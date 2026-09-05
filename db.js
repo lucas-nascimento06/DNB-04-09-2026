@@ -11,6 +11,13 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+// ✅ Definir search_path automaticamente em cada nova conexão
+pool.on('connect', (client) => {
+  client.query('SET search_path TO public').catch(err => {
+    console.error('⚠️ Erro ao definir search_path:', err.message);
+  });
+});
+
 // ✅ Reconexão automática ao detectar erro de conexão perdida
 pool.on('error', (err) => {
   console.error('⚠️ Conexão com o banco caiu, reconectando automaticamente...', err.message);
@@ -44,7 +51,8 @@ pool.query = async function (...args) {
 
 // ✅ Teste de conexão ao iniciar
 pool.connect()
-  .then(client => {
+  .then(async client => {
+    await client.query('SET search_path TO public');
     console.log('💾 Conectado ao Neon DB!');
     client.release();
   })
