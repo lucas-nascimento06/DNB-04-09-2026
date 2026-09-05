@@ -211,7 +211,7 @@ export async function handleLeilaoCommand(sock, message, content) {
 
         if (await isBloqueado(from, leiloadoId)) {
             await sock.sendMessage(from, {
-                text: `⚠️ @${leiloadoId} já está em um casal ativo. Um admin precisa encerrar com *#fl* antes.`,
+                text: `⚠️ @${leiloadoId} já está em um casal ativo.`,
                 mentions: [`${leiloadoId}@s.whatsapp.net`]
             }, { quoted: message });
             return true;
