@@ -1,3 +1,5 @@
+// ARQUIVO: bot/codigos/handlers/command/dcHandler.js
+
 import pool from '../../../../db.js';
 import { flushDC } from '../../features/dcTracker.js';
 

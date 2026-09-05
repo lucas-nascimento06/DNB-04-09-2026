@@ -1,9 +1,29 @@
 // ARQUIVO: bot/codigos/handlers/command/fecharLeilaoHandler.js
 // (mesma pasta onde já ficam leilaoHandler.js, lanceHandler.js, etc.)
+//
+// #fecharleilao / #fl — Admin, em qualquer lugar do grupo.
+//
+// 🆕 NOVO COMPORTAMENTO: o #fl NÃO PEDE CONFIRMAÇÃO e NÃO MEXE EM CASAL.
+//
+// ÚNICA forma de uso:
+//
+//   "#fl" (ou "#fecharleilao"), sozinho, sem reply e sem código
+//   -> fecha e apaga DE UMA VEZ, sem pedir confirmação, TODOS os leilões
+//      (abertos e arrematados) desse grupo. Não precisa marcar ninguém,
+//      não precisa responder nenhuma postagem, não precisa informar código.
+//
+// O #fl SÓ apaga os registros do leilão (damas_dc_leiloes, damas_dc_lances,
+// damas_dc_leiloes_mensagens). Ele NÃO libera casal nenhum, mesmo que algum
+// leilão já esteja 'arrematado'. Pra isso existe o comando separado #dcasal
+// (liberação de casal), que roda sem precisar marcar nada — ver
+// dcasalHandler.js.
+//
+// A transferência de DC + formação/bloqueio do casal continuam acontecendo
+// SOMENTE em #arrematar (arrematarHandler.js) ou no fechamento automático
+// ao bater o valor máximo (lanceHandler.js, que reaproveita a mesma lógica).
 
 import pool from '../../../../db.js';
 import { anunciosCache } from './leilaoCache.js';
-import { flushDC } from '../../features/dcTracker.js';
 
 function extractDigits(number) {
     if (!number) return null;
@@ -31,31 +51,21 @@ async function isAdmin(sock, groupId, userId) {
     }
 }
 
-// Se tivermos a foto do anúncio em cache, respondemos "grudado" nela.
-// Se o bot reiniciou e o cache está vazio, cai no fallback (quota a mensagem do admin).
-function quotedDoAnuncio(leilaoId, message) {
-    const anuncioMsg = anunciosCache.get(leilaoId);
-    return anuncioMsg || message;
+// Apaga tudo relacionado ao leilão: lances -> mensagens vinculadas -> o próprio leilão.
+// Precisa apagar as tabelas filhas primeiro por causa de FOREIGN KEY (leilao_id).
+async function apagarLeilaoCompleto(client, leilaoId) {
+    await client.query(`DELETE FROM damas_dc_lances WHERE leilao_id = $1`, [leilaoId]);
+    await client.query(`DELETE FROM damas_dc_leiloes_mensagens WHERE leilao_id = $1`, [leilaoId]);
+    await client.query(`DELETE FROM damas_dc_leiloes WHERE id = $1`, [leilaoId]);
 }
 
-// content = texto da mensagem, ex: "#fecharleilao", "#fl" (respondendo o anúncio ou
-// a última confirmação de lance) ou "#fl codX7K9" de qualquer lugar do grupo
+// content = texto da mensagem, ex: "#fecharleilao" ou "#fl"
 export async function handleFecharLeilaoCommand(sock, message, content) {
     const from = message.key.remoteJid;
     if (!from.endsWith('@g.us')) return false;
 
-    const match = content.match(/^#(?:fecharleilao|fl)\b(?:\s+cod\s*(\w+))?/i);
+    const match = content.match(/^#(?:fecharleilao|fl)\b/i);
     if (!match) return false;
-
-    const codigoInformado = match[1] ? match[1].toUpperCase() : null;
-    const stanzaId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-
-    if (!stanzaId && !codigoInformado) {
-        await sock.sendMessage(from, {
-            text: '⚠️ Pra fechar, use *#fl cod<código>* ou responda a mensagem do leilão (ou do último lance) com *#fl*.'
-        }, { quoted: message });
-        return true;
-    }
 
     const remetenteCompleto = getNumeroReal(message);
     const adminId = extractDigits(remetenteCompleto);
@@ -68,131 +78,47 @@ export async function handleFecharLeilaoCommand(sock, message, content) {
         return true;
     }
 
-    // Garante que qualquer DC ganho recentemente (ainda no buffer do dcTracker,
-    // aguardando o flush periódico) já esteja gravado antes de checar o saldo
-    // do líder do leilão — evita cancelar a transferência por saldo desatualizado.
-    await flushDC();
-
+    // ========================================================
+    // Fecha e apaga tudo do grupo NA HORA, sem pedir confirmação.
+    // ========================================================
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Aceita fechar por código, ou por reply tanto no anúncio quanto na última
-        // confirmação de lance (igual o #lance já aceita pra dar lance).
-        let leilaoResult;
-        if (codigoInformado) {
-            leilaoResult = await client.query(
-                `SELECT * FROM damas_dc_leiloes
-                 WHERE codigo = $1 AND grupo_id = $2 AND status = 'aberto'
-                 FOR UPDATE`,
-                [codigoInformado, from]
-            );
-        } else {
-            leilaoResult = await client.query(
-                `SELECT l.* FROM damas_dc_leiloes l
-                 JOIN damas_dc_leiloes_mensagens m ON m.leilao_id = l.id
-                 WHERE m.message_id = $1 AND l.grupo_id = $2 AND l.status = 'aberto'
-                 FOR UPDATE OF l`,
-                [stanzaId, from]
-            );
-        }
+        const leiloesResult = await client.query(
+            `SELECT * FROM damas_dc_leiloes
+             WHERE grupo_id = $1 AND status IN ('aberto', 'arrematado')
+             FOR UPDATE`,
+            [from]
+        );
 
-        if (leilaoResult.rowCount === 0) {
+        if (leiloesResult.rowCount === 0) {
             await client.query('ROLLBACK');
-            const texto = codigoInformado
-                ? `⚠️ Não encontrei nenhum leilão aberto com o código *${codigoInformado}*.`
-                : '⚠️ Esse leilão não está mais aberto.';
-            await sock.sendMessage(from, { text: texto }, { quoted: message });
-            return true;
-        }
-
-        const leilao = leilaoResult.rows[0];
-        const quoted = { quoted: quotedDoAnuncio(leilao.id, message) };
-
-        // Sem lances -> fecha e avisa, sem transferir nada
-        if (!leilao.lider_id) {
-            await client.query(
-                `UPDATE damas_dc_leiloes SET status = 'fechado', fechado_em = NOW() WHERE id = $1`,
-                [leilao.id]
-            );
-            await client.query('COMMIT');
             await sock.sendMessage(from, {
-                text: `🔨 Leilão [${leilao.codigo}] encerrado sem nenhum lance.`
-            }, quoted);
-            anunciosCache.delete(leilao.id);
+                text: '✅ Já está tudo limpo por aqui. Pode chamar o próximo leilão!'
+            }, { quoted: message });
             return true;
         }
 
-        // Confere de novo o saldo do líder (pode ter gastado DC em outro lugar nesse meio tempo)
-        const saldoResult = await client.query(
-            `SELECT saldo FROM damas_dc_wallets WHERE user_id = $1 FOR UPDATE`,
-            [leilao.lider_id]
-        );
-        const saldoLider = Number(saldoResult.rows[0]?.saldo || 0);
-        const valorFinal = Number(leilao.valor_atual);
-
-        if (saldoLider < valorFinal) {
-            // Vencedor não tem mais saldo -> fecha sem transferir, fica registrado
-            await client.query(
-                `UPDATE damas_dc_leiloes SET status = 'fechado', fechado_em = NOW() WHERE id = $1`,
-                [leilao.id]
-            );
-            await client.query('COMMIT');
-            await sock.sendMessage(from, {
-                text: `🔨 Leilão [${leilao.codigo}]: @${leilao.lider_id} venceu com ${valorFinal.toLocaleString('pt-BR')} DC ` +
-                      `mas não tem mais saldo suficiente. Transferência cancelada.`,
-                mentions: [`${leilao.lider_id}@s.whatsapp.net`]
-            }, quoted);
+        for (const leilao of leiloesResult.rows) {
+            await apagarLeilaoCompleto(client, leilao.id);
             anunciosCache.delete(leilao.id);
-            return true;
         }
-
-        // Transfere o DC: tira do vencedor, dá pro admin que criou o leilão
-        await client.query(
-            `UPDATE damas_dc_wallets SET saldo = saldo - $1, atualizado_em = NOW() WHERE user_id = $2`,
-            [valorFinal, leilao.lider_id]
-        );
-        await client.query(
-            `INSERT INTO damas_dc_wallets (user_id, saldo)
-             VALUES ($1, $2)
-             ON CONFLICT (user_id)
-             DO UPDATE SET saldo = damas_dc_wallets.saldo + $2, atualizado_em = NOW()`,
-            [leilao.admin_id, valorFinal]
-        );
-
-        await client.query(
-            `UPDATE damas_dc_leiloes SET status = 'fechado', fechado_em = NOW() WHERE id = $1`,
-            [leilao.id]
-        );
 
         await client.query('COMMIT');
 
         await sock.sendMessage(from, {
-            text: `👏🍻 *DAMAS* 💃🔥 *DA* *NIGHT* 💃🎶🍾🍸\n\n` +
-                  `🏆 *LEILÃO [${leilao.codigo}] ENCERRADO!* 🏆\n\n` +
-                  `🎉 Vencedor: @${leilao.lider_id}\n` +
-                  `💰 Arremate: *${valorFinal.toLocaleString('pt-BR')} DC*\n\n` +
-                  `😂 *PARABÉNS... OU BOA SORTE!* 😂\n\n` +
-                  `👑 O arremate foi confirmado!\n` +
-                  `Durante *3 dias*, o(a) arrematado(a) será o(a) “servo(a)” do vencedor! 🫡🤣\n\n` +
-                  `⏳ *Serão 3 dias de ordens, desafios e muita zoeira — tudo na brincadeira, hein! 😈*\n\n` +
-                  `📢 *REGRA DA BRINCADEIRA:*\n` +
-                  `🚫 Nada de PV!\n` +
-                  `🚫 Nada fora do grupo!\n` +
-                  `✅ Tudo acontece *SOMENTE AQUI NO GRUPO!* 🍻🔥\n\n` +
-                  `💸 Valor transferido para o organizador do leilão.\n\n` +
-                  `🔥 *QUE COMECE A RESENHA!* 😂💃🍾`,
-            mentions: [`${leilao.lider_id}@s.whatsapp.net`]
-        }, quoted);
+            text: `🗑️ *${leiloesResult.rowCount} leilão(ões) fechado(s) e removido(s)!*\n\n` +
+                  `✅ Pronto pra começar o próximo leilao.`
+        }, { quoted: message });
 
-        anunciosCache.delete(leilao.id);
         return true;
 
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('[handleFecharLeilaoCommand] Erro:', err.message);
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('[handleFecharLeilaoCommand] Erro ao fechar leilões:', err.message);
         await sock.sendMessage(from, {
-            text: '❌ Erro ao fechar o leilão.'
+            text: '❌ Erro ao fechar os leilões. Tente novamente.'
         }, { quoted: message });
         return true;
     } finally {

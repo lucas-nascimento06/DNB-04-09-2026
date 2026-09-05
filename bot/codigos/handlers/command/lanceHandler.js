@@ -16,6 +16,7 @@ function getNumeroReal(message) {
     return message.key.remoteJid;
 }
 
+import { isBloqueado } from './casalBloqueioUtils.js';
 // Se tivermos a foto do anúncio em cache, usamos ela como "quoted".
 // Se o bot reiniciou e o cache está vazio, cai no fallback (quota a
 // própria mensagem do usuário) — nunca deixa de responder por causa disso.
@@ -60,6 +61,14 @@ export async function handleLanceCommand(sock, message, content) {
 
     const remetenteCompleto = getNumeroReal(message);
     const userId = extractDigits(remetenteCompleto);
+
+    // 🔒 Verifica se o usuário está bloqueado em um casal ativo
+    if (await isBloqueado(from, userId)) {
+        await sock.sendMessage(from, {
+            text: `⚠️ Você está em um casal ativo e não pode participar de leilões! Um admin precisa encerrar com *#fl* antes.`
+        }, { quoted: message });
+        return true;
+    }
 
     const client = await pool.connect();
     try {
@@ -133,8 +142,8 @@ export async function handleLanceCommand(sock, message, content) {
         }
 
         await client.query(
-            `UPDATE damas_dc_leiloes SET valor_atual = $1, lider_id = $2 WHERE id = $3`,
-            [valorLance, userId, leilao.id]
+            `UPDATE damas_dc_leiloes SET valor_atual = $1, lider_id = $2, lider_nome = $3 WHERE id = $4`,
+            [valorLance, userId, message.pushName || userId, leilao.id]
         );
 
         await client.query(
@@ -146,7 +155,9 @@ export async function handleLanceCommand(sock, message, content) {
         await client.query('COMMIT');
 
         const confirmacao = await sock.sendMessage(from, {
-            text: `✅ Novo maior lance [${leilao.codigo}]: ${valorLance.toLocaleString('pt-BR')} DC (@${userId})`,
+            text: `🔨 *NOVO LANCE NO LEILÃO* 🔨\n\n` +
+                  `💵 @${userId} assumiu a liderança com *${valorLance.toLocaleString('pt-BR')} DC* 💎\n\n` +
+                  `🏆 [${leilao.codigo}] — *Quem cobre esse lance?*`,
             mentions: [`${userId}@s.whatsapp.net`]
         }, quoted);
 

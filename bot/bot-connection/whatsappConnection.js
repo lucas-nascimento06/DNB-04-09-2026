@@ -6,6 +6,7 @@ import pino from 'pino';
 import { setupEventListeners } from './eventListeners.js';
 import { autoScanGroups } from "../bot-utils/autoScan.js";
 import { handleMessages, handleReactions } from "../codigos/handlers/message/messageHandler.js";
+import { iniciarVerificadorDesafiosExpirados } from "../codigos/handlers/command/desafioleilaoHandler.js";
 
 const logger = pino({ level: 'silent' });
 const BOT_TITLE = '👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸';
@@ -17,6 +18,13 @@ let currentSocket = null;
 let qrRetryCount = 0;
 const MAX_QR_RETRIES = 3;
 let resourcesLoaded = false;
+
+// ⏰ Guarda o intervalo do verificador de desafios expirados (#desafio/#pronto,
+// 24h de prazo). Precisa ficar num módulo-level pra poder ser limpo em cada
+// reconexão — senão, toda vez que o WhatsApp reconectar, um NOVO setInterval
+// seria criado sem cancelar o anterior, e o aviso de "desafio não cumprido"
+// passaria a ser enviado em duplicidade (2x, 3x, 4x... a cada reconexão).
+let verificadorDesafiosInterval = null;
 
 // 🔥 FUNÇÃO PARA CARREGAR RECURSOS ANTES DA CONEXÃO
 async function preloadResources() {
@@ -246,6 +254,30 @@ export async function connectToWhatsApp() {
                     console.error("⚠️ Erro na varredura automática:", err.message);
                     console.log("🔄 A varredura será tentada novamente mais tarde\n");
                 }
+
+                // ⏰ Liga o verificador de desafios expirados (#desafio/#pronto).
+                // Cancela qualquer intervalo anterior antes de criar um novo,
+                // pra não duplicar o aviso na sala de admins a cada reconexão.
+                try {
+                    if (verificadorDesafiosInterval) {
+                        clearInterval(verificadorDesafiosInterval);
+                    }
+
+                    // ██████████████████████████████████████████████████████
+                    // ██  🔧 INTERRUPTOR 2 de 2 — DE QUANTO EM QUANTO TEMPO ██
+                    // ██  O VERIFICADOR RODA (em minutos)                   ██
+                    // ██                                                     ██
+                    // ██  Pra TESTAR rápido, comente a linha de PRODUÇÃO e  ██
+                    // ██  descomente a linha de TESTE.                      ██
+                    // ██  🚨 DEPOIS DO TESTE, VOLTA PRA PRODUÇÃO (30).       ██
+                    // ██████████████████████████████████████████████████████
+                    // verificadorDesafiosInterval = iniciarVerificadorDesafiosExpirados(sock);        // 👈 PRODUÇÃO (checa a cada 30min)
+                    verificadorDesafiosInterval = iniciarVerificadorDesafiosExpirados(sock, 1);   // 👈 TESTE (checa a cada 1min) — descomenta essa linha E comenta a de cima
+
+                    console.log("⏰ Verificador de desafios expirados ativado\n");
+                } catch (err) {
+                    console.error("⚠️ Erro ao iniciar verificador de desafios expirados:", err.message);
+                }
             }
 
             if (connection === "close") {
@@ -359,6 +391,12 @@ export function disconnectWhatsApp() {
         clearTimeout(reconnectTimeout);
         reconnectTimeout = null;
         console.log("⏹️  Timeout de reconexão cancelado");
+    }
+
+    if (verificadorDesafiosInterval) {
+        clearInterval(verificadorDesafiosInterval);
+        verificadorDesafiosInterval = null;
+        console.log("⏹️  Verificador de desafios expirados cancelado");
     }
     
     if (currentSocket) {

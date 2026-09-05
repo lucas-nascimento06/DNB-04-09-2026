@@ -110,16 +110,10 @@ import {
     handleResetDcCommand
 } from '../command/resetDcHandler.js';
 
-// 🔨 IMPORTS — sistema de leilão
+// 🔨 IMPORT — sistema de leilão (tudo agrupado no commandHandlers.js)
 import {
-    handleLeilaoCommand
-} from '../command/leilaoHandler.js';
-import {
-    handleLanceCommand
-} from '../command/lanceHandler.js';
-import {
-    handleFecharLeilaoCommand
-} from '../command/fecharLeilaoHandler.js';
+    handleLeilaoCommands
+} from '../command/commandHandlers.js';
 
 // 🐄 IMPORT — medidor de gado
 import {
@@ -165,7 +159,7 @@ const MODELO_POSTER =
 // ============================================
 // 🏠 IDs DOS GRUPOS
 // ============================================
-const GRUPO_PRINCIPAL = '120363412511975026@g.us';
+const GRUPO_PRINCIPAL = '120363413774574277@g.us';
 const GRUPO_ADMINS = '120363409228091157@g.us';
 const GRUPO_CONTROLE = '120363409394983918@g.us';
 
@@ -242,8 +236,6 @@ export async function handleMessages(sock, message) {
         const messageKey = message.key;
 
         // 🔧 Procura entre TODAS as chaves da mensagem por um tipo de mídia conhecido
-        // (evita bug onde 'messageContextInfo' aparece antes de 'imageMessage'/'videoMessage'
-        // e faz a mensagem ser descartada por engano)
         const messageKeys = Object.keys(message.message || {});
         const messageType = messageKeys.find(k => MEDIA_TYPES.includes(k)) || messageKeys[0];
         const isMediaMessage = MEDIA_TYPES.includes(messageType);
@@ -297,8 +289,6 @@ export async function handleMessages(sock, message) {
                 console.error('❌ [mensagensTracker] trackMensagem:', err.message)
             );
 
-            // 💰 Conversão de mensagem em DC (Damas Coins)
-            // ⚠️ Comandos (# ou !) NÃO devem gerar DC
             if (!lowerContent.startsWith('#') && !lowerContent.startsWith('!')) {
                 trackDC(sock, message).catch(err =>
                     console.error('❌ [dcTracker] trackDC:', err.message)
@@ -330,7 +320,7 @@ export async function handleMessages(sock, message) {
             }
         }
 
-        // 📮 Comando #poster (envia o modelo de confissão no grupo, marcando todos)
+        // 📮 Comando #poster
         if (from.endsWith('@g.us') && lowerContent === '#poster') {
             if (DEBUG_MODE) console.log('📮 Comando #poster detectado!');
 
@@ -461,7 +451,7 @@ export async function handleMessages(sock, message) {
         // ============================================
         if (lowerContent.startsWith('#gado') || lowerContent.startsWith('!gado')) {
             if (DEBUG_MODE) console.log('🐄 Comando #gado detectado!');
-            const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?. [0];
+            const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
             await gadoCommandHandler(sock, message, from, mentionedJid);
             return;
         }
@@ -471,7 +461,7 @@ export async function handleMessages(sock, message) {
         // ============================================
         if (lowerContent.startsWith('#bebado') || lowerContent.startsWith('!bebado')) {
             if (DEBUG_MODE) console.log('🍺 Comando #bebado detectado!');
-            const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?. [0];
+            const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
             await bebadoCommandHandler(sock, message, from, mentionedJid);
             return;
         }
@@ -485,16 +475,14 @@ export async function handleMessages(sock, message) {
             return;
         }
 
-        // 💸 Transferência de DC entre membros — #emprestar @pessoa valor
+        // 💸 Transferência de DC entre membros
         if (lowerContent.startsWith('#emprestar')) {
             if (DEBUG_MODE) console.log('💸 Comando #emprestar detectado!');
             await dcTransferHandler(sock, message, content);
             return;
         }
 
-        // 🔄 Reset geral da carteira de DC — #resetardc (só admin)
-        // Zera o saldo de todo mundo pra incentivar o pessoal a conversar de novo
-        // e juntar DC pro próximo leilão.
+        // 🔄 Reset geral da carteira de DC
         if (lowerContent === '#resetardc' || lowerContent === '#rdc') {
             if (DEBUG_MODE) console.log('🔄 Comando #resetardc/#rdc detectado!');
             const resetDcHandled = await handleResetDcCommand(sock, message, content);
@@ -502,29 +490,11 @@ export async function handleMessages(sock, message) {
         }
 
         // ============================================
-        // 🔨 SISTEMA DE LEILÃO — #leilao/#leilão (foto+legenda), #lance (reply no anúncio
-        // ou #lance <valor>dc cod<código>) e #fecharleilao/#fl (reply ou cod<código>).
-        // Fica logo depois do #emprestar porque usa a mesma carteira de DC.
+        // 🔨 SISTEMA DE LEILÃO (tudo agrupado no commandHandlers.js:
+        // #leilao, #lance, #fecharleilao/#fl, #rl/#resetarleilao, #desafio/#pronto)
         // ============================================
-        const lowerContentSemAcento = lowerContent.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-        if (lowerContentSemAcento.startsWith('#leilao')) {
-            if (DEBUG_MODE) console.log('🔨 Comando #leilao detectado!');
-            const leilaoHandled = await handleLeilaoCommand(sock, message, content);
-            if (leilaoHandled) return;
-        }
-
-        if (lowerContent.startsWith('#lance')) {
-            if (DEBUG_MODE) console.log('🔨 Comando #lance detectado!');
-            const lanceHandled = await handleLanceCommand(sock, message, content);
-            if (lanceHandled) return;
-        }
-
-        if (lowerContent.startsWith('#fecharleilao') || lowerContent.startsWith('#fl')) {
-            if (DEBUG_MODE) console.log('🔨 Comando #fecharleilao/#fl detectado!');
-            const fecharLeilaoHandled = await handleFecharLeilaoCommand(sock, message, content);
-            if (fecharLeilaoHandled) return;
-        }
+        const leilaoHandled = await handleLeilaoCommands(sock, message, content, from);
+        if (leilaoHandled) return;
 
         // ============================================
         // 👑 COMANDOS RAINHA / RANKING
@@ -665,6 +635,7 @@ export async function handleMessages(sock, message) {
             );
             if (confissaoHandled) return;
         }
+
         const handled = await processCommandPriorities(
             sock, message, from, userId, content,
             OWNER_NUMBERS, autoTag, pool, {
@@ -682,9 +653,6 @@ export async function handleMessages(sock, message) {
 
         // ============================================
         // 🤖 RESPOSTA NATURAL COM IA
-        // ✅ Sticker OU texto — nunca os dois
-        // ✅ Contexto = texto do usuário
-        // ✅ Sticker marca o usuário com quoted
         // ============================================
         if (
             (from === GRUPO_PRINCIPAL || from === GRUPO_CONTROLE) &&
@@ -696,11 +664,9 @@ export async function handleMessages(sock, message) {
         ) {
             const remetente = resolverRemetenteReal(message) || userId;
 
-            // 1️⃣ Tenta sticker primeiro, baseado no texto do USUÁRIO
             const stickerEnviado = await enviarMayaSticker(sock, from, content.trim(), message);
 
             if (!stickerEnviado) {
-                // 2️⃣ Só responde com texto se não mandou sticker
                 const resposta = await responderNaturalmente(remetente, content.trim());
                 if (resposta) {
                     await sock.sendMessage(from, {

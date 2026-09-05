@@ -1,238 +1,304 @@
-// ARQUIVO: bot/codigos/handlers/command/leilaoHandler.js
-// (mesma pasta onde já ficam dcHandler.js, dcTransferHandler.js, etc.)
 import pool from '../../../../db.js';
-import {
-  downloadMediaMessage
-}
-from '@whiskeysockets/baileys';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import fs from 'fs';
 import path from 'path';
 import { Jimp } from 'jimp';
-import {
-  anunciosCache
-}
-from './leilaoCache.js';
+import { anunciosCache } from './leilaoCache.js';
+import { isBloqueado } from './casalBloqueioUtils.js';
+import { obterNomeUsuario } from '../../features/nomesTracker.js';
+
 const PASTA_LEILOES = path.resolve('./bot/temp/leiloes');
-if (!fs.existsSync(PASTA_LEILOES)) fs.mkdirSync(PASTA_LEILOES, {
-  recursive: true
-}
-);
-function extractDigits(number) {
-  if (!number) return null;
-  return number.replace(/@.*$/, '').replace(/\D/g, '');
-}
-// Tira acento pra aceitar "#leilão" e "#leilao" igual, sem mexer no resto do texto
-function normalizarComando(texto) {
-  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-// Aceita "1200", "1.200", "1200dc", "1.200 dc", "1200,50" etc.
-// Ponto seguido de exatamente 3 dígitos é tratado como separador de milhar.
-function parseValorDC(bruto) {
-  let s = bruto.trim();
-  if (s.includes(',')) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  }
-  else if (s.includes('.')) {
-    const partes = s.split('.');
-    if (partes[partes.length - 1].length === 3) {
-      s = partes.join('');
-    }
-  }
-  return parseFloat(s);
-}
-function getNumeroReal(message) {
-  if (message.key.participantAlt) return message.key.participantAlt;
-  if (message.key.participant) return message.key.participant;
-  return message.key.remoteJid;
-}
-async function isAdmin(sock, groupId, userId) {
-  try {
-    const meta = await sock.groupMetadata(groupId);
-    const participante = meta.participants.find(p => {
-      const idDigits = extractDigits(p.id);
-      const phoneDigits = extractDigits(p.phoneNumber);
-      return idDigits === userId || phoneDigits === userId;
-    }
-    );
-    return participante?.admin === 'admin' || participante?.admin === 'superadmin';
-  }
-  catch (err) {
-    console.error('[leilaoHandler] Erro ao checar admin:', err.message);
+if (!fs.existsSync(PASTA_LEILOES)) fs.mkdirSync(PASTA_LEILOES, { recursive: true });
+
+const mensagensJaProcessadas = new Set();
+function jaProcessou(messageId) {
+    if (!messageId) return false;
+    if (mensagensJaProcessadas.has(messageId)) return true;
+    mensagensJaProcessadas.add(messageId);
+    setTimeout(() => mensagensJaProcessadas.delete(messageId), 60_000);
     return false;
-  }
 }
 
-// 🖼️ Gera uma miniatura (thumbnail) da imagem, igual ao esquema usado no boasVindas.js.
-// Sem isso, o WhatsApp às vezes não monta o preview da imagem na hora — a mensagem
-// fica "fechada" até o usuário clicar/abrir manualmente. Enviando o jpegThumbnail
-// junto, o preview aparece imediatamente, igual acontece nas boas-vindas.
-async function gerarThumbnail(buffer, size = 256) {
-  try {
-    const image = await Jimp.read(buffer);
-    await image.resize({ w: size, h: size });
-    return await image.getBuffer("image/png");
-  } catch (err) {
-    console.error("[leilaoHandler] Erro ao gerar thumbnail:", err.message);
-    return null;
-  }
+function extractDigits(number) {
+    if (!number) return null;
+    return number.replace(/@.*$/, '').replace(/\D/g, '');
 }
 
-// Gera um código curto (4 caracteres, base36) garantindo que não colida com
-// nenhum leilão ABERTO no mesmo grupo. Tenta algumas vezes antes de cair
-// num fallback baseado em timestamp (praticamente nunca deve acontecer).
-async function gerarCodigoUnico(grupoId) {
-  for (let tentativas = 0;
-  tentativas < 5;
-  tentativas++) {
-    const codigo = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const existe = await pool.query( `SELECT 1 FROM damas_dc_leiloes WHERE grupo_id = $1 AND codigo = $2 AND status = 'aberto'`, [grupoId, codigo] );
-    if (existe.rowCount === 0) return codigo;
-  }
-  return Date.now().toString(36).toUpperCase().slice(-4);
+function normalizarComando(texto) {
+    return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-// content = legenda da imagem, ex: "#leilao 1200dc" ou "#leilao 1200dc cod CADEIRA"
-export async function handleLeilaoCommand(sock, message, content) {
-  const from = message.key.remoteJid;
-  if (!from.endsWith('@g.us')) return false;
-// "cod" com ou sem espaço antes do código: "codX7K9" ou "cod X7K9"
-  const match = normalizarComando(content).match(/^#leilao\s+([\d.,]+)\s*dc\b(?:\s+cod\s*(\w+))?/i);
-  if (!match) return false;
-  try {
-    const remetenteCompleto = getNumeroReal(message);
-    const adminId = extractDigits(remetenteCompleto);
-    const ehAdmin = await isAdmin(sock, from, adminId);
-    if (!ehAdmin) {
-      await sock.sendMessage(from, {
-        text: '🚫 Só administradores podem criar leilões.'
-      }
-      , {
-        quoted: message
-      }
-      );
-      return true;
-    }
-    const temImagem = !!message.message?.imageMessage;
-    const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const imagemCitada = quotedMessage?.imageMessage;
-    if (!temImagem && !imagemCitada) {
-      await sock.sendMessage(from, {
-        text: '⚠️ Envie a foto do item com a legenda *#leilao <valor>dc*, ou responda a foto com *#leilao <valor>dc*.'
-      }
-      , {
-        quoted: message
-      }
-      );
-      return true;
-    }
-    const valorInicial = parseValorDC(match[1]);
-    if (isNaN(valorInicial) || valorInicial <= 0) {
-      await sock.sendMessage(from, {
-        text: '⚠️ Valor inválido. Ex: *#leilao 1200dc*'
-      }
-      , {
-        quoted: message
-      }
-      );
-      return true;
-    }
-// Código do leilão: usa o informado pelo admin (se veio) ou gera um automático
-    const codigoInformado = match[2] ? match[2].toUpperCase() : null;
-    let codigo = codigoInformado;
-    if (codigo) {
-      const existe = await pool.query( `SELECT 1 FROM damas_dc_leiloes WHERE grupo_id = $1 AND codigo = $2 AND status = 'aberto'`, [from, codigo] );
-      if (existe.rowCount > 0) {
-        await sock.sendMessage(from, {
-          text: `⚠️ Já existe um leilão aberto com o código *${codigo}*. Escolha outro.`
-        }
-        , {
-          quoted: message
-        }
-        );
-        return true;
-      }
-    }
-    else {
-      codigo = await gerarCodigoUnico(from);
-    }
-// Se a imagem veio de uma mensagem citada (foto solta + reply com o comando),
-// monta um "mensagem falsa" só com o necessário pra baixar a mídia dela.
-    let mensagemParaBaixar = message;
-    if (!temImagem && imagemCitada) {
-      const contextInfo = message.message.extendedTextMessage.contextInfo;
-      mensagemParaBaixar = {
-        key: {
-          remoteJid: from, id: contextInfo.stanzaId, fromMe: false, participant: contextInfo.participant
-        }
-        , message: quotedMessage
-      }
-      ;
-    }
-// Baixa a imagem (fica salva localmente por registro)
-    const buffer = await downloadMediaMessage(mensagemParaBaixar, 'buffer', {
-    }
-    );
-    const fotoPath = path.join(PASTA_LEILOES, `${message.key.id}.jpg`);
-    fs.writeFileSync(fotoPath, buffer);
 
-    // 🖼️ Gera o thumbnail da foto ANTES de enviar, mesmo esquema do boasVindas.js.
-    // Isso evita a mensagem chegar "fechada" (precisando clicar pra abrir a imagem).
-    let thumb = null;
+function parseValorDC(bruto) {
+    let s = bruto.trim();
+    if (s.includes(',')) {
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes('.')) {
+        const partes = s.split('.');
+        if (partes[partes.length - 1].length === 3) {
+            s = partes.join('');
+        }
+    }
+    return parseFloat(s);
+}
+
+function getNumeroReal(message) {
+    if (message.key.participantAlt) return message.key.participantAlt;
+    if (message.key.participant) return message.key.participant;
+    return message.key.remoteJid;
+}
+
+async function isAdmin(sock, groupId, userId) {
     try {
-      thumb = await gerarThumbnail(buffer, 256);
-    } catch (thumbErr) {
-      console.warn('⚠️ [leilaoHandler] Não foi possível gerar thumbnail, continuando sem ele:', thumbErr.message);
+        const meta = await sock.groupMetadata(groupId);
+        const participante = meta.participants.find(p => {
+            const idDigits = extractDigits(p.id);
+            const phoneDigits = extractDigits(p.phoneNumber);
+            return idDigits === userId || phoneDigits === userId;
+        });
+        return participante?.admin === 'admin' || participante?.admin === 'superadmin';
+    } catch (err) {
+        console.error('[leilaoHandler] Erro ao checar admin:', err.message);
+        return false;
     }
-
-// Cria o registro ANTES de enviar a foto, assim já sabemos o ID e o código
-// pra colocar na legenda do próprio anúncio.
-    const insertResult = await pool.query( `INSERT INTO damas_dc_leiloes
-                (grupo_id, admin_id, foto_message_id, foto_path, valor_inicial, valor_atual, status, codigo)
-             VALUES ($1, $2, $3, $4, $5, $5, 'aberto', $6)
-             RETURNING id`, [from, adminId, message.key.id, fotoPath, valorInicial, codigo] );
-    const leilaoId = insertResult.rows[0].id;
-
-// Leilão abre AGORA. Esta mensagem será usada como "quote"
-// nas confirmações e recusas de lance.
-    const anuncioOptions = {
-      image: buffer,
-      mimetype: 'image/jpeg',
-      caption: `👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\n` + `🔨 *LEILÃO [${codigo}] ABERTO!* 🔨\n\n` + `💰 *Lance inicial:* ${valorInicial.toLocaleString('pt-BR')} DC\n\n` + `🔥 *QUER PARTICIPAR?*\n` + `É só mandar seu lance usando uma das opções abaixo:\n\n` + `💸 *Opção 1:*\n` + `#lance <valor>dc cod${codigo}\n\n` + `💬 *Opção 2:*\n` + `Responda *ESTA MENSAGEM* com:\n` + `#lance <valor>dc\n\n` + `⚠️ *ATENÇÃO:* Só serão considerados os lances enviados corretamente.\n\n` + `🏆 Quem der o maior lance até o encerramento leva o arremate!\n\n` + `😈 Preparem os DC... porque a resenha vai começar!\n\n` + `🛑 *ENCERRAMENTO:* Um admin encerra o leilão respondendo *ESTA MENSAGEM* com:\n` + `*#fl*\n\n` + `🍻 *Boa sorte aos participantes!* 🔥💃`
-    };
-    if (thumb) {
-      anuncioOptions.jpegThumbnail = thumb;
-    }
-
-    const anuncio = await sock.sendMessage(from, anuncioOptions);
-    const anuncioMessageId = anuncio.key.id;
-    await pool.query( `UPDATE damas_dc_leiloes SET anuncio_message_id = $1 WHERE id = $2`, [anuncioMessageId, leilaoId] );
-// Guarda o objeto completo da mensagem (com a foto) pra poder ser usado
-// como "quoted" em qualquer resposta de lance futura deste leilão.
-    anunciosCache.set(leilaoId, anuncio);
-// Registra a foto como alvo válido de reply
-    await pool.query( `INSERT INTO damas_dc_leiloes_mensagens (message_id, leilao_id) VALUES ($1, $2)
-             ON CONFLICT (message_id) DO NOTHING`, [anuncioMessageId, leilaoId] );
-    const confirmacaoCriacao = await sock.sendMessage(from, {
-      text: `✅ Leilão *[${codigo}]* (#${leilaoId}) criado e aberto para lances.`
-    }
-    , {
-      quoted: message
-    }
-    );
-// A confirmação de "criado com sucesso" também vira alvo válido de reply —
-// é comum o admin ou algum membro responder ela em vez de responder a foto.
-    await pool.query( `INSERT INTO damas_dc_leiloes_mensagens (message_id, leilao_id) VALUES ($1, $2)
-             ON CONFLICT (message_id) DO NOTHING`, [confirmacaoCriacao.key.id, leilaoId] );
-    return true;
-  }
-  catch (err) {
-    console.error('[handleLeilaoCommand] Erro:', err.message);
-    await sock.sendMessage(from, {
-      text: '❌ Erro ao criar o leilão.'
-    }
-    , {
-      quoted: message
-    }
-    );
-    return true;
-  }
 }
+
+function getMentions(message) {
+    const direto = message.message?.imageMessage?.contextInfo?.mentionedJid;
+    const viaReply = message.message?.extendedTextMessage?.contextInfo?.mentionedJid;
+    return direto || viaReply || [];
+}
+
+async function resolverNumeroRealDoMencionado(sock, groupId, mentionedJid) {
+    if (mentionedJid.endsWith('@s.whatsapp.net')) {
+        return extractDigits(mentionedJid);
+    }
+    try {
+        const meta = await sock.groupMetadata(groupId);
+        const participante = meta.participants.find(p => p.id === mentionedJid);
+        const numeroReal = participante?.jid || participante?.phoneNumber || participante?.pn || participante?.participantAlt;
+        if (numeroReal) return extractDigits(numeroReal);
+    } catch (err) {
+        console.error('[resolverNumeroRealDoMencionado] Erro:', err.message);
+    }
+    return extractDigits(mentionedJid);
+}
+
+async function obterParticipantesGrupo(sock, groupId) {
+    try {
+        const groupMetadata = await sock.groupMetadata(groupId);
+        const participantes = groupMetadata.participants.map(p => p.id);
+        console.log(`👥 [leilaoHandler] ${participantes.length} participantes encontrados`);
+        return participantes;
+    } catch (err) {
+        console.error('[leilaoHandler] Erro ao obter participantes do grupo:', err.message);
+        return [];
+    }
+}
+
+async function gerarThumbnail(buffer, size = 256) {
+    try {
+        const image = await Jimp.read(buffer);
+        await image.resize({ w: size, h: size });
+        return await image.getBuffer("image/png");
+    } catch (err) {
+        console.error("[leilaoHandler] Erro ao gerar thumbnail:", err.message);
+        return null;
+    }
+}
+
+function gerarCodigoCompatibilidade() {
+    return Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+export async function handleLeilaoCommand(sock, message, content) {
+    const from = message.key.remoteJid;
+    if (!from.endsWith('@g.us')) return false;
+
+    const normalizado = normalizarComando(content).trim();
+    if (!/^#leilao\b/i.test(normalizado)) return false;
+
+    if (jaProcessou(message.key.id)) {
+        console.log(`⏭️ [leilaoHandler] Mensagem ${message.key.id} já processada, ignorando duplicata.`);
+        return true;
+    }
+
+    try {
+        const remetenteCompleto = getNumeroReal(message);
+        const adminId = extractDigits(remetenteCompleto);
+
+        const ehAdmin = await isAdmin(sock, from, adminId);
+        if (!ehAdmin) {
+            await sock.sendMessage(from, {
+                text: '🚫 Só administradores podem criar leilões.'
+            }, { quoted: message });
+            return true;
+        }
+
+        const mentions = getMentions(message);
+        if (mentions.length < 1) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Marque a pessoa que vai ser leiloada.\n\n*Exemplo:* `#leilao @pessoa 500dc 2000dc`'
+            }, { quoted: message });
+            return true;
+        }
+        const leiloadoId = await resolverNumeroRealDoMencionado(sock, from, mentions[0]);
+
+        const leiloadoNome = (await obterNomeUsuario(leiloadoId)) || leiloadoId;
+        
+        console.log(`👤 [leilaoHandler] Nome obtido: "${leiloadoNome}"`);
+
+        if (leiloadoId === adminId) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Você não pode se auto-leiloar.'
+            }, { quoted: message });
+            return true;
+        }
+
+        const textoSemMencao = normalizado.replace(/@\d+/g, '').trim();
+        const valorMatch = textoSemMencao.match(/^#leilao\s+([\d.,]+)\s*dc\s+([\d.,]+)\s*dc\b/i);
+        if (!valorMatch) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Formato inválido. Você precisa informar o valor *mínimo* e o *máximo* do leilão.\n\n' +
+                      '*Exemplo:* `#leilao @pessoa 500dc 2000dc`'
+            }, { quoted: message });
+            return true;
+        }
+
+        const valorInicial = parseValorDC(valorMatch[1]);
+        const valorMaximo = parseValorDC(valorMatch[2]);
+
+        if (isNaN(valorInicial) || valorInicial <= 0) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Valor *mínimo* inválido.\n\n*Exemplo:* `#leilao @pessoa 500dc 2000dc`'
+            }, { quoted: message });
+            return true;
+        }
+
+        if (isNaN(valorMaximo) || valorMaximo <= 0) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Valor *máximo* inválido.\n\n*Exemplo:* `#leilao @pessoa 500dc 2000dc`'
+            }, { quoted: message });
+            return true;
+        }
+
+        if (valorMaximo <= valorInicial) {
+            await sock.sendMessage(from, {
+                text: `⚠️ O valor *máximo* (${valorMaximo.toLocaleString('pt-BR')} DC) precisa ser maior que o *mínimo* (${valorInicial.toLocaleString('pt-BR')} DC).`
+            }, { quoted: message });
+            return true;
+        }
+
+        const temImagem = !!message.message?.imageMessage;
+        const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const imagemCitada = quotedMessage?.imageMessage;
+        if (!temImagem && !imagemCitada) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Envie a foto da pessoa com a legenda *#leilao @pessoa <min>dc <max>dc*, ou responda a foto com o comando.'
+            }, { quoted: message });
+            return true;
+        }
+
+        const ativoResult = await pool.query(
+            `SELECT id FROM damas_dc_leiloes WHERE grupo_id = $1 AND status = 'aberto'`,
+            [from]
+        );
+        if (ativoResult.rowCount > 0) {
+            await sock.sendMessage(from, {
+                text: '⚠️ Já existe um leilão em andamento nesse grupo. Feche com *#arrematar* + *#fl* antes de abrir outro.'
+            }, { quoted: message });
+            return true;
+        }
+
+        if (await isBloqueado(from, leiloadoId)) {
+            await sock.sendMessage(from, {
+                text: `⚠️ @${leiloadoId} já está em um casal ativo. Um admin precisa encerrar com *#fl* antes.`,
+                mentions: [`${leiloadoId}@s.whatsapp.net`]
+            }, { quoted: message });
+            return true;
+        }
+
+        let mensagemParaBaixar = message;
+        if (!temImagem && imagemCitada) {
+            const contextInfo = message.message.extendedTextMessage.contextInfo;
+            mensagemParaBaixar = {
+                key: {
+                    remoteJid: from, id: contextInfo.stanzaId, fromMe: false, participant: contextInfo.participant
+                },
+                message: quotedMessage
+            };
+        }
+        const buffer = await downloadMediaMessage(mensagemParaBaixar, 'buffer', {});
+        const fotoPath = path.join(PASTA_LEILOES, `${message.key.id}.jpg`);
+        fs.writeFileSync(fotoPath, buffer);
+
+        let thumb = null;
+        try {
+            thumb = await gerarThumbnail(buffer, 256);
+        } catch (thumbErr) {
+            console.warn('⚠️ [leilaoHandler] Não foi possível gerar thumbnail:', thumbErr.message);
+        }
+
+        const codigo = gerarCodigoCompatibilidade();
+
+        const insertResult = await pool.query(
+            `INSERT INTO damas_dc_leiloes
+                (grupo_id, admin_id, leiloado_id, leiloado_nome, foto_message_id, foto_path, valor_inicial, valor_atual, valor_maximo, status, codigo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, 'aberto', $9)
+             RETURNING id`,
+            [from, adminId, leiloadoId, leiloadoNome, message.key.id, fotoPath, valorInicial, valorMaximo, codigo]
+        );
+        const leilaoId = insertResult.rows[0].id;
+
+        const leiloadoJid = `${leiloadoId}@s.whatsapp.net`;
+
+        console.log(`🎯 [leilaoHandler] Leiloado JID: ${leiloadoJid}`);
+
+        const anuncioOptions = {
+            image: buffer,
+            mimetype: 'image/jpeg',
+            caption: `🏛️🔨 *LEILÃO ABERTO* 🔨🏛️\n\n` +
+                `📷 @${leiloadoId}\n\n` +
+                `💰 *Lance inicial:* ${valorInicial.toLocaleString('pt-BR')} DC\n` +
+                `🏆 *Lance máximo:* ${valorMaximo.toLocaleString('pt-BR')} DC\n\n` +
+                `👑 O(a) vencedor(a) fica como dono(a) por *3 dias*!\n\n` +
+                `🎯 *Dê seu lance:*\n` +
+                `\`#lance <valor>dc\`\nou\n\`#l <valor>dc\`\n\n` +
+                `🚨 Ao atingir *${valorMaximo.toLocaleString('pt-BR')} DC*, o leilão será encerrado automaticamente.\n\n` +
+                `🔥 *Que comece o leilão!*`,
+            mentions: [leiloadoJid]
+        };
+        if (thumb) anuncioOptions.jpegThumbnail = thumb;
+
+        const anuncio = await sock.sendMessage(from, anuncioOptions);
+        const anuncioMessageId = anuncio.key.id;
+
+        await pool.query(
+            `UPDATE damas_dc_leiloes SET anuncio_message_id = $1 WHERE id = $2`,
+            [anuncioMessageId, leilaoId]
+        );
+        anunciosCache.set(leilaoId, anuncio);
+
+        await pool.query(
+            `INSERT INTO damas_dc_leiloes_mensagens (message_id, leilao_id) VALUES ($1, $2)
+             ON CONFLICT (message_id) DO NOTHING`,
+            [anuncioMessageId, leilaoId]
+        );
+
+        try {
+            await sock.sendMessage(from, { delete: message.key });
+        } catch (delErr) {
+            console.warn('⚠️ [leilaoHandler] Não foi possível apagar a mensagem de comando original:', delErr.message);
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error('[handleLeilaoCommand] Erro:', err.message);
+        await sock.sendMessage(from, {
+            text: '❌ Erro ao criar o leilão.'
+        }, { quoted: message });
+        return true;
+    }
+}
+
+export { obterParticipantesGrupo };

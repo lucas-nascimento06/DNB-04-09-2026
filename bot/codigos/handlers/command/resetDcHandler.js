@@ -1,90 +1,143 @@
 // ARQUIVO: bot/codigos/handlers/command/resetDcHandler.js
-// (mesma pasta onde já ficam dcHandler.js, dcTransferHandler.js, leilaoHandler.js, etc.)
+// (mesma pasta onde ficam leilaoHandler.js, resetLeilaoHandler.js, resetTudoHandler.js, etc.)
+//
+// 🧹💰 Comando pra resetar (APAGAR) TODO o histórico de DC de TODOS os
+// grupos: zera as carteiras (damas_dc_wallets) e o histórico de mensagens
+// que geraram DC (damas_dc_messages). Serve pra começar uma "temporada"
+// nova de contagem depois que um leilão é encerrado.
+//
+// Aceita: #resetardc
+//
+// Igual ao #resetartudo, é global e por isso travado só pro número
+// autorizado (dono/dev do bot). Funciona em 2 passos:
+//   1) #resetardc            -> mostra quantas carteiras/mensagens seriam apagadas e pede confirmação
+//   2) #resetardc confirmar  -> apaga de verdade
 
 import pool from '../../../../db.js';
+import { flushDC } from '../../features/dcTracker.js';
+import { checarAutorizacao } from '../../utils/authNumero.js';
 
-function extractDigits(number) {
-    if (!number) return null;
-    return number.replace(/@.*$/, '').replace(/\D/g, '');
+// 🔒 Só esses IDs podem rodar o reset global de DC (mesmos usados no #resetartudo).
+// Alguns grupos mandam o número de telefone real, outros (com privacidade LID
+// ativada) só mandam o LID oculto — por isso os dois ficam na lista.
+const NUMEROS_AUTORIZADOS = [
+    '5521972337640',   // número de telefone real
+    '110243874902093', // LID (identificador oculto usado em alguns grupos)
+];
+
+function normalizarComando(texto) {
+    return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function getNumeroReal(message) {
-    if (message.key.participantAlt) return message.key.participantAlt;
-    if (message.key.participant) return message.key.participant;
-    return message.key.remoteJid;
-}
-
-async function isAdmin(sock, groupId, userId) {
-    try {
-        const meta = await sock.groupMetadata(groupId);
-        const participante = meta.participants.find(p => {
-            const idDigits = extractDigits(p.id);
-            const phoneDigits = extractDigits(p.phoneNumber);
-            return idDigits === userId || phoneDigits === userId;
-        });
-        return participante?.admin === 'admin' || participante?.admin === 'superadmin';
-    } catch (err) {
-        console.error('[resetDcHandler] Erro ao checar admin:', err.message);
-        return false;
-    }
-}
-
-// content = texto da mensagem, ex: "#resetardc"
 export async function handleResetDcCommand(sock, message, content) {
     const from = message.key.remoteJid;
-    if (!from.endsWith('@g.us')) return false;
 
-    const lowerContent = content.toLowerCase().trim();
-    if (lowerContent !== '#resetardc' && lowerContent !== '#rdc') return false;
+    const normalizado = normalizarComando(content).trim().toLowerCase();
 
-    const remetenteCompleto = getNumeroReal(message);
-    const adminId = extractDigits(remetenteCompleto);
+    // Aceita #resetardc (com ou sem "confirmar" no final)
+    const match = normalizado.match(/^#resetardc\b\s*(confirmar)?/i);
+    if (!match) return false;
 
-    const ehAdmin = await isAdmin(sock, from, adminId);
-    if (!ehAdmin) {
-        await sock.sendMessage(from, {
-            text: '🚫 Só administradores podem resetar o DC do grupo.'
-        }, { quoted: message });
-        return true;
-    }
-
-    const client = await pool.connect();
+    const querConfirmar = !!match[1];
 
     try {
-        await client.query('BEGIN');
+        // ✅ CORREÇÃO: antes, getNumeroReal local pegava sempre o primeiro
+        // campo que existisse (participantAlt -> participant -> remoteJid),
+        // sem checar o formato. Em grupos que usam LID, "participant" pode
+        // vir como "123456789@lid" em vez do número real "@s.whatsapp.net",
+        // e isso fazia extractDigits gerar um ID diferente do seu número
+        // real — por isso o bot não te reconhecia. Agora checarAutorizacao
+        // usa getNumeroReal do authNumero.js, que procura entre TODOS os
+        // campos disponíveis (participantAlt, participantPn, participant,
+        // remoteJid) e prioriza o que já vier no formato @s.whatsapp.net.
+        const { autorizado, solicitanteId } = checarAutorizacao(message, NUMEROS_AUTORIZADOS);
 
-        // 1) Zera as carteiras (saldo atual de todo mundo)
-        const walletsResult = await client.query(
-            `UPDATE damas_dc_wallets SET saldo = 0, atualizado_em = NOW() WHERE saldo != 0`
-        );
+        console.log(`[resetDcHandler] Tentativa de reset DC por: ${solicitanteId} (autorizados: ${NUMEROS_AUTORIZADOS.join(', ')})`);
+        console.log('[resetDcHandler] DEBUG message.key:', JSON.stringify(message.key));
 
-        // 2) Limpa o histórico/log de DC ganho por mensagens
-        //    OBS: isto apaga o log inteiro (todos os grupos).
-        //    Se quiser limitar ao grupo onde o comando foi chamado, troque por:
-        //    DELETE FROM damas_dc_messages WHERE grupo_id = $1  -- com [from] nos params
-        const ganhoResult = await client.query(
-            `DELETE FROM damas_dc_messages`
-        );
+        // 🔒 Checagem de autorização (só o número autorizado pode usar)
+        if (!autorizado) {
+            await sock.sendMessage(from, {
+                text: '🚫 Esse comando é restrito. Só o responsável pelo bot pode resetar o DC.'
+            }, { quoted: message });
+            return true;
+        }
 
-        await client.query('COMMIT');
+        // Garante que nada fique perdido no buffer em memória do dcTracker
+        // antes de contar/apagar — senão essas mensagens pendentes seriam
+        // gravadas DEPOIS do reset e o saldo "voltaria" sozinho.
+        await flushDC();
 
-        await sock.sendMessage(from, {
-            text: `🔄 *Reset completo de DC realizado!*\n\n` +
-                  `💰 ${walletsResult.rowCount} carteira(s) zerada(s).\n` +
-                  `🗑️ ${ganhoResult.rowCount} registro(s) de histórico apagado(s).\n\n` +
-                  `💬 Bora conversar de novo no grupo pra juntar DC e disputar o próximo leilão! 🔨`
-        }, { quoted: message });
+        // 1️⃣ Prévia: quantas carteiras e mensagens existem no total
+        const previewWallets = await pool.query(`SELECT COUNT(*)::int AS total FROM damas_dc_wallets`);
+        const previewMessages = await pool.query(`SELECT COUNT(*)::int AS total FROM damas_dc_messages`);
+
+        const totalWallets = previewWallets.rows[0].total;
+        const totalMessages = previewMessages.rows[0].total;
+
+        if (totalWallets === 0 && totalMessages === 0) {
+            await sock.sendMessage(from, {
+                text: '✅ Não há nenhum DC registrado (carteiras ou mensagens) pra resetar.'
+            }, { quoted: message });
+            return true;
+        }
+
+        // 2️⃣ Sem "confirmar" -> só avisa e pede confirmação
+        if (!querConfirmar) {
+            await sock.sendMessage(from, {
+                text: `⚠️💰 *ATENÇÃO — RESET GLOBAL DE DC, AÇÃO IRREVERSÍVEL*\n\n` +
+                      `Isso vai apagar, de *TODOS os grupos*:\n\n` +
+                      `   • ${totalWallets} carteira(s) (saldo de DC de todo mundo)\n` +
+                      `   • ${totalMessages} mensagem(ns) contabilizada(s)\n\n` +
+                      `Todo mundo volta a ter *0 DC* e a contagem de mensagens recomeça do zero.\n\n` +
+                      `Se tiver certeza, mande:\n*#resetardc confirmar*`
+            }, { quoted: message });
+            return true;
+        }
+
+        // 3️⃣ Com "confirmar" -> apaga de fato em transação
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const delMessages = await client.query(`DELETE FROM damas_dc_messages`);
+            const delWallets = await client.query(`DELETE FROM damas_dc_wallets`);
+
+            await client.query('COMMIT');
+
+            await sock.sendMessage(from, {
+                text: `✅ *Reset de DC concluído!*\n\n` +
+                      `🗑️ ${delWallets.rowCount} carteira(s) zerada(s)\n` +
+                      `🗑️ ${delMessages.rowCount} mensagem(ns) apagada(s)\n\n` +
+                      `💰 A contagem de DC recomeça do zero pra todo mundo, em todos os grupos.`
+            }, { quoted: message });
+
+            console.log(`🧹💰 [resetDcHandler] Reset GLOBAL de DC feito por ${solicitanteId} — ${delWallets.rowCount} carteiras e ${delMessages.rowCount} mensagens apagadas`);
+
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+
+            if (err.code === '23503') {
+                await sock.sendMessage(from, {
+                    text: `❌ Erro: existe outra tabela vinculada não prevista (constraint: ${err.constraint}). Avisa o dev pra ajustar o comando.`
+                }, { quoted: message });
+            } else {
+                await sock.sendMessage(from, {
+                    text: '❌ Erro ao resetar o DC. Tente novamente.'
+                }, { quoted: message });
+            }
+            console.error('[resetDcHandler] Erro ao apagar:', err.message);
+        } finally {
+            client.release();
+        }
 
         return true;
 
     } catch (err) {
-        await client.query('ROLLBACK');
         console.error('[handleResetDcCommand] Erro:', err.message);
         await sock.sendMessage(from, {
-            text: '❌ Erro ao resetar o DC. Nada foi alterado.'
+            text: '❌ Erro ao processar o comando de reset de DC.'
         }, { quoted: message });
         return true;
-    } finally {
-        client.release();
     }
 }

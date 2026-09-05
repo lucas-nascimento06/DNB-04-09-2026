@@ -2,6 +2,9 @@ import pool from '../../../db.js';
 
 const DC_POR_MENSAGEM = 1; // ajuste aqui quanto vale cada mensagem
 
+// 🎯 Só esse grupo conta DC. Mensagens de qualquer outro grupo são ignoradas.
+const GRUPO_PRINCIPAL = '120363413774574277@g.us';
+
 const processedDC = new Set();
 const CACHE_LIMIT = 200;
 
@@ -62,7 +65,8 @@ function getNumeroReal(message) {
  */
 export async function trackDC(sock, message) {
     try {
-        if (!message?.key?.remoteJid?.endsWith('@g.us')) return;
+        // 🎯 Só conta DC se a mensagem for do grupo principal
+        if (message?.key?.remoteJid !== GRUPO_PRINCIPAL) return;
         if (message.key.fromMe) return;
         if (isProcessed(message.key)) return;
 
@@ -93,7 +97,6 @@ export async function trackDC(sock, message) {
         console.log(`🧾 [DC] Enfileirado +${DC_POR_MENSAGEM} DC para ${numeroLimpo} (buffer: ${pendingBuffer.length})`);
 
         if (pendingBuffer.length >= FLUSH_MAX_BUFFER) {
-            // Não precisa esperar o timer, já dispara o flush agora
             flushDC().catch(err => console.error('[trackDC] Erro no flush por limite:', err.message));
         }
     } catch (err) {
@@ -104,14 +107,9 @@ export async function trackDC(sock, message) {
 /**
  * Escreve todo o buffer acumulado no banco em duas queries em lote,
  * não importa quantas mensagens tenham se acumulado.
- *
- * Exportada para poder ser chamada "sob demanda" antes de qualquer operação
- * que dependa do saldo real e atualizado (ex: #dc, #emprestar, #lance,
- * #fecharleilao) — assim garantimos consistência sem perder o benefício
- * do batching no caminho de alto volume (mensagem por mensagem).
  */
 export async function flushDC() {
-    if (flushing) return; // evita flush concorrente
+    if (flushing) return;
     if (pendingBuffer.length === 0) return;
 
     flushing = true;
@@ -119,7 +117,6 @@ export async function flushDC() {
     pendingBuffer = [];
 
     try {
-        // 1) Bulk insert das mensagens (dedup por grupo_id + message_id)
         const values = [];
         const placeholders = batch.map((item, i) => {
             const base = i * 5;
@@ -140,14 +137,12 @@ export async function flushDC() {
             return;
         }
 
-        // 2) Agrega quanto cada usuário ganhou de fato (só das linhas que foram inseridas)
         const ganhosPorUsuario = new Map();
         for (const row of insertResult.rows) {
             const atual = ganhosPorUsuario.get(row.user_id) || 0;
             ganhosPorUsuario.set(row.user_id, atual + Number(row.dc_ganho));
         }
 
-        // 3) Bulk upsert dos saldos, um único INSERT com vários VALUES
         const walletValues = [];
         const walletPlaceholders = [...ganhosPorUsuario.entries()].map(([userId, ganho], i) => {
             const base = i * 2;
@@ -166,19 +161,16 @@ export async function flushDC() {
         console.log(`💰 [DC] Flush concluído: ${insertResult.rowCount} mensagens novas, ${ganhosPorUsuario.size} usuário(s) atualizado(s)`);
     } catch (err) {
         console.error('[flushDC] Erro:', err.message);
-        // Em caso de erro, devolve os itens pro buffer pra tentar de novo no próximo flush
         pendingBuffer = batch.concat(pendingBuffer);
     } finally {
         flushing = false;
     }
 }
 
-// Dispara o flush periodicamente
 setInterval(() => {
     flushDC().catch(err => console.error('[trackDC] Erro no flush periódico:', err.message));
 }, FLUSH_INTERVAL_MS);
 
-// Garante que o buffer não se perca se o processo for encerrado (Ctrl+C, PM2 restart, etc)
 async function flushOnExit() {
     if (pendingBuffer.length === 0) return;
     console.log(`🛑 [DC] Encerrando: gravando ${pendingBuffer.length} mensagem(ns) pendente(s) antes de sair...`);
