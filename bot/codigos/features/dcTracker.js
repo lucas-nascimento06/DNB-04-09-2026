@@ -3,7 +3,7 @@ import pool from '../../../db.js';
 const DC_POR_MENSAGEM = 1; // ajuste aqui quanto vale cada mensagem
 
 // 🎯 Só esse grupo conta DC. Mensagens de qualquer outro grupo são ignoradas.
-const GRUPO_PRINCIPAL = '120363413774574277@g.us';
+const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 
 const processedDC = new Set();
 const CACHE_LIMIT = 200;
