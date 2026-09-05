@@ -1,5 +1,15 @@
-// signosHandler.js - Versão Otimizada com apenas 3 comandos
+// signosHandler.js - Versão Otimizada com apenas 3 comandos + Fotos locais (com thumbnail, igual boasVindas)
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { Jimp } from 'jimp';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Pasta com as fotos dos signos (bot/codigos/fotos-signos)
+const PASTA_FOTOS = path.join(__dirname, '..', 'fotos-signos');
 
 const URL_SIGNOS = 'https://raw.githubusercontent.com/lucas-nascimento06/signos-taro/refs/heads/main/signos.json';
 const ADMIN_NUMBERS = ['5521972337640'];
@@ -34,6 +44,74 @@ function extractDigits(number) {
     return digits;
 }
 
+// ============================================
+// 🖼️ RESOLUÇÃO DE IMAGENS LOCAIS
+// ============================================
+
+function obterCaminhoImagem(key) {
+    const extensoes = ['.jpg', '.jpeg', '.png'];
+    for (const ext of extensoes) {
+        const caminho = path.join(PASTA_FOTOS, `${key}${ext}`);
+        if (fs.existsSync(caminho)) {
+            return caminho;
+        }
+    }
+    return null;
+}
+
+/**
+ * Gera thumbnail (mesmo esquema usado no boasVindas.js)
+ */
+async function gerarThumbnail(buffer, size = 256) {
+    try {
+        const image = await Jimp.read(buffer);
+        await image.resize({ w: size, h: size });
+        return await image.getBuffer("image/png");
+    } catch (err) {
+        console.error("❌ Erro ao gerar thumbnail:", err.message);
+        return null;
+    }
+}
+
+/**
+ * Envia imagem com thumbnail — igual ao sendImageWithThumbnail do boasVindas.js.
+ * Necessário porque no Termux o envio de imagem sem jpegThumbnail
+ * às vezes não renderiza corretamente.
+ */
+async function sendImageWithThumbnail(sock, jid, imageBuffer, caption, options = {}) {
+    try {
+        let thumb = null;
+        try {
+            thumb = await gerarThumbnail(imageBuffer, 256);
+        } catch (thumbErr) {
+            console.warn("⚠️ Não foi possível gerar thumbnail, continuando sem ele:", thumbErr.message);
+        }
+
+        const messageOptions = {
+            image: imageBuffer,
+            caption,
+        };
+
+        if (thumb) {
+            messageOptions.jpegThumbnail = thumb;
+        }
+
+        const mensagem = await sock.sendMessage(jid, messageOptions, options);
+        console.log("✅ Imagem enviada" + (thumb ? " com thumbnail" : " sem thumbnail"));
+        return mensagem;
+    } catch (err) {
+        console.error("❌ Erro ao enviar imagem:", err.message);
+        try {
+            const mensagem = await sock.sendMessage(jid, { text: caption }, options);
+            console.log("✅ Enviado como texto (fallback)");
+            return mensagem;
+        } catch (fallbackErr) {
+            console.error("❌ Erro no fallback:", fallbackErr.message);
+            return null;
+        }
+    }
+}
+
 const formatarCabecalho = () =>
     'ஓீᤢ✧͢⃟ᤢ̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̼̬🔮ஓீᤢ✧͢⃟ᤢ̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̼̬🔮ஓீᤢ✧͢⃟ᤢ̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̤̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̣̼̬🔮\n💃 ⃝⃕፝⃟Oráculo das Damas⸵░⃟☪️\n᭥ꩌ゚໋ ꯴᩠ꦽꦼ⛓️↦᭥ꩌ゚໋ ꯴᩠ꦽꦼ⛓️↦᭥ꩌ゚໋ ꯴᩠ꦽꦼ⛓️\n𝔇𝔞𝔪𝔞𝔰 𝔡𝔞 𝔑𝔦𝔤𝔥𝔱\n🔮 ⃢───𖡜ꦽ̸ོ˚￫───ཹ🔮💃🏻 ݇-݈\n°︠︠︠︠︠︠︠︠𖡬 ᭄\n\n';
 
@@ -51,7 +129,6 @@ export async function carregarSignos() {
     try {
         console.log('🔄 Carregando signos...');
 
-        // Cache-busting: evita pegar versão em cache do CDN do GitHub (Fastly)
         const urlSemCache = `${URL_SIGNOS}?t=${Date.now()}`;
 
         const response = await fetch(urlSemCache, {
@@ -75,6 +152,10 @@ export async function carregarSignos() {
                 console.warn(`⚠️ Signo ${key} incompleto:`, signo);
             } else {
                 validos++;
+            }
+
+            if (!obterCaminhoImagem(key)) {
+                console.warn(`🖼️ Sem foto local para o signo: ${key} (esperado em ${PASTA_FOTOS})`);
             }
         }
 
@@ -237,14 +318,14 @@ async function enviarSignosCompletos(sock, jid) {
     envioEmAndamento = true;
 
     try {
-        const listaSignos = Object.values(signos);
+        const listaSignos = Object.entries(signos); // [[key, signo], ...]
 
         if (listaSignos.length === 0) {
             throw new Error('Nenhum signo foi carregado!');
         }
 
         console.log(`📊 Total de signos a enviar: ${listaSignos.length}`);
-        console.log(`🔍 Primeiro signo:`, listaSignos[0]);
+        console.log(`🔍 Primeiro signo:`, listaSignos[0][1]);
 
         const mentions = await obterParticipantesGrupo(sock, jid);
 
@@ -267,21 +348,34 @@ async function enviarSignosCompletos(sock, jid) {
 
         // Envia cada signo
         for (let i = 0; i < listaSignos.length; i++) {
-            const s = listaSignos[i];
+            const [key, s] = listaSignos[i];
 
             if (!s.nome || !s.simbolo || !s.carta || !s.previsao || !s.conselho) {
-                console.warn(`⚠️ Signo ${i} incompleto, pulando:`, s);
+                console.warn(`⚠️ Signo ${i} (${key}) incompleto, pulando:`, s);
                 continue;
             }
 
-            const mensagem = formatarCabecalho() +
+            const legenda = formatarCabecalho() +
                 `${s.simbolo} *${s.nome.toUpperCase()}* ${s.simbolo}\n\n` +
                 `🃏 *Carta do Dia:* ${s.carta}\n\n` +
                 `🌟 *Previsão:*\n${s.previsao}\n\n` +
                 `💡 *Conselho:*\n${s.conselho}\n\n` +
                 formatarRodape();
 
-            await sock.sendMessage(jid, { text: mensagem });
+            const caminhoImagem = obterCaminhoImagem(key);
+
+            if (caminhoImagem) {
+                try {
+                    const buffer = fs.readFileSync(caminhoImagem);
+                    await sendImageWithThumbnail(sock, jid, buffer, legenda);
+                } catch (err) {
+                    console.error(`❌ Erro ao ler/enviar imagem de "${key}", enviando só texto:`, err.message);
+                    await sock.sendMessage(jid, { text: legenda });
+                }
+            } else {
+                console.warn(`🖼️ Imagem não encontrada para "${key}", enviando só texto.`);
+                await sock.sendMessage(jid, { text: legenda });
+            }
 
             console.log(`✅ Signo ${i + 1}/${listaSignos.length} enviado: ${s.nome}`);
 
@@ -356,7 +450,9 @@ export function obterSigno(nome) {
         `💡 *Conselho:*\n${s.conselho}\n` +
         formatarRodape();
 
-    return { sucesso: true, mensagem: msg, signo: s };
+    const caminhoImagem = obterCaminhoImagem(key);
+
+    return { sucesso: true, imagem: caminhoImagem, mensagem: msg, signo: s };
 }
 
 // ============================================
@@ -460,7 +556,18 @@ export async function handleSignos(sock, message) {
         if (cmd.startsWith('!signo ')) {
             const nome = texto.substring(7).trim();
             const res = obterSigno(nome);
-            await sock.sendMessage(jid, { text: res.mensagem }, { quoted: message });
+
+            if (res.sucesso && res.imagem) {
+                try {
+                    const buffer = fs.readFileSync(res.imagem);
+                    await sendImageWithThumbnail(sock, jid, buffer, res.mensagem, { quoted: message });
+                } catch (err) {
+                    console.error(`❌ Erro ao ler/enviar imagem, enviando só texto:`, err.message);
+                    await sock.sendMessage(jid, { text: res.mensagem }, { quoted: message });
+                }
+            } else {
+                await sock.sendMessage(jid, { text: res.mensagem }, { quoted: message });
+            }
             return true;
         }
 
