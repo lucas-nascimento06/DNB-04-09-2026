@@ -107,6 +107,15 @@ export async function handleLanceCommand(sock, message, content) {
         const valorAtual = Number(leilao.valor_atual);
         const quoted = { quoted: quotedDoAnuncio(leilao, message) };
 
+        // 🔒 Impede que a pessoa leiloada dê lance em si mesma (auto-compra)
+        if (userId === leilao.leiloado_id) {
+            await client.query('ROLLBACK');
+            await sock.sendMessage(from, {
+                text: `⚠️ Você é a pessoa sendo leiloada [${leilao.codigo}] — não pode dar lance em si mesmo(a).`
+            }, quoted);
+            return true;
+        }
+
         if (valorLance <= valorAtual) {
             await client.query('ROLLBACK');
             await pool.query(
