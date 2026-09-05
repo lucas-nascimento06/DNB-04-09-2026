@@ -204,7 +204,7 @@ export async function handleLeilaoCommand(sock, message, content) {
         );
         if (ativoResult.rowCount > 0) {
             await sock.sendMessage(from, {
-                text: '⚠️ Já existe um leilão em andamento nesse grupo. Feche com *#arrematar* + *#fl* antes de abrir outro.'
+                text: '⚠️ Já existe um leilão em andamento nesse grupo. Feche com *#fl* antes de abrir outro.'
             }, { quoted: message });
             return true;
         }
