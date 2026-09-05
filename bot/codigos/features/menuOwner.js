@@ -248,7 +248,7 @@ function isOwner(userId, ownerNumbers) {
     const isOwnerUser = ownerDigitsList.includes(userDigits);
     
     console.log(`\n🎯 RESULTADO: ${isOwnerUser ? '👑 É OWNER' : '🚫 NÃO É OWNER'}`);
-    console.log(`==========================================\n`);
+    console.log(`=======================================\n`);
     
     return isOwnerUser;
 }
