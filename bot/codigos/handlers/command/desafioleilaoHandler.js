@@ -1,87 +1,9 @@
-// ARQUIVO: bot/codigos/handlers/command/desafioleilaoHandler.js
-// Gerencia desafios enviados durante os leilões (#desafio e #pronto)
-// ✨ VERSÃO MELHORADA - #pronto sem ID obrigatório
-// ✨ AJUSTE: #pronto @admin agora notifica o admin marcado e o registro
-//    enviado pra sala de leilões inclui o #ID do desafio pra rastreio.
-// 🔧 FIX: removida comparação frágil que bloqueava o envio do registro
-//    quando GRUPO_LEILOES_ID era configurado com o ID do grupo de admins.
-//    Agora só checa se a variável de ambiente está definida.
-// 🔧 FIX 2: encaminhamento de mídia pro grupo de registros agora também
-//    funciona quando a comprovação veio por REPLY/QUOTE numa foto/vídeo
-//    já mandada no grupo (antes só funcionava se a mídia vinha direto
-//    como legenda do #pronto).
-//
-// 🔧 FIX 3: parou de usar "forward" pra reencaminhar a mídia de comprovação
-//    pro grupo de admins. O forward reenviava a mensagem ORIGINAL, que ainda
-//    tinha o texto "#pronto" na legenda/reply — isso fazia esse texto "ecoar"
-//    de volta pro bot dentro do próprio grupo de admins, disparando o handler
-//    de novo por engano (e mandando "você não tem desafio pendente" lá).
-//    Agora a mídia é baixada e reenviada limpa, sem nenhuma legenda.
-//
-// ✨ AJUSTE 4 (prazo de 24h + aviso de desafio não cumprido):
-//    - O prazo do desafio passou de 3 dias pra 24 horas (ver PRAZO_DESAFIO_HORAS).
-//    - Foi adicionado um verificador (verificarDesafiosExpirados) que roda
-//      periodicamente, encontra desafios ainda "pendente" cujo prazo de 24h
-//      já estourou, manda um aviso na SALA DE ADMINS marcando o casal e o
-//      admin que criou, e marca o desafio como "expirado" no banco (pra não
-//      avisar de novo).
-//    - Pra isso funcionar de verdade, é preciso:
-//        1) Chamar iniciarVerificadorDesafiosExpirados(sock) uma vez, no
-//           arquivo principal do bot, depois que o `sock` conectar (ver
-//           exemplo de uso no comentário logo acima da função, mais abaixo).
-//        2) Garantir que a coluna de status na tabela damas_desafios aceite
-//           o valor 'expirado' (se for um ENUM/CHECK constraint no banco,
-//           rodar uma migration liberando esse valor).
-//
-// ██████████████████████████████████████████████████████████████████
-// ██                                                                ██
-// ██   MAPA DOS DOIS GRUPOS USADOS NESSE ARQUIVO:                  ██
-// ██                                                                ██
-// ██   1) GRUPO ONDE O LEILÃO ACONTECE (comandos #desafio/#pronto) ██
-// ██      ID: 120363413774574277@g.us                              ██
-// ██      -> NÃO fica hardcoded aqui no código. Esse ID vem sempre ██
-// ██         de "from = message.key.remoteJid", ou seja, é o       ██
-// ██         próprio grupo de onde a mensagem #desafio/#pronto foi ██
-// ██         mandada. O bot responde ali mesmo automaticamente.    ██
-// ██                                                                ██
-// ██   2) GRUPO DOS ADMINS (recebe só o registro/aviso de desafio  ██
-// ██      concluído, não roda comandos)                            ██
-// ██      ID: 120363429213248144@g.us                              ██
-// ██      -> Esse ID FICA CONFIGURADO NO .env, na variável         ██
-// ██         GRUPO_LEILOES_ID. Procure mais abaixo neste arquivo   ██
-// ██         por "const GRUPO_LEILOES = process.env..." para ver   ██
-// ██         onde ele é lido e usado.                               ██
-// ██                                                                ██
-// ██████████████████████████████████████████████████████████████████
-
 import pool from '../../../../db.js';
-// ⚠️ AJUSTE: troque '@whiskeysockets/baileys' pelo pacote baileys que o
-//    projeto já usa (ex: '@adiwajshing/baileys'), se for diferente —
-//    dá pra conferir olhando o import do "sock" lá no arquivo principal do bot.
 import { downloadMediaMessage } from '@whiskeysockets/baileys';
-// 🖼️ Mesmo pacote usado no boasvindas.js pra gerar thumbnail da imagem —
-//    sem o "jpegThumbnail", a imagem às vezes não aparece direito (fica
-//    só carregando) em algumas sessões, principalmente rodando no Termux.
 import { Jimp } from "jimp";
 
-// ⏰ Prazo que o casal tem pra cumprir o desafio antes de virar "expirado"
-//    e disparar o aviso na sala de admins. Usado no TEXTO da mensagem do
-//    #desafio (ex: "Vocês têm 24 horas"). Deixa sempre em 24 aqui —
-//    quem controla o tempo real da checagem é o INTERRUPTOR 1 logo abaixo.
 const PRAZO_DESAFIO_HORAS = 24;
-
-// ██████████████████████████████████████████████████████████████████
-// ██  🔧 INTERRUPTOR 1 de 2 — TEMPO REAL QUE O VERIFICADOR CONSIDERA ██
-// ██  "EXPIRADO" (o texto do INTERVAL usado na query do banco)      ██
-// ██                                                                 ██
-// ██  Pra TESTAR rápido, comente a linha de PRODUÇÃO (coloca // na  ██
-// ██  frente) e descomente a linha de TESTE (tira o // da frente).  ██
-// ██                                                                 ██
-// ██  🚨 DEPOIS DO TESTE, VOLTA PRA PRODUÇÃO — senão todo desafio    ██
-// ██     real vira "não cumprido" 1 minuto depois de criado.        ██
-// ██████████████████████████████████████████████████████████████████
-// const INTERVALO_EXPIRACAO_SQL = `${PRAZO_DESAFIO_HORAS} hours`;   // 👈 PRODUÇÃO (deixa assim no dia a dia)
-const INTERVALO_EXPIRACAO_SQL = '1 minutes';                    // 👈 TESTE (1 minuto) — descomenta essa linha E comenta a de cima
+const INTERVALO_EXPIRACAO_SQL = '24 hours';
 
 function extractDigits(number) {
     if (!number) return null;
@@ -109,9 +31,6 @@ async function isAdmin(sock, groupId, userId) {
     }
 }
 
-// ✂️ Extrai só o texto "livre" que a pessoa escreveu no #pronto — tira o
-//    comando, um possível ID numérico e as menções (@admin etc), sobrando
-//    só a frase que ela realmente digitou (ex: "Fizemos o que foi combinado").
 function extrairTextoExtra(content) {
     return content
         .replace(/#pronto\b\s*/i, '')
@@ -120,26 +39,17 @@ function extrairTextoExtra(content) {
         .trim();
 }
 
-// 🖼️ Mesma função do boasvindas.js — gera uma miniatura (thumbnail) da
-//    imagem com o Jimp. Sem isso, o WhatsApp/Baileys às vezes manda a
-//    imagem sem preview, e ela não aparece em algumas sessões (comum no
-//    Termux, por causa dos recursos mais limitados do aparelho).
 async function gerarThumbnail(buffer, size = 256) {
     try {
         const image = await Jimp.read(buffer);
         await image.resize({ w: size, h: size });
         return await image.getBuffer("image/png");
     } catch (err) {
-        console.warn('[desafioleilaoHandler] Não foi possível gerar thumbnail:', err.message);
+        console.warn('[desafioleilaoHandler] Erro ao gerar thumbnail:', err.message);
         return null;
     }
 }
 
-// 📥➡️📤 Baixa a mídia de uma mensagem (direta ou reconstruída a partir de um
-//    quote) e reenvia pro grupo de destino já com a LEGENDA DE ATRIBUIÇÃO
-//    (quem mandou + o que escreveu) embutida na própria mídia, em vez de
-//    mandar como mensagem separada — assim tudo chega junto, de uma vez.
-//    "opcoes.caption" e "opcoes.mentions" já vêm prontos de quem chamou.
 async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes = {}) {
     const { caption = '', mentions = [] } = opcoes;
     const conteudo = mensagemComMidia.message;
@@ -149,9 +59,6 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
         .find(t => conteudo[t]);
     if (!tipo) return false;
 
-    // 🧹 Apaga a legenda ORIGINAL do objeto antes de baixar a mídia (pode ter
-    //    "#pronto ..." dentro) — a legenda final é sempre a "caption" que
-    //    passamos por parâmetro, nunca a original.
     const mensagemSemComando = {
         ...mensagemComMidia,
         message: {
@@ -170,16 +77,11 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
         { reuploadRequest: sock.updateMediaMessage }
     );
 
-    // Só imagem, vídeo e documento suportam "caption" no WhatsApp.
     const suportaCaption = tipo === 'imageMessage' || tipo === 'videoMessage' || tipo === 'documentMessage';
 
     const payload = {};
     if (tipo === 'imageMessage') {
         payload.image = buffer;
-
-        // 🖼️ Mesmo esquema do boasvindas.js: gera o thumbnail ANTES de
-        // mandar e injeta como "jpegThumbnail". Se não conseguir gerar,
-        // manda mesmo assim sem o thumbnail (não trava o fluxo).
         const thumb = await gerarThumbnail(buffer, 256);
         if (thumb) payload.jpegThumbnail = thumb;
     } else if (tipo === 'videoMessage') {
@@ -204,16 +106,10 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
     try {
         await sock.sendMessage(grupoDestino, payload);
     } catch (err) {
-        // 🔁 Se o envio da mídia falhar por qualquer motivo, retorna false —
-        // quem chamou essa função já manda a legenda como texto puro nesse
-        // caso, pra não perder a informação de quem mandou a comprovação.
         console.warn('[desafioleilaoHandler] Erro ao enviar mídia:', err.message);
         return false;
     }
 
-    // Áudio e figurinha não têm campo de legenda no WhatsApp — nesse caso,
-    // manda a atribuição como uma mensagem de texto logo em seguida, senão
-    // ela se perderia.
     if (!suportaCaption && caption) {
         await sock.sendMessage(grupoDestino, { text: caption, mentions });
     }
@@ -221,17 +117,10 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
     return true;
 }
 
-// 📎 Verifica se a mensagem tem alguma COMPROVAÇÃO anexada — pode ser:
-//    - foto, vídeo, documento ou áudio (direto ou como resposta/reply)
-//    - OU um texto descrevendo o que foi feito (ex: "#pronto tiramos a selfie
-//      e mandamos no privado do admin")
-//    O que NÃO passa é vir vazio: só "#pronto" ou só "#pronto @admin", sem
-//    nenhum texto extra nem mídia junto.
 function temComprovacao(message, content) {
     const msg = message.message;
     if (!msg) return false;
 
-    // Mídia mandada DIRETO junto com o #pronto (como legenda da foto/vídeo, por ex.)
     const temMidiaDireta = !!(
         msg.imageMessage ||
         msg.videoMessage ||
@@ -241,7 +130,6 @@ function temComprovacao(message, content) {
     );
     if (temMidiaDireta) return true;
 
-    // Mídia anexada via RESPOSTA (reply) a uma mensagem de mídia já existente
     const quoted = msg.extendedTextMessage?.contextInfo?.quotedMessage;
     if (quoted) {
         const temMidiaNoQuote = !!(
@@ -254,7 +142,6 @@ function temComprovacao(message, content) {
         if (temMidiaNoQuote) return true;
     }
 
-    // Texto extra além do comando/ID/menção (ex: descrição do que fizeram)
     const textoRestante = extrairTextoExtra(content);
     if (textoRestante.length >= 3) return true;
 
@@ -278,14 +165,10 @@ async function resolverNumeroRealDoMencionado(sock, groupId, mentionedJid) {
     return extractDigits(mentionedJid);
 }
 
-// ============================================================
-// 🎯 COMANDO #desafio — Admin envia desafio pro casal
-// ============================================================
 async function handleDesafioCommand(sock, message, content) {
     const from = message.key.remoteJid;
     if (!from.endsWith('@g.us')) return false;
 
-    // Detecta "#desafio" em qualquer posição da mensagem (não só no início)
     const match = content.match(/#desafio\b\s*/i);
     if (!match) return false;
 
@@ -333,7 +216,6 @@ async function handleDesafioCommand(sock, message, content) {
             return true;
         }
 
-        // Verifica se já existe desafio ativo pra esse casal
         const ativo = await pool.query(
             `SELECT id FROM damas_desafios 
              WHERE grupo_id = $1 
@@ -355,7 +237,6 @@ async function handleDesafioCommand(sock, message, content) {
             return true;
         }
 
-        // Insere o desafio no banco
         const insertResult = await pool.query(
             `INSERT INTO damas_desafios 
              (grupo_id, casal_id1, casal_id2, descricao, admin_id, status)
@@ -370,7 +251,6 @@ async function handleDesafioCommand(sock, message, content) {
             timeStyle: 'short' 
         });
 
-        // 🎯 Envia o desafio pros dois no grupo
         await sock.sendMessage(from, {
             text: `🎯 *DESAFIO RECEBIDO!* 🎯\n\n` +
                   `👥 Casal: @${pessoa1} & @${pessoa2}\n\n` +
@@ -400,19 +280,10 @@ async function handleDesafioCommand(sock, message, content) {
     }
 }
 
-// ============================================================
-// ✅ COMANDO #pronto — Casal confirma que completou desafio
-//    Aceita: #pronto | #pronto id123 | #pronto @admin
-//    A menção (@admin) é só pra NOTIFICAR/marcar um admin — quem
-//    identifica o desafio continua sendo quem ENVIOU a mensagem
-//    (tem que ser um dos dois do casal).
-// ============================================================
 async function handleProntoCommand(sock, message, content) {
     const from = message.key.remoteJid;
     if (!from.endsWith('@g.us')) return false;
 
-    // Detecta "#pronto" em qualquer posição da mensagem (não só no início).
-    // Aceita: #pronto, #pronto id123, #pronto 123 (a @menção é tratada à parte)
     const match = content.match(/#pronto\b(?:\s+(?:id)?(\d+))?/i);
     if (!match) return false;
 
@@ -422,20 +293,17 @@ async function handleProntoCommand(sock, message, content) {
 
         let desafioId = match[1] ? parseInt(match[1], 10) : null;
 
-        // 👮 Se a pessoa marcou alguém no #pronto, é o admin sendo notificado
-        // (não é usado pra identificar o desafio, só pra marcar/avisar na sala de leilões)
         const mentionedRaw = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         let adminMencionadoId = null;
         if (mentionedRaw.length > 0) {
             adminMencionadoId = await resolverNumeroRealDoMencionado(sock, from, mentionedRaw[0]);
         }
 
-        // 🔍 Se não passou ID, busca o desafio PENDENTE do casal (baseado em quem ENVIOU)
         if (!desafioId) {
             const desafioResult = await pool.query(
                 `SELECT id FROM damas_desafios 
                  WHERE grupo_id = $1 
-                 AND status = 'pendente'
+                 AND status IN ('pendente', 'confirmado_por_um')
                  AND (casal_id1 = $2 OR casal_id2 = $2)
                  ORDER BY criado_em DESC
                  LIMIT 1`,
@@ -452,7 +320,6 @@ async function handleProntoCommand(sock, message, content) {
             desafioId = desafioResult.rows[0].id;
         }
 
-        // 📋 Busca o desafio completo
         const desafioResult = await pool.query(
             `SELECT * FROM damas_desafios WHERE id = $1 AND grupo_id = $2`,
             [desafioId, from]
@@ -467,7 +334,6 @@ async function handleProntoCommand(sock, message, content) {
 
         const desafio = desafioResult.rows[0];
 
-        // ✅ Valida se quem está respondendo é um dos dois do casal
         if (userId !== desafio.casal_id1 && userId !== desafio.casal_id2) {
             await sock.sendMessage(from, {
                 text: `🚫 *Acesso negado!*\n\n` +
@@ -477,8 +343,6 @@ async function handleProntoCommand(sock, message, content) {
             return true;
         }
 
-        // 📎 Exige alguma comprovação (foto, vídeo ou texto) — não deixa
-        //    passar um "#pronto" vazio, sem nada além da menção do admin.
         if (!temComprovacao(message, content)) {
             await sock.sendMessage(from, {
                 text: `🚨 *OPA, CALMA AÍ!* 🚨\n\n` +
@@ -500,7 +364,6 @@ async function handleProntoCommand(sock, message, content) {
             return true;
         }
 
-        // 🔄 Se já foi concluído antes, avisa
         if (desafio.status === 'concluido') {
             const dataConclusao = new Date(desafio.concluido_em).toLocaleString('pt-BR');
             await sock.sendMessage(from, {
@@ -509,16 +372,64 @@ async function handleProntoCommand(sock, message, content) {
             return true;
         }
 
-        // 🔧 Marca como concluído
-        const updateResult = await pool.query(
-            `UPDATE damas_desafios 
+        let jaConfirmou = false;
+        let novoStatus = 'confirmado_por_um';
+        
+        if (desafio.status === 'confirmado_por_um') {
+            if ((userId === desafio.casal_id1 && desafio.confirmado_por_casal_1) ||
+                (userId === desafio.casal_id2 && desafio.confirmado_por_casal_2)) {
+                jaConfirmou = true;
+            } else {
+                novoStatus = 'concluido';
+            }
+        }
+
+        if (jaConfirmou) {
+            await sock.sendMessage(from, {
+                text: `ℹ️ Você já confirmou este desafio. Aguarde a confirmação do outro membro do casal.`
+            }, { quoted: message });
+            return true;
+        }
+
+        let updateQuery, updateParams;
+        if (novoStatus === 'confirmado_por_um') {
+            if (userId === desafio.casal_id1) {
+                updateQuery = `UPDATE damas_desafios 
+                 SET status = $1, confirmado_por_casal_1 = $2
+                 WHERE id = $3
+                 RETURNING *`;
+                updateParams = [novoStatus, userId, desafioId];
+            } else {
+                updateQuery = `UPDATE damas_desafios 
+                 SET status = $1, confirmado_por_casal_2 = $2
+                 WHERE id = $3
+                 RETURNING *`;
+                updateParams = [novoStatus, userId, desafioId];
+            }
+        } else {
+            updateQuery = `UPDATE damas_desafios 
              SET status = 'concluido', concluido_em = NOW(), concluido_por = $1
              WHERE id = $2
-             RETURNING *`,
-            [userId, desafioId]
-        );
+             RETURNING *`;
+            updateParams = [userId, desafioId];
+        }
 
+        const updateResult = await pool.query(updateQuery, updateParams);
         const desafioAtualizado = updateResult.rows[0];
+
+        if (novoStatus === 'confirmado_por_um') {
+            const outraMembro = userId === desafio.casal_id1 ? desafio.casal_id2 : desafio.casal_id1;
+            await sock.sendMessage(from, {
+                text: `✅ *CONFIRMAÇÃO RECEBIDA!* ✨\n\n` +
+                      `@${userId} confirmou que o desafio foi realizado!\n\n` +
+                      `⏳ Agora é a vez de @${outraMembro} confirmar também.\n\n` +
+                      `🎯 *Desafio:* ${desafio.descricao}`,
+                mentions: [`${userId}@s.whatsapp.net`, `${outraMembro}@s.whatsapp.net`]
+            });
+            console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} confirmado por ${userId}`);
+            return true;
+        }
+
         const dataEnvio = new Date(desafio.criado_em).toLocaleString('pt-BR', { 
             dateStyle: 'short', 
             timeStyle: 'short' 
@@ -528,7 +439,6 @@ async function handleProntoCommand(sock, message, content) {
             timeStyle: 'short'
         });
 
-        // 🎉 Resposta no grupo (marcando os dois + admin notificado, se houver)
         const mentionsConclusao = [`${desafio.casal_id1}@s.whatsapp.net`, `${desafio.casal_id2}@s.whatsapp.net`];
         let linhaAdminMencionado = '';
         if (adminMencionadoId) {
@@ -546,13 +456,6 @@ async function handleProntoCommand(sock, message, content) {
             mentions: mentionsConclusao
         });
 
-        // ██████████████████████████████████████████████████████████████
-        // ██  ID DO GRUPO QUE RECEBE OS REGISTROS (GRUPO DOS ADMINS)   ██
-        // ██  Configurado no arquivo .env, variável GRUPO_LEILOES_ID   ██
-        // ██  Valor que deve estar no .env: 120363429213248144@g.us    ██
-        // ██  (NÃO é o grupo onde o leilão acontece — é o grupo priv-  ██
-        // ██   ado dos admins que só recebe os avisos/registros)       ██
-        // ██████████████████████████████████████████████████████████████
         const GRUPO_LEILOES = process.env.GRUPO_LEILOES_ID;
 
         if (GRUPO_LEILOES) {
@@ -580,14 +483,6 @@ async function handleProntoCommand(sock, message, content) {
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
             try {
-                // 📸 Se a comprovação veio como mídia DIRETA (foto/vídeo/áudio/
-                // documento anexado no próprio #pronto), encaminha ela também
-                // pro grupo de admins, além do resumo em texto logo abaixo.
-                //
-                // 🔧 FIX: se a comprovação veio por REPLY/QUOTE numa foto/vídeo
-                // já mandada antes no grupo, a mídia direta do #pronto está
-                // vazia — precisamos pegar a mídia de dentro do quotedMessage
-                // e reconstruir uma "mensagem" mínima pra poder encaminhar.
                 const temMidiaDireta = !!(
                     message.message?.imageMessage ||
                     message.message?.videoMessage ||
@@ -604,9 +499,6 @@ async function handleProntoCommand(sock, message, content) {
                     quotedMsg?.audioMessage
                 );
 
-                // 🏷️ Monta a legenda de atribuição (quem mandou + o que
-                // escreveu) UMA vez só — ela vai embutida na própria mídia
-                // (como "caption") em vez de virar uma mensagem separada.
                 const textoDoCasal = extrairTextoExtra(content);
                 const legendaAtribuicao = `📸 *Comprovação de:* @${desafio.casal_id1} e @${desafio.casal_id2}` +
                       (textoDoCasal.length >= 3 ? `\n💬 _"${textoDoCasal}"_` : '');
@@ -614,14 +506,11 @@ async function handleProntoCommand(sock, message, content) {
 
                 let midiaEnviada = false;
                 if (temMidiaDireta) {
-                    // Mídia veio direto como legenda do #pronto → baixa e reenvia com a atribuição
                     midiaEnviada = await reenviarMidiaLimpa(sock, GRUPO_LEILOES, message, {
                         caption: legendaAtribuicao,
                         mentions: mentionsAtribuicao
                     });
                 } else if (temMidiaNoQuote) {
-                    // Mídia veio via reply a uma mensagem anterior → reconstrói
-                    // uma mensagem mínima em cima do quote pra conseguir baixar
                     const quotedFakeMessage = {
                         key: {
                             remoteJid: from,
@@ -637,10 +526,6 @@ async function handleProntoCommand(sock, message, content) {
                     });
                 }
 
-                // 📝 Se não tinha mídia nenhuma (comprovação só por texto), ou
-                // se por algum motivo o reenvio da mídia falhou, manda a
-                // atribuição como mensagem de texto normal — assim ela nunca
-                // se perde.
                 if (!midiaEnviada) {
                     await sock.sendMessage(GRUPO_LEILOES, {
                         text: legendaAtribuicao,
@@ -653,13 +538,11 @@ async function handleProntoCommand(sock, message, content) {
                     mentions: mentionsRegistro
                 });
                 console.log(`📋 [desafioleilaoHandler] Registro do desafio #${desafioId} enviado pro grupo de admins`);
-                if (temMidiaDireta) console.log(`   Mídia encaminhada: direta (legenda do #pronto)`);
-                if (temMidiaNoQuote) console.log(`   Mídia encaminhada: via reply/quote`);
+                if (temMidiaDireta) console.log(`   Mídia encaminhada: direta`);
+                if (temMidiaNoQuote) console.log(`   Mídia encaminhada: via reply`);
             } catch (err) {
                 console.warn('[desafioleilaoHandler] Erro ao enviar registro:', err.message);
             }
-        } else {
-            console.warn('[desafioleilaoHandler] GRUPO_LEILOES_ID não configurado no .env — registro não enviado.');
         }
 
         console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} concluído`);
@@ -677,23 +560,11 @@ async function handleProntoCommand(sock, message, content) {
     }
 }
 
-// ============================================================
-// ⏰ VERIFICADOR DE DESAFIOS EXPIRADOS (prazo de 24h estourado)
-//    Roda periodicamente (ver iniciarVerificadorDesafiosExpirados),
-//    busca todo desafio ainda "pendente" cujo prazo já passou, avisa
-//    a SALA DE ADMINS marcando o casal + o admin que criou, e marca
-//    o desafio como "expirado" no banco (pra não avisar de novo).
-// ============================================================
 async function verificarDesafiosExpirados(sock) {
     const GRUPO_LEILOES = process.env.GRUPO_LEILOES_ID;
-    if (!GRUPO_LEILOES) {
-        console.warn('[desafioleilaoHandler] GRUPO_LEILOES_ID não configurado — não é possível avisar desafios expirados.');
-        return;
-    }
+    if (!GRUPO_LEILOES) return;
 
     try {
-        // 👆 Essa query usa o INTERRUPTOR 1 (INTERVALO_EXPIRACAO_SQL, lá em
-        // cima do arquivo) pra decidir o que conta como "expirado".
         const expirados = await pool.query(
             `SELECT * FROM damas_desafios
              WHERE status = 'pendente'
@@ -716,8 +587,6 @@ async function verificarDesafiosExpirados(sock) {
                     ]
                 });
 
-                // 🔧 Marca como "expirado" pra esse desafio parar de aparecer
-                // nas buscas por "pendente" e não gerar aviso de novo.
                 await pool.query(
                     `UPDATE damas_desafios SET status = 'expirado' WHERE id = $1`,
                     [desafio.id]
@@ -725,7 +594,7 @@ async function verificarDesafiosExpirados(sock) {
 
                 console.log(`⏰ [desafioleilaoHandler] Desafio #${desafio.id} expirado — admins avisados`);
             } catch (err) {
-                console.warn(`[desafioleilaoHandler] Erro ao avisar expiração do desafio #${desafio.id}:`, err.message);
+                console.warn(`[desafioleilaoHandler] Erro ao avisar expiração #${desafio.id}:`, err.message);
             }
         }
     } catch (err) {
@@ -733,31 +602,13 @@ async function verificarDesafiosExpirados(sock) {
     }
 }
 
-// 🚀 Chame essa função UMA VEZ no arquivo principal do bot, depois que o
-//    `sock` conectar, pra ligar a checagem periódica de desafios expirados.
-//    Exemplo de uso lá no arquivo principal:
-//
-//        import { iniciarVerificadorDesafiosExpirados } from './handlers/command/desafioleilaoHandler.js';
-//        // ... depois que sock conectar:
-//        iniciarVerificadorDesafiosExpirados(sock);
-//
-//    Por padrão checa a cada 30 minutos — dá pra mudar passando o segundo
-//    argumento (em minutos), ex: iniciarVerificadorDesafiosExpirados(sock, 15).
 export function iniciarVerificadorDesafiosExpirados(sock, intervaloMinutos = 30) {
-    // Roda uma vez logo de cara (pra não esperar 30min pelo primeiro check)
     verificarDesafiosExpirados(sock);
     return setInterval(() => verificarDesafiosExpirados(sock), intervaloMinutos * 60 * 1000);
 }
 
-// ============================================================
-// 📤 Export das duas funções
-// ============================================================
 export async function handleDesafioleilaoCommand(sock, message, content) {
-    // Tenta #desafio primeiro
     if (await handleDesafioCommand(sock, message, content)) return true;
-    
-    // Se não foi #desafio, tenta #pronto
     if (await handleProntoCommand(sock, message, content)) return true;
-    
     return false;
 }
