@@ -21,9 +21,10 @@ const CUSTO_MUSICA = 30;
 
 // ============================================
 // 🖼️ FOTOS LOCAIS DO POSTER (pasta bot/codigos/foto-musicas)
-// ✨ Alternam em sequência a cada #play, igual ao esquema das boas-vindas
+// ✨ Sorteadas ALEATORIAMENTE a cada #play, evitando repetir
+//    a mesma imagem duas vezes seguidas.
 // ============================================
-let indicePosterAtual = 0;
+let ultimoPosterIndice = -1;
 const PASTA_FOTOS_MUSICA = path.join(__dirname, '../../foto-musicas');
 
 function listarFotosMusica() {
@@ -156,7 +157,7 @@ async function baixarThumbnailComJimp(url) {
 
 // ============================================
 // 🖼️ POSTER INICIAL — lido SOMENTE da pasta local foto-musicas,
-// alternando em sequência. Não busca mais nenhuma imagem por link.
+// escolhido de forma ALEATÓRIA. Não busca mais nenhuma imagem por link.
 // Se a pasta estiver vazia ou der erro, retorna null (o fluxo já
 // trata isso enviando só o texto, sem imagem).
 // ============================================
@@ -169,16 +170,20 @@ async function baixarImagemPoster() {
             return null;
         }
 
-        const indice = indicePosterAtual % fotos.length;
+        let indice = Math.floor(Math.random() * fotos.length);
+
+        // Se sorteou a mesma da vez anterior, empurra pra outra posição
+        // (só faz sentido quando existe mais de uma foto na pasta)
+        if (fotos.length > 1 && indice === ultimoPosterIndice) {
+            indice = (indice + 1 + Math.floor(Math.random() * (fotos.length - 1))) % fotos.length;
+        }
+
+        ultimoPosterIndice = indice;
+
         const nomeArquivo = fotos[indice];
         const caminhoCompleto = path.join(PASTA_FOTOS_MUSICA, nomeArquivo);
 
-        console.log(`🖼️ Poster local selecionado [${indice + 1}/${fotos.length}]: ${nomeArquivo}`);
-
-        indicePosterAtual = (indicePosterAtual + 1) % fotos.length;
-        if (indicePosterAtual === 0) {
-            console.log('🔄 Sequência de posters reiniciada! Voltando ao primeiro.');
-        }
+        console.log(`🖼️ Poster local sorteado [${indice + 1}/${fotos.length}]: ${nomeArquivo}`);
 
         const buffer = fs.readFileSync(caminhoCompleto);
         console.log(`✅ Poster local lido: ${(buffer.length / 1024).toFixed(2)} KB`);
@@ -300,7 +305,7 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
             `✨ Exemplo: _#play Bon Jovi - Always_`;
 
         if (posterBuffer) {
-            console.log('✅ Poster baixado, enviando...');
+            console.log('✅ Poster carregado, enviando...');
             const enviado = await sendMediaWithThumbnail(sock, from, posterBuffer, captionPoster, [senderId]);
             if (!enviado) {
                 await sock.sendMessage(from, { text: captionPoster, mentions: [senderId], quoted: originalMessage });
@@ -456,7 +461,7 @@ export async function handleMusicaCommands(sock, message, from) {
     // remover o número do termo — assim "#play 21 guns" continua
     // buscando "21 guns" (o "21" não some por engano).
     // O número digitado é só sintaxe/lembrete — o valor cobrado é sempre
-    // o de CUSTO_MUSICA, definido abaixo.
+    // o de CUSTO_MUSICA, definido acima.
     const restante = contentTrim.replace(/^#play/i, '').trim();
 
     let termo = restante;
