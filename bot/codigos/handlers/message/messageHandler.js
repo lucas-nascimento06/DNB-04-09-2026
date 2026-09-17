@@ -125,6 +125,11 @@ import {
     bebadoCommandHandler
 } from '../command/bebadoHandler.js';
 
+// 📩 IMPORT — recados anônimos (Neon)
+import {
+    handleRecadosAnonimosCommand
+} from '../command/recadosAnonimosHandler.js';
+
 const autoTag = new AutoTagHandler();
 const replyTag = new ReplyTagHandler();
 
@@ -423,6 +428,13 @@ export async function handleMessages(sock, message) {
         // 🎨 Sticker
         if (lowerContent.startsWith('#stk')) {
             await handleStickerCommand(sock, message);
+            return;
+        }
+
+        // 📩 Recados anônimos — #msn
+        if (lowerContent === '#msn') {
+            if (DEBUG_MODE) console.log('📩 Comando #msn detectado!');
+            await handleRecadosAnonimosCommand(sock, message, from);
             return;
         }
 
