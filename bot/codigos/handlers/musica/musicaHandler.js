@@ -1,12 +1,12 @@
-// bot/codigos/musicaHandler.js
+// bot/codigos/handlers/musica/musicaHandler.js
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import { Jimp } from 'jimp';
-import translate from 'google-translate-api-x';
 import { fileURLToPath } from 'url';
-import { buscarLetra } from './extrairLetraHandler.js';
 import { baixarMusicaBuffer, obterDadosMusica, buscarUrlPorNome } from './download.util.js';
+import pool from '../../../../db.js';
+import { flushDC } from '../../features/dcTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,11 +15,9 @@ let processandoMusica = false;
 const filaMusicas = [];
 
 // ============================================
-// 🎨 CONSTANTES DE IDENTIDADE VISUAL DA LETRA
+// 🪙 CUSTO EM DC PARA LIBERAR UMA MÚSICA (JUKEBOX)
 // ============================================
-const RODAPE = `©𝘋𝘢𝘮𝘢𝘴 𝘥𝘢 𝘕𝘪𝘨𝘩𝘵`;
-const TITULO = `👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸`;
-const BANNER_URL = 'https://i.ibb.co/p6TmfFFs/music.png';
+const CUSTO_MUSICA = 30;
 
 // ============================================
 // 🖼️ FOTOS LOCAIS DO POSTER (pasta bot/codigos/foto-musicas)
@@ -37,72 +35,6 @@ function listarFotosMusica() {
     } catch (err) {
         console.error('❌ Erro ao listar fotos em foto-musicas:', err.message);
         return [];
-    }
-}
-
-// ============================================
-// 🌐 TRADUÇÃO DA LETRA (via google-translate-api-x)
-// ============================================
-// Anteriormente usava a API da Mistral (paga). Trocado para
-// google-translate-api-x, que usa o motor do Google Tradutor de forma
-// gratuita. Se falhar (bloqueio, timeout, etc), mantém a letra original
-// no idioma em que veio (ex: inglês) em vez de travar o fluxo.
-const IDIOMA_ALVO = 'pt';
-
-// ============================================
-// 🕵️ DETECTA SE O TEXTO JÁ ESTÁ EM PORTUGUÊS
-// (heurística simples baseada em palavras comuns do PT-BR;
-// evita gastar uma chamada de tradução pra letras que já estão em PT)
-// ============================================
-function pareceJaEmPortugues(texto) {
-    const amostra = texto.toLowerCase();
-    const marcadoresPt = [
-        ' que ', ' não ', ' você ', ' para ', ' com ', ' uma ', ' está ',
-        ' eu ', ' meu ', ' minha ', ' você', ' ção', ' são ', ' já '
-    ];
-    let acertos = 0;
-    for (const marcador of marcadoresPt) {
-        if (amostra.includes(marcador)) acertos++;
-    }
-    // Se encontrar vários marcadores típicos de PT, assume que já está em português
-    return acertos >= 3;
-}
-
-async function traduzirLetraViaGoogle(texto) {
-    try {
-        const res = await translate(texto, { to: IDIOMA_ALVO });
-        const traducao = res?.text?.trim() || null;
-        return traducao;
-    } catch (err) {
-        console.error('❌ Erro ao traduzir letra via Google:', err.message);
-        return null;
-    }
-}
-
-// ============================================
-// 🌐 TRADUZ A LETRA PARA PT-BR SE NÃO ESTIVER EM PORTUGUÊS
-// ============================================
-async function traduzirLetraSeIngles(letra) {
-    try {
-        if (pareceJaEmPortugues(letra)) {
-            console.log('🌐 Letra já parece estar em português, não vou traduzir.');
-            return { texto: letra, traduzida: false };
-        }
-
-        console.log('🌐 Letra não parece estar em português, tentando traduzir...');
-        const traducao = await traduzirLetraViaGoogle(letra);
-
-        if (traducao && traducao.trim() !== letra.trim()) {
-            console.log('🌐 Letra traduzida com sucesso.');
-            return { texto: traducao, traduzida: true };
-        }
-
-        console.warn('⚠️ Tradução falhou ou voltou igual ao original, mantendo letra original (idioma original).');
-        return { texto: letra, traduzida: false };
-    } catch (err) {
-        console.error('❌ Erro ao traduzir letra:', err.message);
-        // Se a tradução falhar, mantém a letra original pra não perder o conteúdo
-        return { texto: letra, traduzida: false };
     }
 }
 
@@ -257,28 +189,6 @@ async function baixarImagemPoster() {
     }
 }
 
-// ============================================
-// 🖼️ BAIXA O BANNER USADO NA LETRA
-// ============================================
-async function baixarBannerLetra() {
-    try {
-        console.log('🖼️ Baixando banner da letra...');
-        const response = await axios.get(BANNER_URL, {
-            responseType: 'arraybuffer',
-            timeout: 10000,
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' },
-            maxRedirects: 5
-        });
-        const buffer = Buffer.from(response.data, 'binary');
-        console.log(`✅ Banner da letra baixado: ${buffer.length} bytes`);
-        if (buffer.length < 1000) return null;
-        return buffer;
-    } catch (error) {
-        console.error('❌ Erro ao baixar banner da letra:', error.message);
-        return null;
-    }
-}
-
 async function sendMediaWithThumbnail(sock, jid, buffer, caption, mentions = []) {
     try {
         const thumb = await gerarThumbnail(buffer, 256);
@@ -295,6 +205,64 @@ async function sendMediaWithThumbnail(sock, jid, buffer, caption, mentions = [])
             console.error('❌ Erro ao enviar imagem (fallback):', err2.message);
             return false;
         }
+    }
+}
+
+// ============================================
+// 🪙 FUNÇÕES DE DC (JUKEBOX)
+// ============================================
+function extractDigits(number) {
+    if (!number) return null;
+    return number.replace(/@.*$/, '').replace(/\D/g, '');
+}
+
+// ✅ FIX: em grupos com privacidade LID ativada, "message.key.participant"
+// pode vir como um @lid (identificador oculto) diferente do número real
+// usado pelo dcTracker.js pra creditar DC (que prioriza participantAlt).
+// Sem essa função, o musicaHandler cobrava DC de um user_id diferente do
+// que tinha saldo, e por isso a compra sempre dava "saldo insuficiente"
+// mesmo com o #dc mostrando saldo correto. Mesma lógica usada em
+// dcHandler.js, dcTransferHandler.js, lanceHandler.js e arrematarHandler.js.
+function getNumeroReal(message) {
+    if (message.key.participantAlt) return message.key.participantAlt;
+    if (message.key.participant) return message.key.participant;
+    return message.key.remoteJid;
+}
+
+// Cobra o custo da música em DC, de forma atômica (evita corrida caso a
+// pessoa mande dois #play muito rápido). Retorna { sucesso, saldoAtual }.
+async function cobrarDcMusica(userId, valor) {
+    // Garante que DCs recentes (ainda no buffer do dcTracker, aguardando o
+    // flush periódico) já estejam gravados antes de checar o saldo.
+    await flushDC();
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const saldoResult = await client.query(
+            `SELECT saldo FROM damas_dc_wallets WHERE user_id = $1 FOR UPDATE`,
+            [userId]
+        );
+        const saldoAtual = Number(saldoResult.rows[0]?.saldo || 0);
+
+        if (saldoAtual < valor) {
+            await client.query('ROLLBACK');
+            return { sucesso: false, saldoAtual };
+        }
+
+        await client.query(
+            `UPDATE damas_dc_wallets SET saldo = saldo - $1, atualizado_em = NOW() WHERE user_id = $2`,
+            [valor, userId]
+        );
+
+        await client.query('COMMIT');
+        return { sucesso: true, saldoAtual: saldoAtual - valor };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
     }
 }
 
@@ -354,52 +322,7 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
 
         console.log(`📄 Dados obtidos: ${dados.titulo} - ${dados.autor}`);
 
-        // ── 3. BUSCA E ENVIA A LETRA (ANTES DO ÁUDIO) ────────────────────────
-        // Agora letra + banner vão numa ÚNICA mensagem: imagem com a letra na legenda.
-        try {
-            console.log(`📖 Buscando letra: ${dados.titulo} - ${dados.autor}`);
-            const letra = await buscarLetra(dados.autor, dados.titulo);
-
-            if (letra) {
-                const { texto: letraFinal, traduzida } = await traduzirLetraSeIngles(letra);
-
-                const legendaLetra =
-                    `${TITULO}\n` +
-                    `#musicaboa 🔥 Não tem idade, tem atitude 💃 #damasdanight #amizade #liberdade #diversao #atitude\n\n` +
-                    `@${senderId.split('@')[0]}\n\n` +
-                    `🎼📖 *${dados.titulo} - ${dados.autor}*\n\n` +
-                    `${letraFinal}\n\n` +
-                    `_🍋🧂🥃 Se a vida te der limão, pede sal e tequila e se joga! 🎉_\n\n` +
-                    `${RODAPE}`;
-
-                const bannerBuffer = await baixarBannerLetra();
-
-                if (bannerBuffer) {
-                    // Tenta mandar tudo junto: imagem do banner + letra na legenda
-                    const enviouJunto = await sendMediaWithThumbnail(
-                        sock, from, bannerBuffer, legendaLetra, [senderId]
-                    );
-                    if (enviouJunto) {
-                        console.log(`✅ Letra + banner enviados juntos!`);
-                    } else {
-                        // Fallback: se falhar mandar como imagem (ex: legenda grande demais
-                        // ou WhatsApp rejeitando payload), manda só o texto da letra.
-                        console.warn('⚠️ Falha ao enviar letra+banner juntos, caindo para texto puro.');
-                        await sock.sendMessage(from, { text: legendaLetra, mentions: [senderId] });
-                    }
-                } else {
-                    // Sem banner disponível, manda só o texto da letra.
-                    console.warn('⚠️ Banner da letra indisponível, enviando apenas texto.');
-                    await sock.sendMessage(from, { text: legendaLetra, mentions: [senderId] });
-                }
-            } else {
-                console.log(`⚠️ Letra não encontrada para: ${dados.titulo} - ${dados.autor}`);
-            }
-        } catch (letraErr) {
-            console.error('❌ Erro ao buscar/enviar letra:', letraErr.message);
-        }
-
-        // ── 4. THUMBNAIL + INFO ──────────────────────────────────────────────
+        // ── 3. THUMBNAIL + INFO ──────────────────────────────────────────────
         let thumbnailEnviada = false;
         if (dados.thumbnailUrl) {
             console.log(`🖼️ Processando thumbnail...`);
@@ -457,7 +380,7 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
             });
         }
 
-        // ── 5. DOWNLOAD E ENVIO DO ÁUDIO ─────────────────────────────────────
+        // ── 4. DOWNLOAD E ENVIO DO ÁUDIO ─────────────────────────────────────
         console.log(`⬇️ Baixando áudio: ${dados.titulo} - ${dados.autor}`);
         const result = await baixarMusicaBuffer(url);
 
@@ -515,17 +438,39 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
 export async function handleMusicaCommands(sock, message, from) {
     const content = message.message?.conversation ||
                     message.message?.extendedTextMessage?.text || '';
-    const lowerContent = content.toLowerCase().trim();
+    const contentTrim = content.trim();
 
-    if (!lowerContent.startsWith('#play ')) return false;
+    // Aceita "#play" seguido de dígito, espaço, ou fim de string —
+    // cobre "#play30dc...", "#play 30dc...", "#play djavan..." etc,
+    // sem depender de espaço fixo logo após o "#play".
+    if (!/^#play(?=\d|\s|$)/i.test(contentTrim)) return false;
 
     // Se tiver @menção = é dedicatória, deixa o dedicatoriaHandler tratar
     const temMencaoNoTexto = /@\S+/.test(content);
     const temMencaoResolvida = (message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length || 0) > 0;
     if (temMencaoNoTexto || temMencaoResolvida) return false;
 
-    const termo = content.replace(/^#play\s*/i, '').trim();
-    const senderId = message.key.participant || message.key.remoteJid;
+    // Aceita as variações: "#play djavan oceano" (formato antigo),
+    // "#play30dc djavan oceano", "#play 30dc djavan oceano" e
+    // "#play 30 dc djavan oceano". A palavra "dc" é sempre exigida pra
+    // remover o número do termo — assim "#play 21 guns" continua
+    // buscando "21 guns" (o "21" não some por engano).
+    // O número digitado é só sintaxe/lembrete — o valor cobrado é sempre
+    // o de CUSTO_MUSICA, definido abaixo.
+    const restante = contentTrim.replace(/^#play/i, '').trim();
+
+    let termo = restante;
+    const matchComDc = restante.match(/^(\d+)\s*dc\b\s*(.*)$/i);
+    if (matchComDc) {
+        termo = matchComDc[2].trim();
+    }
+
+    // ✅ FIX: antes era "message.key.participant || message.key.remoteJid",
+    // que em grupos com privacidade LID ativada podia gerar um ID diferente
+    // do usado pelo dcTracker.js pra creditar DC (que prioriza
+    // participantAlt). Agora usa getNumeroReal(), igual aos outros handlers
+    // de DC (dcHandler, dcTransferHandler, lanceHandler, arrematarHandler).
+    const senderId = getNumeroReal(message);
     const messageKey = message.key;
     const originalMessage = message;
 
@@ -533,12 +478,49 @@ export async function handleMusicaCommands(sock, message, from) {
 
     if (!termo) {
         await sock.sendMessage(from, {
-            text: `@${senderId.split('@')[0]}\n\nUso correto: *#play [música - cantor/banda]*\nExemplo: _#play Envolver - Anitta_`,
+            text: `@${senderId.split('@')[0]}\n\nUso correto: *#play ${CUSTO_MUSICA}dc [cantor/banda - música]*\nExemplo: _#play ${CUSTO_MUSICA}dc Bon Jovi - Always_`,
             mentions: [senderId],
             quoted: originalMessage
         });
         return true;
     }
+
+    // ── 🪙 JUKEBOX: COBRA O CUSTO EM DC ANTES DE LIBERAR A MÚSICA ────────
+    const senderIdDigits = extractDigits(senderId);
+    let cobranca;
+    try {
+        cobranca = await cobrarDcMusica(senderIdDigits, CUSTO_MUSICA);
+    } catch (err) {
+        console.error('[handleMusicaCommands] Erro ao cobrar DC:', err.message);
+        await sock.sendMessage(from, {
+            text: `@${senderId.split('@')[0]}\n\n❌ Deu erro ao consultar seu saldo de DC. Tenta de novo daqui a pouco.`,
+            mentions: [senderId],
+            quoted: originalMessage
+        });
+        return true;
+    }
+
+    if (!cobranca.sucesso) {
+        await sock.sendMessage(from, {
+            text: `@${senderId.split('@')[0]}\n\n❌ Saldo insuficiente! 🪙\nVocê tem apenas *${cobranca.saldoAtual.toLocaleString('pt-BR')} DC*, e a música custa *${CUSTO_MUSICA} DC*.\n\n💬 Continue conversando no grupo Damas e juntando suas DCs pra pedir músicas! 💃🕺`,
+            mentions: [senderId],
+            quoted: originalMessage
+        });
+        return true;
+    }
+
+    await sock.sendMessage(from, {
+        text: `💃 🅟🅔🅓🅘🅓🅞 🅜🅤🅢🅘🅒🅐🅛 🕺\n` +
+              `👤 @${senderId.split('@')[0]} pediu ${termo}\n\n` +
+              `✅ Pagamento confirmado!\n` +
+              `🪙 ${CUSTO_MUSICA} *DCs debitados da carteira*.\n\n` +
+              `🔊 .¸¸.·♩♪♫ *SEGURA ESSA, DﾑMﾑS!* ♫♪♩·.¸¸.·\n` +
+              `🎶 Solta o som! 🍻🔥\n\n` +
+              `💬 Continue conversando no grupo DﾑMﾑS e juntando suas DCs pra pedir mais músicas! 💃🕺`,
+        mentions: [senderId],
+        quoted: originalMessage
+    });
+    // ──────────────────────────────────────────────────────────────────────
 
     filaMusicas.push({ sock, from, termo, senderId, messageKey, originalMessage });
 

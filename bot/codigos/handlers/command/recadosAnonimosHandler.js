@@ -1,44 +1,13 @@
-// bot/codigos/handlers/command/recadosAnonimosHandler.js
-import fs from 'fs';
-import path from 'path';
 import axios from 'axios';
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📩 RECADOS ANÔNIMOS — envia pro grupo os recados pendentes da tabela
-// `recados_anonimos` (Neon/Postgres via pg.Pool, mesmo client do resto do bot)
+// 📩 RECADOS ANÔNIMOS — mostra todos os recados da tabela `recados_anonimos`
 //
 // Uso: #msn
 // Precisa ser digitado dentro do grupo pra onde os recados devem ir.
-//
-// ⚠️ A tabela `recados_anonimos` é escrita por outro aplicativo (o que gera o
-// link de "mandar recado"), então o bot NÃO mexe no schema dela (sem ALTER
-// TABLE, sem coluna nova). Pra saber quais recados já foram mandados, o bot
-// guarda o próprio controle localmente, em bot/data/recadosAnonimosState.json
-// (mesmo padrão já usado em bot/data/groups.json).
+// 🔒 Apenas administradores do grupo podem executar esse comando.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const STATE_PATH = path.join('./bot/data', 'recadosAnonimosState.json');
-
-function lerUltimoIdEnviado() {
-    try {
-        if (!fs.existsSync(STATE_PATH)) return 0;
-        const data = JSON.parse(fs.readFileSync(STATE_PATH, 'utf-8'));
-        return data.ultimoIdEnviado || 0;
-    } catch (err) {
-        console.error('⚠️ [RECADOS] Erro ao ler state, assumindo 0:', err.message);
-        return 0;
-    }
-}
-
-function salvarUltimoIdEnviado(id) {
-    try {
-        fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-        fs.writeFileSync(STATE_PATH, JSON.stringify({ ultimoIdEnviado: id }, null, 2));
-    } catch (err) {
-        console.error('⚠️ [RECADOS] Erro ao salvar state:', err.message);
-    }
-}
 
 function resolverSenderId(message) {
     const key = message.key;
@@ -51,17 +20,36 @@ function resolverSenderId(message) {
     return key.participant || key.remoteJid;
 }
 
-async function buscarRecadosPendentes() {
-    const ultimoId = lerUltimoIdEnviado();
+// 🔒 Verifica se quem mandou o comando é admin do grupo
+async function verificarSeEhAdmin(sock, from, message, senderId) {
+    try {
+        const groupMetadata = await sock.groupMetadata(from);
+        const candidatos = new Set([
+            senderId,
+            message.key.participant,
+            message.key.participantAlt,
+        ].filter(Boolean));
+
+        const participante = groupMetadata.participants.find(p => candidatos.has(p.id));
+
+        if (!participante) return false;
+
+        return participante.admin === 'admin' || participante.admin === 'superadmin';
+    } catch (err) {
+        console.error('⚠️ [RECADOS] Erro ao verificar admin:', err.message);
+        return false;
+    }
+}
+
+// Busca TODOS os recados do banco
+async function buscarRecados() {
     const { rows } = await pool.query(
-        `SELECT * FROM recados_anonimos WHERE id > $1 ORDER BY id ASC`,
-        [ultimoId]
+        `SELECT * FROM recados_anonimos ORDER BY id ASC`
     );
     return rows;
 }
 
-// Baixa o arquivo de música/áudio pra enviar como mensagem de áudio real
-// (em vez de mandar o link, que não toca dentro do WhatsApp)
+// Baixa áudio pra enviar como mensagem de áudio real
 async function baixarAudioBuffer(url) {
     try {
         const response = await axios.get(url, {
@@ -77,14 +65,17 @@ async function baixarAudioBuffer(url) {
 }
 
 async function enviarRecado(sock, from, recado) {
-    const texto = `💌✨ *CORREIO SECRETO • DAMAS DA NIGHT* ✨💌
+    const texto = `💌❤️❥❥═══ *RECADINHO DO CORAÇAO* ═══❥❥❤️💌
 
-📩 Um recado anônimo para @${recado.numero_destinatario} 💙💞
+💌🥰 *Um recado anônimo* *para* @${recado.numero_destinatario}
 
-${recado.content}`;
+${recado.content}
+
+_© damas da night_`;
     const mentions = [`${recado.numero_destinatario}@s.whatsapp.net`];
 
     try {
+        // Envia foto se tiver
         if (recado.photo_url) {
             await sock.sendMessage(from, {
                 image: { url: recado.photo_url },
@@ -102,7 +93,7 @@ ${recado.content}`;
         await sock.sendMessage(from, { text: texto, mentions });
     }
 
-    // 🎵 Se tiver música, baixa o mp3 e manda como áudio tocável de verdade
+    // Envia áudio se tiver
     if (recado.music_url) {
         const audioBuffer = await baixarAudioBuffer(recado.music_url);
 
@@ -118,14 +109,9 @@ ${recado.content}`;
                 await sock.sendMessage(from, { text: `🎵 ${recado.music_url}` });
             }
         } else {
-            // se não conseguiu baixar, manda o link como fallback
             await sock.sendMessage(from, { text: `🎵 ${recado.music_url}` });
         }
     }
-
-    // ✅ Só avança o marcador depois que o envio deu certo, pra não perder
-    // um recado em caso de erro no meio da fila.
-    salvarUltimoIdEnviado(recado.id);
 }
 
 export async function handleRecadosAnonimosCommand(sock, message, from) {
@@ -137,12 +123,24 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
 
     const senderId = resolverSenderId(message);
 
+    // 🔒 Apenas administradores podem disparar
+    const ehAdmin = await verificarSeEhAdmin(sock, from, message, senderId);
+
+    if (!ehAdmin) {
+        await sock.sendMessage(from, {
+            text: '🚫 Esse comando é exclusivo para administradores do grupo.',
+            mentions: [senderId],
+            quoted: message
+        });
+        return true;
+    }
+
     try {
-        const recados = await buscarRecadosPendentes();
+        const recados = await buscarRecados();
 
         if (recados.length === 0) {
             await sock.sendMessage(from, {
-                text: '📭 Nenhum recado anônimo pendente no momento.',
+                text: '📭 Nenhum recado anônimo.',
                 mentions: [senderId],
                 quoted: message
             });
@@ -150,23 +148,22 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
         }
 
         await sock.sendMessage(from, {
-            text: `📬 Enviando ${recados.length} recado(s) anônimo(s)...`,
+            text: `📬 Enviando ${recados.length} recado(s)...`,
             mentions: [senderId],
             quoted: message
         });
 
         for (const recado of recados) {
             await enviarRecado(sock, from, recado);
-            // pequeno delay entre envios pra não levar rate-limit do WhatsApp
             await new Promise(r => setTimeout(r, 800));
         }
 
         console.log(`✅ [RECADOS] ${recados.length} recado(s) enviado(s) no grupo ${from}`);
 
     } catch (err) {
-        console.error('❌ [RECADOS] Erro ao processar recados anônimos:', err.message);
+        console.error('❌ [RECADOS] Erro:', err.message);
         await sock.sendMessage(from, {
-            text: '❌ Deu erro ao buscar os recados no banco. Tenta de novo em instantes.',
+            text: '❌ Erro ao buscar recados. Tenta de novo.',
             mentions: [senderId],
             quoted: message
         });

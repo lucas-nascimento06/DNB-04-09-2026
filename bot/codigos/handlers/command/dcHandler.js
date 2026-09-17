@@ -34,18 +34,18 @@ export async function dcHandler(sock, message) {
         const saldo = Number(result.rows[0]?.saldo || 0);
         const saldoFormatado = saldo.toLocaleString('pt-BR');
 
-        const texto = `💰 *CARTEIRA VIRTUAL DO DAMAS* 💲💸
-🪙 Você possui *${saldoFormatado} DC* — Damas Coins
+        const texto = `💰 *CARTEIRA VIRTUAL DO DﾑMﾑS* 💲💸
+🪙 Você possui *${saldoFormatado} DCs* — Damas Coins
 ━━━━━━━━━━━━━━━━━━
-🏦 Moeda oficial do Grupo Damas
+🏦 Moeda oficial do *Grupo DﾑMﾑS*
 
-🎴 Com seus DC você pode:
+🎴 Com seus DCs você pode:
 🔨 Participar dos leilões
-🎴 Comprar figurinhas
+🎼 Pedir músicas — *30 DCs por música*
 💸 Transferir para amigos
-🎁 Enviar DC durante os leilões
+🎁 Enviar DCs durante os leilões
 
-🤑 Junte seus DC e torne-se o Tio Patinhas do Damas!`;
+🤑 Junte seus DCs e torne-se o Tio Patinhas do DﾑMﾑS!`;
 
         await sock.sendMessage(from, {
             text: texto
