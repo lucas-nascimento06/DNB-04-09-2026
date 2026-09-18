@@ -130,6 +130,11 @@ import {
     handleRecadosAnonimosCommand
 } from '../command/recadosAnonimosHandler.js';
 
+// 📊 IMPORT — estatísticas dos recados (#dados)
+import {
+    handleDadosCommand
+} from '../command/dadosHandler.js';
+
 const autoTag = new AutoTagHandler();
 const replyTag = new ReplyTagHandler();
 
@@ -435,6 +440,13 @@ export async function handleMessages(sock, message) {
         if (lowerContent === '#msn') {
             if (DEBUG_MODE) console.log('📩 Comando #msn detectado!');
             await handleRecadosAnonimosCommand(sock, message, from);
+            return;
+        }
+
+        // 📊 Estatísticas dos recados — #dados
+        const dadosHandled = await handleDadosCommand(sock, message, content, from);
+        if (dadosHandled) {
+            if (DEBUG_MODE) console.log('✅ Comando #dados processado');
             return;
         }
 

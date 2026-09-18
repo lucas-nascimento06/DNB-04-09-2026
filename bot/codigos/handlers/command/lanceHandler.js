@@ -65,7 +65,7 @@ export async function handleLanceCommand(sock, message, content) {
     // 🔒 Verifica se o usuário está bloqueado em um casal ativo
     if (await isBloqueado(from, userId)) {
         await sock.sendMessage(from, {
-            text: `⚠️ Você está em um casal ativo e não pode participar de leilões! Um admin precisa encerrar com *#fl* antes.`
+            text: `⚠️ Você está em um casal ativo e não pode participar de leilões.`
         }, { quoted: message });
         return true;
     }

@@ -1,22 +1,39 @@
-// bot/codigos/dedicatoriaHandler.js
+// bot/codigos/handlers/musica/dedicatoriaHandler.js
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+import { fileURLToPath } from 'url';
 import { Jimp } from 'jimp';
 
 import { baixarMusicaBuffer, obterDadosMusica, buscarUrlPorNome } from './download.util.js';
+// 🪙 DC (JUKEBOX) — mesmos imports do musicaHandler.js
+// (este arquivo fica em bot/codigos/handlers/musica/)
+import pool from '../../../../db.js';
+import { flushDC } from '../../features/dcTracker.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🎙️ SISTEMA DE DEDICATÓRIA MUSICAL - ESTILO RÁDIO ROMÂNTICA
-// Uso: #play [música] @pessoa
-// Exemplo: #play Sonho de Ícaro @monica
+// Uso: #play 30dc [música] @pessoa
+// Exemplo: #play 30dc Sonho de Ícaro @monica
 // ─────────────────────────────────────────────────────────────────────────────
 
 const URL_CONFIG = 'https://raw.githubusercontent.com/lucas-nascimento06/dedicatoria-music-radio-dmng/refs/heads/main/dedicatoria-config.json';
 
+// 🖼️ Poster LOCAL (bot/codigos/foto-musicas/radio-damas.png)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// handlers/musica → sobe 2 níveis (bot/codigos) → foto-musicas
+const POSTER_LOCAL = path.join(__dirname, '..', '..', 'foto-musicas', 'radio-damas.png');
+// 🖼️ Poster do POEMA final (bot/codigos/foto-musicas/radio-damas-poemas.png)
+const POSTER_POEMAS_LOCAL = path.join(__dirname, '..', '..', 'foto-musicas', 'radio-damas-poemas.png');
+
 let config = null;
 let processandoDedicatoria = false;
 const filaDedicatorias = [];
+
+// ============================================
+// 🪙 CUSTO EM DC PARA LIBERAR UMA DEDICATÓRIA (JUKEBOX)
+// ============================================
+const CUSTO_MUSICA = 30;
 
 // ── CARREGAMENTO DO CONFIG ───────────────────────────────────────────────────
 
@@ -36,7 +53,7 @@ export async function carregarConfigDedicatoria() {
     }
 }
 
-// ✅ CORRIGIDO: tenta recarregar se config for null, em vez de lançar erro fatal
+// Tenta recarregar se config for null, em vez de lançar erro fatal
 async function garantirConfig() {
     if (!config) {
         console.warn('⚠️ Config não carregada, tentando recarregar...');
@@ -76,7 +93,6 @@ function fraseAleatoria(de, para, musica, artista) {
 }
 
 // ── MENSAGENS SIMPLES (mensagens.*) ─────────────────────────────────────────
-// ✅ CORRIGIDO: retorna fallback seguro se config ou chave não existir
 function getMensagem(chave, variaveis = {}) {
     if (!config?.mensagens) {
         console.warn(`⚠️ getMensagem("${chave}"): config.mensagens não disponível`);
@@ -93,7 +109,6 @@ function getMensagem(chave, variaveis = {}) {
 }
 
 // ── POSTERS (posters.*) ──────────────────────────────────────────────────────
-// ✅ CORRIGIDO: retorna fallback seguro se config ou chave não existir
 function getPosterCaption(chave, variaveis = {}) {
     if (!config?.posters) {
         console.warn(`⚠️ getPosterCaption("${chave}"): config.posters não disponível`);
@@ -109,7 +124,7 @@ function getPosterCaption(chave, variaveis = {}) {
     return texto;
 }
 
-// ✅ Monta caption com fallback: tenta posters, depois mensagens, depois texto padrão
+// Monta caption com fallback: tenta posters, depois mensagens, depois texto padrão
 function montarCaption(chave, variaveis = {}, fallbackTexto = '') {
     return getPosterCaption(chave, variaveis)
         || getMensagem(chave, variaveis)
@@ -127,7 +142,7 @@ async function gerarThumbnail(buffer, size = 256) {
     }
 }
 
-// ✅ RESOLVER SENDER REAL (evita @lid e JID de grupo)
+// Resolver sender real (evita @lid e JID de grupo)
 function resolverSenderId(message) {
     const key = message.key;
     if (key.participantAlt && key.participantAlt.endsWith('@s.whatsapp.net')) {
@@ -139,13 +154,78 @@ function resolverSenderId(message) {
     return key.participant || key.remoteJid;
 }
 
+// ============================================
+// 🪙 FUNÇÕES DE DC (JUKEBOX) — iguais às do musicaHandler.js
+// ============================================
+function extractDigits(number) {
+    if (!number) return null;
+    return number.replace(/@.*$/, '').replace(/\D/g, '');
+}
+
+// Mesma lógica do musicaHandler/dcHandler/dcTransferHandler/lanceHandler/
+// arrematarHandler: prioriza participantAlt pra bater com o user_id que o
+// dcTracker.js usa pra creditar DC (evita cobrar de um @lid diferente).
+function getNumeroReal(message) {
+    if (message.key.participantAlt) return message.key.participantAlt;
+    if (message.key.participant) return message.key.participant;
+    return message.key.remoteJid;
+}
+
+// Cobra o custo em DC de forma atômica (evita corrida caso a pessoa mande
+// dois #play muito rápido). Retorna { sucesso, saldoAtual }.
+async function cobrarDcMusica(userId, valor) {
+    // Garante que DCs recentes (ainda no buffer do dcTracker, aguardando o
+    // flush periódico) já estejam gravados antes de checar o saldo.
+    await flushDC();
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const saldoResult = await client.query(
+            `SELECT saldo FROM damas_dc_wallets WHERE user_id = $1 FOR UPDATE`,
+            [userId]
+        );
+        const saldoAtual = Number(saldoResult.rows[0]?.saldo || 0);
+
+        if (saldoAtual < valor) {
+            await client.query('ROLLBACK');
+            return { sucesso: false, saldoAtual };
+        }
+
+        await client.query(
+            `UPDATE damas_dc_wallets SET saldo = saldo - $1, atualizado_em = NOW() WHERE user_id = $2`,
+            [valor, userId]
+        );
+
+        await client.query('COMMIT');
+        return { sucesso: true, saldoAtual: saldoAtual - valor };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 // ── PARSEAR COMANDO ──────────────────────────────────────────────────────────
+// Aceita as variações (igual ao musicaHandler):
+//   "#play música @pessoa"            (formato antigo)
+//   "#play30dc música @pessoa"
+//   "#play 30dc música @pessoa"
+//   "#play 30 dc música @pessoa"
+// A palavra "dc" é sempre exigida pra remover o número do termo — assim
+// "#play 21 guns @pessoa" continua buscando "21 guns".
+// O número digitado é só sintaxe/lembrete — o valor cobrado é sempre CUSTO_MUSICA.
 function parsearComando(content, message) {
-    const semPrefixo = content
-        .replace(/^#play\s*/i, '')
+    let semPrefixo = content
+        .replace(/^#play/i, '')
         .trim();
 
-    if (!semPrefixo) return null;
+    const matchComDc = semPrefixo.match(/^(\d+)\s*dc\b\s*(.*)$/i);
+    if (matchComDc) {
+        semPrefixo = matchComDc[2].trim();
+    }
 
     const mentionedJids =
         message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -163,38 +243,41 @@ function parsearComando(content, message) {
 
     console.log(`🧹 [DEDICATÓRIA] Termo limpo: "${termoLimpo}"`);
 
-    if (!termoLimpo) return null;
+    // termo pode vir vazio: o handler principal mostra a mensagem de uso
     return { termo: termoLimpo, mentionedJids, nomeExibicao };
 }
 
-// ✅ CORRIGIDO: valida a URL antes de tentar baixar
-async function baixarImagemPoster() {
-    await garantirConfig();
+// ── 🖼️ POSTER LOCAL ──────────────────────────────────────────────────────────
+// Lê do disco uma única vez e mantém em memória: as próximas dedicatórias
+// são instantâneas (sem download).
+let posterCache = null;
+let posterThumbCache = null;
+// Poster usado na frase romântica/poema final
+let posterPoemasCache = null;
+let posterPoemasThumbCache = null;
 
-    const posterUrl = config?.poster_url;
-
-    if (!posterUrl || typeof posterUrl !== 'string' || !posterUrl.startsWith('http')) {
-        console.warn('⚠️ poster_url inválida ou ausente no config:', posterUrl);
-        return null;
-    }
+async function carregarPosterLocal() {
+    if (posterCache) return posterCache;
 
     try {
-        console.log('🖼️ Baixando poster da dedicatória...');
-        const response = await axios.get(posterUrl, {
-            responseType: 'arraybuffer',
-            timeout: 10000,
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' },
-            maxRedirects: 5
-        });
-        const buffer = Buffer.from(response.data, 'binary');
-        if (buffer.length < 1000) {
-            console.warn('⚠️ Poster baixado parece inválido (muito pequeno)');
-            return null;
-        }
-        console.log(`✅ Poster baixado: ${buffer.length} bytes`);
-        return buffer;
+        posterCache = await fs.promises.readFile(POSTER_LOCAL);
+        console.log(`✅ Poster local carregado: ${posterCache.length} bytes`);
+        return posterCache;
     } catch (err) {
-        console.error('❌ Erro ao baixar poster:', err.message);
+        console.warn(`⚠️ Poster local não encontrado em ${POSTER_LOCAL}:`, err.message);
+        return null;
+    }
+}
+
+async function carregarPosterPoemasLocal() {
+    if (posterPoemasCache) return posterPoemasCache;
+
+    try {
+        posterPoemasCache = await fs.promises.readFile(POSTER_POEMAS_LOCAL);
+        console.log(`✅ Poster de poemas carregado: ${posterPoemasCache.length} bytes`);
+        return posterPoemasCache;
+    } catch (err) {
+        console.warn(`⚠️ Poster de poemas não encontrado em ${POSTER_POEMAS_LOCAL}:`, err.message);
         return null;
     }
 }
@@ -261,8 +344,8 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
     };
 
     try {
-        // ── 1. POSTER INICIAL ────────────────────────────────────────────────
-        const posterBuffer = await baixarImagemPoster();
+        // ── 1. POSTER INICIAL (LOCAL) ────────────────────────────────────────
+        const posterBuffer = await carregarPosterLocal();
 
         const captionAviso = montarCaption('aviso_inicial', {
             destinatario: nomeDestinatario,
@@ -271,7 +354,10 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
         }, `🎵 Procurando *${termo}* para ${nomeDestinatario}... aguarde!`);
 
         if (posterBuffer) {
-            const thumb = await gerarThumbnail(posterBuffer, 256);
+            // Miniatura em cache: é sempre a mesma imagem
+            if (!posterThumbCache) posterThumbCache = await gerarThumbnail(posterBuffer, 256);
+            const thumb = posterThumbCache;
+
             try {
                 await sock.sendMessage(from, {
                     image: posterBuffer,
@@ -353,23 +439,46 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
             contextInfo: replyContext
         });
 
-        // ── 6. MENSAGEM ROMÂNTICA FINAL ──────────────────────────────────────
-        const nomeParaExibição = destinatarioJid
+        // ── 6. MENSAGEM ROMÂNTICA FINAL (POEMA) ──────────────────────────────
+        const nomeParaExibicao = destinatarioJid
             ? destinatarioJid.split('@')[0]
             : (nomeExibicao || 'você');
 
         const mensagemRomantica = fraseAleatoria(
             `@${numeroRemetente}`,
-            `@${nomeParaExibição}`,
+            `@${nomeParaExibicao}`,
             dados.titulo,
             dados.autor
         );
 
         await new Promise(r => setTimeout(r, 800));
-        await sock.sendMessage(from, {
-            text: mensagemRomantica,
-            mentions: allMentions
-        });
+
+        const posterPoemaBuffer = await carregarPosterPoemasLocal();
+
+        if (posterPoemaBuffer) {
+            if (!posterPoemasThumbCache) posterPoemasThumbCache = await gerarThumbnail(posterPoemaBuffer, 256);
+            const thumbPoema = posterPoemasThumbCache;
+
+            try {
+                await sock.sendMessage(from, {
+                    image: posterPoemaBuffer,
+                    caption: mensagemRomantica,
+                    mentions: allMentions,
+                    jpegThumbnail: thumbPoema
+                });
+            } catch (e) {
+                console.warn('⚠️ Falha ao enviar poster do poema, enviando texto:', e.message);
+                await sock.sendMessage(from, {
+                    text: mensagemRomantica,
+                    mentions: allMentions
+                });
+            }
+        } else {
+            await sock.sendMessage(from, {
+                text: mensagemRomantica,
+                mentions: allMentions
+            });
+        }
 
         if (fs.existsSync(caminhoFinal)) fs.unlinkSync(caminhoFinal);
         console.log(`✅ [DEDICATÓRIA] Concluída com sucesso!`);
@@ -380,7 +489,7 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
 
         const chaveErro = err.message?.includes('timeout') ? 'erro_timeout' : 'erro_nao_encontrado';
 
-        // ✅ CORRIGIDO: fallback seguro se config.mensagens não estiver disponível
+        // Fallback seguro se config.mensagens não estiver disponível
         const mensagemErro = getMensagem(chaveErro, { termo })
             || (chaveErro === 'erro_timeout'
                 ? `⏱️ Tempo esgotado ao buscar *${termo}*. Tente novamente.`
@@ -434,6 +543,13 @@ export async function handleReloadConfig(sock, message, from) {
 
     try {
         await carregarConfigDedicatoria();
+
+        // Também limpa o cache dos posters locais, caso você tenha trocado as imagens
+        posterCache = null;
+        posterThumbCache = null;
+        posterPoemasCache = null;
+        posterPoemasThumbCache = null;
+
         await sock.sendMessage(from, {
             text: '✅ Config atualizada com sucesso! Novas frases e poster já estão valendo.',
             mentions: [senderId],
@@ -459,15 +575,18 @@ export async function handleDedicatoriaCommands(sock, message, from) {
         message.message?.conversation ||
         message.message?.extendedTextMessage?.text || '';
 
-    if (!/^#play\s/i.test(content)) return false;
+    // Aceita "#play" seguido de dígito, espaço, ou fim de string —
+    // cobre "#play30dc...", "#play 30dc...", "#play sonho..." etc.
+    if (!/^#play(?=\d|\s|$)/i.test(content.trim())) return false;
 
     const temMencaoNoTexto = /@\S+/.test(content);
     const temMencaoResolvida =
         (message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length || 0) > 0;
 
+    // Sem @menção = é #play normal, deixa o musicaHandler tratar
     if (!temMencaoNoTexto && !temMencaoResolvida) return false;
 
-    const parsed = parsearComando(content, message);
+    const parsed = parsearComando(content.trim(), message);
     if (!parsed) return false;
 
     const { termo, mentionedJids, nomeExibicao } = parsed;
@@ -475,11 +594,12 @@ export async function handleDedicatoriaCommands(sock, message, from) {
     const senderId = resolverSenderId(message);
     console.log(`🎙️ [DEDICATÓRIA] senderId resolvido: ${senderId}`);
 
-    // ✅ CORRIGIDO: garante config antes de usar getMensagem
+    // Garante config antes de usar getMensagem
     await garantirConfig();
 
     if (!termo) {
-        const textoUso = getMensagem('uso_comando') || '📌 Use: #play [música] @pessoa';
+        const textoUso = getMensagem('uso_comando')
+            || `📌 Uso correto: *#play ${CUSTO_MUSICA}dc [música] @pessoa*\nExemplo: _#play ${CUSTO_MUSICA}dc Sonho de Ícaro @monica_`;
         await sock.sendMessage(from, {
             text: textoUso,
             mentions: [senderId],
@@ -487,6 +607,49 @@ export async function handleDedicatoriaCommands(sock, message, from) {
         });
         return true;
     }
+
+    // ── 🪙 JUKEBOX: COBRA O CUSTO EM DC ANTES DE LIBERAR A DEDICATÓRIA ───
+    // Usa getNumeroReal() (igual ao musicaHandler) pra bater com o user_id
+    // que o dcTracker.js usa pra creditar DC.
+    const senderIdDC = getNumeroReal(message);
+    const senderIdDigits = extractDigits(senderIdDC);
+
+    let cobranca;
+    try {
+        cobranca = await cobrarDcMusica(senderIdDigits, CUSTO_MUSICA);
+    } catch (err) {
+        console.error('[handleDedicatoriaCommands] Erro ao cobrar DC:', err.message);
+        await sock.sendMessage(from, {
+            text: `@${senderId.split('@')[0]}\n\n❌ Deu erro ao consultar seu saldo de DC. Tenta de novo daqui a pouco.`,
+            mentions: [senderId],
+            quoted: message
+        });
+        return true;
+    }
+
+    if (!cobranca.sucesso) {
+        await sock.sendMessage(from, {
+            text: `@${senderId.split('@')[0]}\n\n❌ Saldo insuficiente! 🪙\nVocê tem apenas *${cobranca.saldoAtual.toLocaleString('pt-BR')} DC*, e a dedicatória custa *${CUSTO_MUSICA} DC*.\n\n💬 Continue conversando no grupo Damas e juntando suas DCs pra dedicar músicas! 💃🕺`,
+            mentions: [senderId],
+            quoted: message
+        });
+        return true;
+    }
+
+    const destinatarioConfirm = mentionedJids.length > 0
+        ? `@${mentionedJids[0].split('@')[0]}`
+        : (nomeExibicao ? `@${nomeExibicao}` : 'alguém especial');
+
+    await sock.sendMessage(from, {
+        text: `💌 🅓🅔🅓🅘🅒🅐🅣🅞́🅡🅘🅐 🅜🅤🅢🅘🅒🅐🅛 💌\n` +
+              `👤 @${senderId.split('@')[0]} dedicou *${termo}* para ${destinatarioConfirm}\n\n` +
+              `✅ Pagamento confirmado!\n` +
+              `🪙 ${CUSTO_MUSICA} *DCs debitados da carteira*.\n\n` +
+              `💬 Continue conversando no grupo DﾑMﾑS e juntando suas DCs pra dedicar mais músicas! 💃🕺`,
+        mentions: [senderId, ...mentionedJids.slice(0, 1)],
+        quoted: message
+    });
+    // ──────────────────────────────────────────────────────────────────────
 
     filaDedicatorias.push({
         sock, from, termo, senderId,

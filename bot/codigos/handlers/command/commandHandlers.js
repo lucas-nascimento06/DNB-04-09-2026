@@ -20,6 +20,11 @@ import { handleDesafioleilaoCommand } from './desafioleilaoHandler.js';
 import { handleArrematarCommand } from './arrematarHandler.js';
 // 🆕 #dcasal — libera casal(is) bloqueado(s) do grupo sem precisar de #fl
 import { handleDCasalCommand } from './dcasalHandler.js';
+// 📊 #dados — mostra estatísticas dos recados anônimos (poster)
+// 🆕 FIX: esse import tinha sumido nessa versão do arquivo. Sem ele, o
+// messageHandler.js não consegue importar handleDadosCommand daqui, e o
+// build quebra com "does not provide an export named 'handleDadosCommand'".
+import { handleDadosCommand } from './dadosHandler.js';
 
 /**
  * Função para deletar mensagem com múltiplas tentativas (IGUAL AO #BAN)
@@ -128,6 +133,9 @@ export { handleChamarCommand };
 
 // 📜 LISTA DE COMANDOS DO DC - delega tudo para ajudaDcHandler.js
 export { handleAjudaDcCommand };
+
+// 📊 DADOS - delega tudo para dadosHandler.js (comando #dados, mostra o poster de estatísticas)
+export { handleDadosCommand };
 
 // ============================================
 // 🔨 SISTEMA DE LEILÃO — TODOS OS COMANDOS AGRUPADOS
