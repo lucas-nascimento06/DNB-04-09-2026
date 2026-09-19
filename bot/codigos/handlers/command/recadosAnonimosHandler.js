@@ -1,11 +1,15 @@
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📩 RECADOS ANÔNIMOS — Versão 2.0 com Base64 (RÁPIDO & SEM FALHAS NO TERMUX)
+// 📩 RECADOS ANÔNIMOS — Versão 2.1 com Base64 (RÁPIDO & SEM FALHAS NO TERMUX)
 //
 // Uso: #msn
 // Precisa ser digitado dentro do grupo pra onde os recados devem ir.
 // 🔒 Apenas administradores do grupo podem executar esse comando.
+//
+// 🔧 v2.1: agora só busca recados com status = 'pendente' e marca cada um
+//          como 'enviado' logo após o envio individual dar certo — evita
+//          reenviar recados antigos toda vez que o #msn é rodado.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolverSenderId(message) {
@@ -46,14 +50,14 @@ async function verificarSeEhAdmin(sock, from, message, senderId) {
     }
 }
 
-// Busca TODOS os recados do banco (COM BASE64!)
+// Busca APENAS os recados pendentes do banco (COM BASE64!)
 async function buscarRecados() {
     try {
-        console.log('🗄️  [DEBUG] Buscando recados do banco...');
+        console.log('🗄️  [DEBUG] Buscando recados pendentes do banco...');
         const { rows } = await pool.query(
-            `SELECT * FROM recados_anonimos ORDER BY id ASC`
+            `SELECT * FROM recados_anonimos WHERE status = 'pendente' ORDER BY id ASC`
         );
-        console.log(`✅ [DEBUG] ${rows.length} recado(s) encontrado(s)`);
+        console.log(`✅ [DEBUG] ${rows.length} recado(s) pendente(s) encontrado(s)`);
         if (rows.length > 0) {
             console.log('📋 [DEBUG] Primeiro recado:', JSON.stringify(rows[0], null, 2));
         }
@@ -61,6 +65,23 @@ async function buscarRecados() {
     } catch (err) {
         console.error('❌ [DEBUG] Erro ao buscar recados:', err.message);
         throw err;
+    }
+}
+
+// Marca um recado como enviado, pra não ser buscado de novo na próxima rodada
+async function marcarComoEnviado(recadoId) {
+    try {
+        await pool.query(
+            `UPDATE recados_anonimos SET status = 'enviado' WHERE id = $1`,
+            [recadoId]
+        );
+        console.log(`🗃️  [DEBUG] Recado #${recadoId} marcado como 'enviado' no banco`);
+    } catch (err) {
+        console.error(`⚠️  [DEBUG] Erro ao marcar recado #${recadoId} como enviado: ${err.message}`);
+        // Não relança o erro: o recado já foi entregue no WhatsApp,
+        // então não queremos que ele conte como "falhado" no resumo.
+        // Mas fica registrado no log pra investigar depois — se isso
+        // falhar, o recado pode ser reenviado na próxima rodada.
     }
 }
 
@@ -176,6 +197,7 @@ _© damas da night_`;
     } catch (err) {
         console.error(`\n❌ [RECADO #${recado.id}] ERRO CRÍTICO: ${err.message}`);
         console.error(`Stack: ${err.stack}\n`);
+        throw err; // repassa pro loop, pra NÃO marcar como enviado se algo crítico falhou
     }
 }
 
@@ -189,7 +211,7 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
     console.log(`\n${'█'.repeat(60)}`);
     console.log(`█ COMANDO #MSN DETECTADO`);
     console.log(`█ Grupo: ${from}`);
-    console.log(`█ Versão: 2.0 (BASE64 - SEM DOWNLOADS!)`);
+    console.log(`█ Versão: 2.1 (BASE64 + STATUS PENDENTE/ENVIADO)`);
     console.log(`${'█'.repeat(60)}\n`);
 
     const senderId = resolverSenderId(message);
@@ -213,9 +235,9 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
         const recados = await buscarRecados();
 
         if (recados.length === 0) {
-            console.log(`📭 Nenhum recado encontrado`);
+            console.log(`📭 Nenhum recado pendente encontrado`);
             await sock.sendMessage(from, {
-                text: '📭 Nenhum recado anônimo.',
+                text: '📭 Nenhum recado anônimo pendente.',
                 mentions: [senderId],
                 quoted: message
             });
@@ -223,7 +245,7 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
         }
 
         console.log(`\n${'█'.repeat(60)}`);
-        console.log(`█ INICIANDO ENVIO DE ${recados.length} RECADO(S)`);
+        console.log(`█ INICIANDO ENVIO DE ${recados.length} RECADO(S) PENDENTE(S)`);
         console.log(`█ ⚡ MODO RÁPIDO: Base64 do banco (SEM DOWNLOADS!)`);
         console.log(`${'█'.repeat(60)}\n`);
 
@@ -245,10 +267,15 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
                 console.log(`\n[${i + 1}/${recados.length}] Processando recado #${recado.id}...`);
                 await enviarRecado(sock, from, recado);
                 enviados++;
+                // 🔧 Marca como enviado SÓ depois do envio ter dado certo,
+                // assim ele some da busca na próxima vez que #msn rodar.
+                await marcarComoEnviado(recado.id);
             } catch (err) {
                 console.error(`❌ [HANDLER] Erro ao enviar recado #${recado.id}: ${err.message}`);
                 falhados++;
                 erros.push(`#${recado.id}: ${err.message}`);
+                // Não marca como enviado — continua 'pendente' pra ser
+                // tentado de novo na próxima rodada do #msn.
             }
             // Delay entre recados
             if (i < recados.length - 1) {
