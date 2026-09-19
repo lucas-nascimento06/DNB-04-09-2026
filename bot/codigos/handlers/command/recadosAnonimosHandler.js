@@ -31,7 +31,7 @@ const GRUPOS_TESTE = [
 ];
 
 // ID do grupo PRINCIPAL (envia só os pendentes e marca como 'enviado')
-const GRUPO_PRINCIPAL = '120363414417789335@g.us';
+const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 
 // 🔖 Mostrar o código também nas mensagens do grupo principal?
 // false = mensagem limpa no principal (código só aparece no grupo de teste)

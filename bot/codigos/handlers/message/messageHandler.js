@@ -169,7 +169,7 @@ const MODELO_POSTER =
 // ============================================
 // 🏠 IDs DOS GRUPOS
 // ============================================
-const GRUPO_PRINCIPAL = '120363414417789335@g.us';
+const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 const GRUPO_ADMINS = '120363409228091157@g.us';
 const GRUPO_CONTROLE = '120363409394983918@g.us';
 
