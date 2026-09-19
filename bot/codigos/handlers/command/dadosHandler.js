@@ -11,71 +11,19 @@ async function buscarEstatisticas() {
         `SELECT
             COUNT(*) AS total_recados,
             COUNT(DISTINCT numero_destinatario) AS destinatarios_unicos,
-            MAX(created_at) AS ultimo_recado
+            TO_CHAR(
+                MAX(created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo',
+                'DD/MM/YYYY" às "HH24:MI'
+            ) AS ultimo_recado
          FROM recados_anonimos`
     );
     return rows[0];
 }
 
-// ⏰ Formata data com timezone correto (Fortaleza)
-function formatarData(data) {
-    if (!data) return 'N/A';
-    
-    try {
-        const d = new Date(data);
-        
-        // Usando toLocaleString com timezone de Fortaleza (UTC-3)
-        const dataFormatada = d.toLocaleString('pt-BR', {
-            timeZone: 'America/Fortaleza',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-        
-        // dataFormatada vem no formato: "DD/MM/YYYY, HH:mm:ss"
-        // Vamos reformatar para: "DD/MM/YYYY às HH:mm"
-        const [data_parte, hora_parte] = dataFormatada.split(', ');
-        const [hora, min] = hora_parte.split(':');
-        
-        return `${data_parte} às ${hora}:${min}`;
-        
-    } catch (err) {
-        console.error('❌ [DADOS] Erro ao formatar data:', err.message);
-        return 'Erro ao formatar';
-    }
-}
-
-// Alternativa com dayjs (mais robusta se tiver instalado)
-// Descomente se quiser usar dayjs em vez do método acima
-/*
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc.js';
-import timezone from 'dayjs/plugin/timezone.js';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
-
-function formatarDataDayjs(data) {
-    if (!data) return 'N/A';
-    try {
-        return dayjs(data)
-            .tz('America/Fortaleza')
-            .format('DD/MM/YYYY HH:mm:ss');
-    } catch (err) {
-        console.error('❌ [DADOS] Erro ao formatar data:', err.message);
-        return 'Erro ao formatar';
-    }
-}
-*/
-
 function montarPoster(stats) {
     const total = stats.total_recados ?? 0;
     const destinatarios = stats.destinatarios_unicos ?? 0;
-    const ultimoRecado = formatarData(stats.ultimo_recado);
+    const ultimoRecado = stats.ultimo_recado ?? 'N/A';
 
     return `💌❤️❥❥═══ *RECADINHO DO CORAÇAO* ═══❥❥❤️💌
 
@@ -166,12 +114,12 @@ export async function handleDadosCommand(sock, message, content, from) {
     try {
         console.log('📊 [DADOS] Buscando estatísticas do banco...');
         const stats = await buscarEstatisticas();
-        
+
         console.log(`✅ [DADOS] Estatísticas encontradas:`);
         console.log(`   • Total de recados: ${stats.total_recados}`);
         console.log(`   • Destinatários únicos: ${stats.destinatarios_unicos}`);
         console.log(`   • Último recado: ${stats.ultimo_recado}`);
-        
+
         const poster = montarPoster(stats);
 
         console.log('📤 [DADOS] Enviando mensagem...');
