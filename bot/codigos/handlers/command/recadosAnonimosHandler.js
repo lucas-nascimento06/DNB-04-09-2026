@@ -1,7 +1,7 @@
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📩 RECADOS ANÔNIMOS — Versão 2.2 com Base64 (RÁPIDO & SEM FALHAS NO TERMUX)
+// 📩 RECADOS ANÔNIMOS — Versão 2.3 com Base64 (RÁPIDO & SEM FALHAS NO TERMUX)
 //
 // Uso: #msn
 // Precisa ser digitado dentro do grupo pra onde os recados devem ir.
@@ -15,6 +15,14 @@ import pool from '../../../../db.js';
 //          - NÃO altera o status no banco
 //          Assim dá pra testar quantas vezes precisar sem "gastar" os recados
 //          que serão enviados no grupo principal.
+//
+// 🔖 v2.3: CÓDIGO + MODERAÇÃO. Cada recado ganha um código de 2 dígitos (01–99)
+//          na primeira vez que o #msn passa por ele. Nos grupos de teste o
+//          código aparece na mensagem. Pra apagar um recado inapropriado:
+//              #rmsn 42     ou     #rmsn42 ou #r msn 42
+//          (só admin, só nos grupos liberados). O recado é removido do banco.
+//          Fluxo sugerido: rodar #msn no grupo de TESTE, ver os códigos,
+//          apagar o que for inapropriado e só depois rodar no grupo PRINCIPAL.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // IDs dos grupos de TESTE (envia tudo, mas NÃO marca como 'enviado')
@@ -24,6 +32,14 @@ const GRUPOS_TESTE = [
 
 // ID do grupo PRINCIPAL (envia só os pendentes e marca como 'enviado')
 const GRUPO_PRINCIPAL = '120363414417789335@g.us';
+
+// 🔖 Mostrar o código também nas mensagens do grupo principal?
+// false = mensagem limpa no principal (código só aparece no grupo de teste)
+const MOSTRAR_CODIGO_NO_PRINCIPAL = false;
+
+// 🔖 Quantidade de dígitos do código (2 = 00 a 99 → até 100 recados ao mesmo tempo)
+const DIGITOS_CODIGO = 2;
+const TOTAL_CODIGOS = 10 ** DIGITOS_CODIGO;
 
 function resolverSenderId(message) {
     const key = message.key;
@@ -61,6 +77,66 @@ async function verificarSeEhAdmin(sock, from, message, senderId) {
         console.error('⚠️ [RECADOS] Erro ao verificar admin:', err.message);
         return false;
     }
+}
+
+// ============================================
+// 🔖 CÓDIGOS DOS RECADOS
+// ============================================
+
+// Cria a coluna `codigo` sozinha na primeira vez (não precisa mexer no banco na mão).
+// O índice único garante que dois recados nunca fiquem com o mesmo código.
+let colunaCodigoOk = false;
+async function garantirColunaCodigo() {
+    if (colunaCodigoOk) return;
+    await pool.query(`ALTER TABLE recados_anonimos ADD COLUMN IF NOT EXISTS codigo VARCHAR(${DIGITOS_CODIGO})`);
+    await pool.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS recados_anonimos_codigo_uidx
+         ON recados_anonimos (codigo) WHERE codigo IS NOT NULL`
+    );
+    colunaCodigoOk = true;
+    console.log(`🔖 [DEBUG] Coluna 'codigo' pronta na tabela recados_anonimos`);
+}
+
+// Dá um código pra cada recado que ainda não tem (menor código livre: 01, 02, 03...).
+// Quando um recado é apagado com #rmsn, o código dele volta a ficar livre.
+async function garantirCodigos(recados) {
+    const semCodigo = recados.filter(r => !r.codigo);
+    if (semCodigo.length === 0) return;
+
+    // Códigos em uso em TODA a tabela (não só nos recados desta rodada)
+    const { rows } = await pool.query(`SELECT codigo FROM recados_anonimos WHERE codigo IS NOT NULL`);
+    const usados = new Set(rows.map(r => r.codigo));
+
+    const livres = [];
+    // começa do 1 pra evitar "00"; o 0 só entra se sobrar espaço
+    for (let n = 1; n <= TOTAL_CODIGOS; n++) {
+        const cod = String(n % TOTAL_CODIGOS).padStart(DIGITOS_CODIGO, '0');
+        if (!usados.has(cod)) livres.push(cod);
+    }
+
+    if (livres.length < semCodigo.length) {
+        throw new Error(
+            `Só restam ${livres.length} código(s) livre(s) e há ${semCodigo.length} recado(s) sem código. ` +
+            `Apague recados antigos com #rmsn ou aumente DIGITOS_CODIGO.`
+        );
+    }
+
+    for (const recado of semCodigo) {
+        const codigo = livres.shift();
+        await pool.query(`UPDATE recados_anonimos SET codigo = $1 WHERE id = $2`, [codigo, recado.id]);
+        recado.codigo = codigo;
+        console.log(`🔖 [DEBUG] Recado #${recado.id} recebeu o código ${codigo}`);
+    }
+}
+
+// Apaga do banco o recado com esse código. Retorna o recado apagado (ou null se não existir).
+async function removerRecadoPorCodigo(codigo) {
+    const { rows } = await pool.query(
+        `DELETE FROM recados_anonimos WHERE codigo = $1
+         RETURNING id, codigo, numero_destinatario, status`,
+        [codigo]
+    );
+    return rows[0] || null;
 }
 
 // Busca os recados do banco (COM BASE64!)
@@ -140,13 +216,18 @@ async function gerarThumbnailDoBase64(base64String, size = 256) {
     }
 }
 
-async function enviarRecado(sock, from, recado) {
+async function enviarRecado(sock, from, recado, mostrarCodigo = false) {
+    // 🔖 Linha do código (só quando mostrarCodigo = true e o recado tem código)
+    const linhaCodigo = mostrarCodigo && recado.codigo
+        ? `\n🔖 *Cód: ${recado.codigo}* _(apagar: #rmsn ${recado.codigo})_\n`
+        : '';
+
     const texto = `💌❤️❥❥═══ *RECADINHO DO CORAÇAO* ═══❥❥❤️💌
 
 💌🥰 *Um recado anônimo* *para* @${recado.numero_destinatario}
 
 ${recado.content}
-
+${linhaCodigo}
 _© damas da night_`;
     const mentions = [`${recado.numero_destinatario}@s.whatsapp.net`];
 
@@ -226,20 +307,90 @@ _© damas da night_`;
     }
 }
 
+// ============================================
+// 🗑️ #rmsn FG / #rmsnFG — apaga um recado pelo código
+// ============================================
+async function handleDelRecado(sock, message, from, codigo) {
+    // Só age nos grupos liberados. Em qualquer outro grupo ignora em silêncio
+    // (assim não atrapalha algum outro comando #rmsn que exista no bot).
+    const grupoPermitido = GRUPOS_TESTE.includes(from) || from === GRUPO_PRINCIPAL;
+    if (!grupoPermitido) return false;
+
+    const senderId = resolverSenderId(message);
+
+    const ehAdmin = await verificarSeEhAdmin(sock, from, message, senderId);
+    if (!ehAdmin) {
+        console.log(`❌ ${senderId} não é admin, rejeitando #rmsn`);
+        await sock.sendMessage(from, {
+            text: '🚫 Esse comando é exclusivo para administradores do grupo.',
+            mentions: [senderId],
+            quoted: message
+        });
+        return true;
+    }
+
+    try {
+        await garantirColunaCodigo();
+        const removido = await removerRecadoPorCodigo(codigo);
+
+        if (!removido) {
+            console.log(`🔎 [DEL] Nenhum recado com o código ${codigo}`);
+            await sock.sendMessage(from, {
+                text: `❓ Não achei nenhum recado com o código *${codigo}*.`,
+                mentions: [senderId],
+                quoted: message
+            });
+            return true;
+        }
+
+        console.log(`🗑️  [DEL] Recado #${removido.id} (código ${codigo}, status ${removido.status}) removido por ${senderId}`);
+        await sock.sendMessage(from, {
+            text: `╭━━〔 🗑️ 𝐑𝐄𝐂𝐀𝐃𝐎 𝐑𝐄𝐌𝐎𝐕𝐈𝐃𝐎 〕━━╮
+
+🚫 O recado *${codigo}* foi removido
+por conter conteúdo inadequado.
+
+🛡️ 𝐌𝐨𝐝𝐞𝐫𝐚𝐜̧𝐚̃𝐨 𝐃𝐚𝐦𝐚𝐬 𝐝𝐚 𝐍𝐢𝐠𝐡𝐭
+
+╰━━━━━━━━━━━━━━━━━━━━╯`,
+            mentions: [senderId],
+            quoted: message
+        });
+    } catch (err) {
+        console.error('❌ [DEL] Erro ao remover recado:', err.message);
+        await sock.sendMessage(from, {
+            text: `❌ Erro ao remover o recado: ${err.message}`,
+            mentions: [senderId],
+            quoted: message
+        });
+    }
+
+    return true;
+}
+
 export async function handleRecadosAnonimosCommand(sock, message, from) {
     const content =
         message.message?.conversation ||
         message.message?.extendedTextMessage?.text || '';
+
+    // 🗑️ #rmsn 42 ou #rmsn42 ou #r msn 42 (exatamente 2 dígitos)
+    const matchDel = content.trim().match(new RegExp(`^#r\\s*msn\\s*(\\d{${DIGITOS_CODIGO}})$`, 'i'));
+    if (matchDel) {
+        return await handleDelRecado(sock, message, from, matchDel[1]);
+    }
 
     if (!/^#msn$/i.test(content.trim())) return false;
 
     // 🧪 Grupo de teste? (envia tudo e NÃO altera o status no banco)
     const modoTeste = GRUPOS_TESTE.includes(from);
 
+    // 🔖 Mostra o código na mensagem? (sempre no teste; no principal só se a flag estiver ligada)
+    const mostrarCodigo = modoTeste || MOSTRAR_CODIGO_NO_PRINCIPAL;
+
     console.log(`\n${'█'.repeat(60)}`);
     console.log(`█ COMANDO #MSN DETECTADO`);
     console.log(`█ Grupo: ${from}`);
-    console.log(`█ Versão: 2.2 (BASE64 + STATUS PENDENTE/ENVIADO + MODO TESTE)`);
+    console.log(`█ Versão: 2.3 (BASE64 + STATUS + MODO TESTE + CÓDIGO/#RMSN)`);
     console.log(`█ Modo: ${modoTeste ? '🧪 TESTE (todos os recados, sem alterar status)' : '🚀 NORMAL (só pendentes, marca como enviado)'}`);
     console.log(`${'█'.repeat(60)}\n`);
 
@@ -273,6 +424,8 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
     try {
         console.log(`✅ ${senderId} é admin, prosseguindo...\n`);
 
+        await garantirColunaCodigo();
+
         const recados = await buscarRecados(modoTeste);
 
         if (recados.length === 0) {
@@ -286,6 +439,9 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
             });
             return true;
         }
+
+        // 🔖 Garante que todo recado desta rodada tenha um código
+        await garantirCodigos(recados);
 
         console.log(`\n${'█'.repeat(60)}`);
         console.log(`█ INICIANDO ENVIO DE ${recados.length} RECADO(S) ${modoTeste ? '(MODO TESTE)' : 'PENDENTE(S)'}`);
@@ -307,8 +463,8 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
         for (let i = 0; i < recados.length; i++) {
             const recado = recados[i];
             try {
-                console.log(`\n[${i + 1}/${recados.length}] Processando recado #${recado.id}...`);
-                await enviarRecado(sock, from, recado);
+                console.log(`\n[${i + 1}/${recados.length}] Processando recado #${recado.id} (código ${recado.codigo})...`);
+                await enviarRecado(sock, from, recado, mostrarCodigo);
                 enviados++;
 
                 if (!modoTeste) {

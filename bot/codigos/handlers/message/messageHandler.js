@@ -436,9 +436,10 @@ export async function handleMessages(sock, message) {
             return;
         }
 
-        // 📩 Recados anônimos — #msn
-        if (lowerContent === '#msn') {
-            if (DEBUG_MODE) console.log('📩 Comando #msn detectado!');
+        // 📩 Recados anônimos — #msn (enviar) e #rmsn FG / #r msn FG (remover pelo código)
+        // O handler valida o formato exato e se é admin; aqui só roteamos.
+        if (lowerContent === '#msn' || /^#r\s*msn\s*\d+$/.test(lowerContent)) {
+            if (DEBUG_MODE) console.log('📩 Comando #msn / #rmsn detectado!');
             await handleRecadosAnonimosCommand(sock, message, from);
             return;
         }
