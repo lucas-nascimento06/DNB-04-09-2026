@@ -4,13 +4,19 @@ import pool from '../../../../db.js';
 // 📊 DADOS DOS RECADOS — mostra estatísticas da tabela `recados_anonimos`
 //
 // Uso: #dados (exclusivo para administradores do grupo)
+//
+// 🔧 v2: agora separa por status:
+//   • Pessoas que já receberam recado  → destinatários únicos com status 'enviado'
+//   • Pessoas que ainda faltam receber → destinatários únicos com status 'pendente'
+//   • Total de recados enviados        → quantidade de recados com status 'enviado'
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function buscarEstatisticas() {
     const { rows } = await pool.query(
         `SELECT
-            COUNT(*) AS total_recados,
-            COUNT(DISTINCT numero_destinatario) AS destinatarios_unicos,
+            COUNT(DISTINCT numero_destinatario) FILTER (WHERE status = 'enviado')  AS pessoas_receberam,
+            COUNT(DISTINCT numero_destinatario) FILTER (WHERE status = 'pendente') AS pessoas_aguardando,
+            COUNT(*) FILTER (WHERE status = 'enviado')                             AS total_enviados,
             TO_CHAR(
                 MAX(created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo',
                 'DD/MM/YYYY" às "HH24:MI'
@@ -21,15 +27,17 @@ async function buscarEstatisticas() {
 }
 
 function montarPoster(stats) {
-    const total = stats.total_recados ?? 0;
-    const destinatarios = stats.destinatarios_unicos ?? 0;
+    const receberam = stats.pessoas_receberam ?? 0;
+    const aguardando = stats.pessoas_aguardando ?? 0;
+    const totalEnviados = stats.total_enviados ?? 0;
     const ultimoRecado = stats.ultimo_recado ?? 'N/A';
 
     return `💌❤️❥❥═══ *RECADINHO DO CORAÇAO* ═══❥❥❤️💌
 
 📊 *ESTATÍSTICAS DOS RECADOS*
-👥 Pessoas que já receberam recado: \`${destinatarios}\`
-💬 Total de recados enviados: \`${total}\`
+✅ Pessoas que já receberam recado: \`${receberam}\`
+⏳ Pessoas que ainda faltam receber: \`${aguardando}\`
+💬 Total de recados enviados: \`${totalEnviados}\`
 📅 Último recado: \`${ultimoRecado}\`
 ───────────────
 _© Damas da Night_`;
@@ -116,8 +124,9 @@ export async function handleDadosCommand(sock, message, content, from) {
         const stats = await buscarEstatisticas();
 
         console.log(`✅ [DADOS] Estatísticas encontradas:`);
-        console.log(`   • Total de recados: ${stats.total_recados}`);
-        console.log(`   • Destinatários únicos: ${stats.destinatarios_unicos}`);
+        console.log(`   • Pessoas que já receberam: ${stats.pessoas_receberam}`);
+        console.log(`   • Pessoas aguardando: ${stats.pessoas_aguardando}`);
+        console.log(`   • Total de recados enviados: ${stats.total_enviados}`);
         console.log(`   • Último recado: ${stats.ultimo_recado}`);
 
         const poster = montarPoster(stats);
