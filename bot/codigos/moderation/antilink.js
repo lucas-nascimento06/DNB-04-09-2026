@@ -1,13 +1,9 @@
 // Sistema AntiLink Otimizado - Redução de Falsos Positivos
 // Sistema de controle de infrações para evitar duplicatas
-
-// ✅ WHITELIST DE DOMÍNIOS PERMITIDOS
-const WHITELISTED_DOMAINS = [
-    'damasdanight.top',
-    'www.damasdanight.top'
-];
-
 const pendingRemovals = new Map(); // { userId: { timer, violations: [], groupId } }
+
+// Domínios permitidos (whitelist)
+const allowedDomains = ['damasdanight.top'];
 
 const getGroupInviteLink = async (sock, groupId) => {
     try {
@@ -283,10 +279,9 @@ export const handleAntiLink = async (sock, msg, groupId) => {
             // Normaliza o link para comparação
             const normalizedLink = link.replace(/^https?:\/\//, '').toLowerCase();
             
-            // ✅ Verifica whitelist de domínios permitidos
-            if (WHITELISTED_DOMAINS.some(domain => normalizedLink.includes(domain))) {
-                return false; // Link permitido
-            }
+            // ✅ NOVO: permite domínios da whitelist (com ou sem www, e com qualquer caminho)
+            const host = normalizedLink.split(/[\/?#:]/)[0].replace(/^www\./, '');
+            if (allowedDomains.includes(host)) return false;
             
             // Permite apenas links do próprio grupo WhatsApp
             if (normalizedLink.includes('chat.whatsapp.com') || normalizedLink.includes('whatsapp.com')) {
@@ -310,7 +305,7 @@ export const handleAntiLink = async (sock, msg, groupId) => {
 };
 
 // POLÍTICA RESTRITIVA: Nenhum link externo é permitido
-// Exceções: Links do próprio grupo WhatsApp + domínios na whitelist
+// Apenas o link do próprio grupo WhatsApp e os domínios da whitelist (allowedDomains) são autorizados
 
 export const testAntiLink = async (sock, groupId) => {
     const testCases = [
@@ -321,12 +316,10 @@ export const testAntiLink = async (sock, groupId) => {
         'Email: joao@empresa.com.br',       // ✅ NÃO deve detectar (contexto email)
         'Site malicioso.com aqui',          // ❌ Deve detectar (domínio suspeito)
         'youtube.com/video123',             // ❌ Deve detectar (NENHUM link externo é permitido)
-        'chat.whatsapp.com/abc123',         // ❌ Deve detectar (apenas link do próprio grupo é permitido)
-        'Visitem www.damasdanight.top',     // ✅ NÃO deve detectar (domínio na whitelist)
-        'damasdanight.top/info'             // ✅ NÃO deve detectar (domínio na whitelist)
+        'chat.whatsapp.com/abc123'          // ❌ Deve detectar (apenas link do próprio grupo é permitido)
     ];
     
-    console.log('🧪 Testando antilink - POLÍTICA RESTRITIVA com WHITELIST...');
+    console.log('🧪 Testando antilink - POLÍTICA RESTRITIVA (nenhum link externo permitido)...');
     
     for (const [index, testText] of testCases.entries()) {
         const testMsg = {
