@@ -17,16 +17,60 @@ async function buscarEstatisticas() {
     return rows[0];
 }
 
+// ⏰ Formata data com timezone correto (Fortaleza)
 function formatarData(data) {
     if (!data) return 'N/A';
-    const d = new Date(data);
-    const dia = String(d.getDate()).padStart(2, '0');
-    const mes = String(d.getMonth() + 1).padStart(2, '0');
-    const ano = d.getFullYear();
-    const hora = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${dia}/${mes}/${ano} às ${hora}:${min}`;
+    
+    try {
+        const d = new Date(data);
+        
+        // Usando toLocaleString com timezone de Fortaleza (UTC-3)
+        const dataFormatada = d.toLocaleString('pt-BR', {
+            timeZone: 'America/Fortaleza',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        
+        // dataFormatada vem no formato: "DD/MM/YYYY, HH:mm:ss"
+        // Vamos reformatar para: "DD/MM/YYYY às HH:mm"
+        const [data_parte, hora_parte] = dataFormatada.split(', ');
+        const [hora, min] = hora_parte.split(':');
+        
+        return `${data_parte} às ${hora}:${min}`;
+        
+    } catch (err) {
+        console.error('❌ [DADOS] Erro ao formatar data:', err.message);
+        return 'Erro ao formatar';
+    }
 }
+
+// Alternativa com dayjs (mais robusta se tiver instalado)
+// Descomente se quiser usar dayjs em vez do método acima
+/*
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+function formatarDataDayjs(data) {
+    if (!data) return 'N/A';
+    try {
+        return dayjs(data)
+            .tz('America/Fortaleza')
+            .format('DD/MM/YYYY HH:mm:ss');
+    } catch (err) {
+        console.error('❌ [DADOS] Erro ao formatar data:', err.message);
+        return 'Erro ao formatar';
+    }
+}
+*/
 
 function montarPoster(stats) {
     const total = stats.total_recados ?? 0;
@@ -46,6 +90,7 @@ _© Damas da Night_`;
 // 🛡️ Verifica se o remetente é admin do grupo
 async function isAdminDoGrupo(sock, from, message) {
     try {
+        console.log('🔐 [DADOS] Verificando permissões do usuário...');
         const metadata = await sock.groupMetadata(from);
 
         const key = message.key;
@@ -84,6 +129,7 @@ async function isAdminDoGrupo(sock, from, message) {
             return false;
         });
 
+        console.log(`${ehAdmin ? '✅' : '❌'} [DADOS] Usuário é admin: ${ehAdmin}`);
         return ehAdmin;
     } catch (err) {
         console.error('❌ [DADOS] Erro ao verificar admin:', err.message);
@@ -92,19 +138,24 @@ async function isAdminDoGrupo(sock, from, message) {
 }
 
 // 🔧 Assinatura (sock, message, content, from), igual aos outros handlers
-// de commandHandlers.js — o dispatcher chama todo handler passando
-// (sock, message, content, from).
 export async function handleDadosCommand(sock, message, content, from) {
     if (!/^#dados$/i.test(content.trim())) return false;
 
+    console.log(`\n${'═'.repeat(60)}`);
+    console.log(`📊 COMANDO #DADOS DETECTADO`);
+    console.log(`Grupo: ${from}`);
+    console.log(`${'═'.repeat(60)}\n`);
+
     // 🚫 Comando exclusivo para grupos
     if (!from.endsWith('@g.us')) {
+        console.log('⚠️  [DADOS] Comando executado em DM, ignorando...');
         return true;
     }
 
     const ehAdmin = await isAdminDoGrupo(sock, from, message);
 
     if (!ehAdmin) {
+        console.log('❌ [DADOS] Usuário não é admin, rejeitando...');
         await sock.sendMessage(from, {
             text: '🚫 Esse comando é exclusivo para administradores do grupo.',
             quoted: message
@@ -113,17 +164,26 @@ export async function handleDadosCommand(sock, message, content, from) {
     }
 
     try {
+        console.log('📊 [DADOS] Buscando estatísticas do banco...');
         const stats = await buscarEstatisticas();
+        
+        console.log(`✅ [DADOS] Estatísticas encontradas:`);
+        console.log(`   • Total de recados: ${stats.total_recados}`);
+        console.log(`   • Destinatários únicos: ${stats.destinatarios_unicos}`);
+        console.log(`   • Último recado: ${stats.ultimo_recado}`);
+        
         const poster = montarPoster(stats);
 
+        console.log('📤 [DADOS] Enviando mensagem...');
         await sock.sendMessage(from, {
             text: poster,
             quoted: message
         });
 
-        console.log('✅ [DADOS] Estatísticas enviadas com sucesso.');
+        console.log('✅ [DADOS] Estatísticas enviadas com sucesso!\n');
     } catch (err) {
         console.error('❌ [DADOS] Erro ao buscar estatísticas:', err.message);
+        console.error('Stack:', err.stack);
         try {
             await sock.sendMessage(from, {
                 text: '❌ Erro ao buscar as estatísticas. Tenta de novo.',
