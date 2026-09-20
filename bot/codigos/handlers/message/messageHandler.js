@@ -368,6 +368,18 @@ export async function handleMessages(sock, message) {
             ]);
         }
 
+        // 📩 Recados anônimos — #msn (enviar) e remoção:
+        //   • respondendo a mensagem do recado:  #rmsn  |  #r msn
+        //   • digitando o código:                #rmsn PD8pM | #rmsnPD8pM | #r msn PD8pM
+        // ✅ Fica ANTES do ReplyTag de propósito: remover por resposta é uma mensagem
+        //    com quotedMessage, e o ReplyTag não pode "engolir" esse comando.
+        // O handler valida o formato exato e se é admin; aqui só roteamos.
+        if (lowerContent === '#msn' || /^#r\s*msn(\s*[a-z0-9]{2,})?$/i.test(lowerContent)) {
+            if (DEBUG_MODE) console.log('📩 Comando #msn / #rmsn detectado!');
+            await handleRecadosAnonimosCommand(sock, message, from);
+            return;
+        }
+
         // 🔥 ReplyTag
         if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
             const replyResult = await replyTag.processReply(
@@ -433,14 +445,6 @@ export async function handleMessages(sock, message) {
         // 🎨 Sticker
         if (lowerContent.startsWith('#stk')) {
             await handleStickerCommand(sock, message);
-            return;
-        }
-
-        // 📩 Recados anônimos — #msn (enviar) e #rmsn FG / #r msn FG (remover pelo código)
-        // O handler valida o formato exato e se é admin; aqui só roteamos.
-        if (lowerContent === '#msn' || /^#r\s*msn\s*\d+$/.test(lowerContent)) {
-            if (DEBUG_MODE) console.log('📩 Comando #msn / #rmsn detectado!');
-            await handleRecadosAnonimosCommand(sock, message, from);
             return;
         }
 
