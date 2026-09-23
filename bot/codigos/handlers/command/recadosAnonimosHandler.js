@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📩 RECADOS ANÔNIMOS — Versão 2.9.2 (Base64, RÁPIDO & SEM FALHAS NO TERMUX)
+// 📩 RECADOS ANÔNIMOS — Versão 2.10.0 (Base64, RÁPIDO & SEM FALHAS NO TERMUX)
 //
 // Uso: #msn
 // Precisa ser digitado dentro do grupo pra onde os recados devem ir.
@@ -11,6 +11,17 @@ import pool from '../../../../db.js';
 // 📦 NOVO: LIMITE POR RODADA — cada #msn envia no máximo LIMITE_POR_RODADA
 //   recados (10). Os que sobrarem continuam 'pendente' e saem no próximo #msn.
 //   Evita rajada de mensagens e risco do WhatsApp entender como spam.
+//
+// 🆕 v2.10.0 - NOVO:
+//   • #rmsn agora APAGA DE VERDADE a mensagem no WhatsApp (delete for everyone),
+//     em vez de só marcar como removida no banco. Isso vale pra todas as
+//     mensagens do recado (texto/foto + áudio, se houver).
+//   • Pra isso, o bot agora guarda a CHAVE completa de cada mensagem enviada
+//     (coluna nova msg_keys), não só o ID. A coluna antiga msg_ids continua
+//     existindo (usada pra achar o recado a partir da mensagem respondida).
+//   • Recados enviados ANTES dessa atualização não têm msg_keys salvo, então
+//     continuam só sendo marcados como removidos no banco (não dá pra apagar
+//     do WhatsApp retroativamente).
 //
 // 🩹 v2.9.2 - CORREÇÃO:
 //   • O grupo PRINCIPAL agora só envia recados que JÁ passaram pelo grupo de
@@ -51,6 +62,7 @@ import pool from '../../../../db.js';
 // ✨ v2.9: REMOVER RESPONDENDO A MENSAGEM DO RECADO
 // 🩹 v2.9.1: aceita espaço depois do # (# r msn)
 // 🩹 v2.9.2: principal exige enviado_teste = TRUE (moderação obrigatória)
+// 🆕 v2.10.0: #rmsn apaga a mensagem de verdade no WhatsApp (delete for everyone)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // IDs dos grupos de TESTE (mesmo comportamento do principal, mas mostra o código)
@@ -169,8 +181,12 @@ async function garantirColunas() {
     // ✨ v2.9 - IDs das mensagens enviadas no WhatsApp (pra remover respondendo a mensagem)
     await pool.query(`ALTER TABLE recados_anonimos ADD COLUMN IF NOT EXISTS msg_ids TEXT[]`);
 
+    // 🆕 v2.10.0 - Chaves COMPLETAS das mensagens enviadas (pra apagar de verdade no WhatsApp).
+    //   Cada item é um JSON string com { remoteJid, id, fromMe }.
+    await pool.query(`ALTER TABLE recados_anonimos ADD COLUMN IF NOT EXISTS msg_keys TEXT[]`);
+
     colunasOk = true;
-    console.log(`✅ [DEBUG] Todas as colunas prontas (código, enviado_teste, removido, removed_at, msg_ids)`);
+    console.log(`✅ [DEBUG] Todas as colunas prontas (código, enviado_teste, removido, removed_at, msg_ids, msg_keys)`);
 }
 
 // ============================================
@@ -266,13 +282,15 @@ async function garantirCodigos(recados) {
 }
 
 // ✨ v2.8 - SOFT DELETE: marca como removido em vez de deletar
+// 🆕 v2.10.0: também devolve msg_keys, pra quem chamou poder apagar as
+//   mensagens de verdade no WhatsApp depois.
 async function removerRecadoPorCodigo(codigo) {
     const { rows } = await pool.query(
         `UPDATE recados_anonimos 
          SET removido = TRUE, 
              removed_at = NOW()
          WHERE UPPER(codigo) = UPPER($1) AND removido = FALSE
-         RETURNING id, codigo, numero_destinatario, status`,
+         RETURNING id, codigo, numero_destinatario, status, msg_keys`,
         [codigo]
     );
     return rows[0] || null;
@@ -282,20 +300,27 @@ async function removerRecadoPorCodigo(codigo) {
 // ↩️ v2.9 — DESCOBRIR O CÓDIGO PELA MENSAGEM RESPONDIDA
 // ============================================
 
-// Guarda no banco os IDs das mensagens que o bot mandou pro WhatsApp (texto/foto/áudio)
-async function salvarMsgIds(recadoId, ids) {
-    if (!ids || ids.length === 0) return;
+// Guarda no banco os IDs + as CHAVES COMPLETAS das mensagens que o bot mandou
+// pro WhatsApp (texto/foto/áudio). Os IDs continuam servindo pra achar o
+// recado a partir de uma resposta; as chaves completas são o que permite
+// apagar a mensagem de verdade depois (delete for everyone).
+async function salvarMsgsEnviadas(recadoId, chaves) {
+    if (!chaves || chaves.length === 0) return;
     try {
+        const ids = chaves.map(k => k.id).filter(Boolean);
+        const chavesJson = chaves.map(k => JSON.stringify(k));
+
         await pool.query(
             `UPDATE recados_anonimos
-             SET msg_ids = COALESCE(msg_ids, ARRAY[]::text[]) || $2::text[]
+             SET msg_ids  = COALESCE(msg_ids, ARRAY[]::text[])  || $2::text[],
+                 msg_keys = COALESCE(msg_keys, ARRAY[]::text[]) || $3::text[]
              WHERE id = $1`,
-            [recadoId, ids]
+            [recadoId, ids, chavesJson]
         );
-        console.log(`🧷 [DEBUG] Recado #${recadoId}: ${ids.length} ID(s) de mensagem salvo(s)`);
+        console.log(`🧷 [DEBUG] Recado #${recadoId}: ${ids.length} mensagem(ns) salva(s) (id + chave completa)`);
     } catch (err) {
-        // Não derruba o envio: no pior caso, esse recado só não poderá ser removido por resposta
-        console.error(`⚠️  [DEBUG] Erro ao salvar msg_ids do recado #${recadoId}: ${err.message}`);
+        // Não derruba o envio: no pior caso, esse recado só não poderá ser removido/apagado depois
+        console.error(`⚠️  [DEBUG] Erro ao salvar msg_ids/msg_keys do recado #${recadoId}: ${err.message}`);
     }
 }
 
@@ -451,6 +476,8 @@ async function gerarThumbnailDoBase64(base64String, size = 256) {
 // mostrarCodigoNoTexto: coloca a linha do código DENTRO do recado
 // (sempre no grupo de teste; no principal só se a flag estiver ligada)
 // ✨ v2.9: devolve a lista de IDs das mensagens enviadas (texto/foto/áudio)
+// 🆕 v2.10.0: agora devolve a CHAVE COMPLETA de cada mensagem (não só o id),
+//   pra dar pra apagar de verdade depois.
 async function enviarRecado(sock, from, recado, mostrarCodigoNoTexto = false) {
     const linhaCodigo = mostrarCodigoNoTexto && recado.codigo
         ? `\n🔖 *Cód: ${recado.codigo}*\n🗑️ _Para remover essa mensagem digite:_ *#rmsn ${recado.codigo}*\n`
@@ -465,9 +492,9 @@ ${linhaCodigo}
 _© damas da night_`;
     const mentions = [`${recado.numero_destinatario}@s.whatsapp.net`];
 
-    const idsEnviados = [];
-    const guardarId = (enviada) => {
-        if (enviada?.key?.id) idsEnviados.push(enviada.key.id);
+    const chavesEnviadas = [];
+    const guardarChave = (enviada) => {
+        if (enviada?.key?.id) chavesEnviadas.push(enviada.key);
     };
 
     console.log(`\n${'═'.repeat(60)}`);
@@ -492,18 +519,18 @@ _© damas da night_`;
                     mentions,
                     jpegThumbnail: thumb // pode ser null, é ok
                 });
-                guardarId(enviada);
+                guardarChave(enviada);
                 console.log(`✅ [RECADO #${recado.id}] Foto enviada com sucesso`);
             } catch (err) {
                 console.error(`❌ [RECADO #${recado.id}] Erro ao enviar foto: ${err.message}`);
                 console.log(`⚠️  [RECADO #${recado.id}] Enviando só texto...`);
                 const enviada = await sock.sendMessage(from, { text: texto, mentions });
-                guardarId(enviada);
+                guardarChave(enviada);
             }
         } else {
             console.log(`\n📝 [RECADO #${recado.id}] Sem foto, enviando texto puro...`);
             const enviada = await sock.sendMessage(from, { text: texto, mentions });
-            guardarId(enviada);
+            guardarChave(enviada);
             console.log(`✅ [RECADO #${recado.id}] Texto enviado com sucesso`);
         }
 
@@ -522,7 +549,7 @@ _© damas da night_`;
                     mimetype: 'audio/mpeg',
                     ptt: false
                 });
-                guardarId(enviada);
+                guardarChave(enviada);
                 console.log(`✅ [RECADO #${recado.id}] Áudio enviado com sucesso`);
             } catch (err) {
                 console.error(`❌ [RECADO #${recado.id}] Erro ao enviar áudio: ${err.message}`);
@@ -531,7 +558,7 @@ _© damas da night_`;
         }
 
         console.log(`\n✅ [RECADO #${recado.id}] FINALIZADO COM SUCESSO\n`);
-        return idsEnviados;
+        return chavesEnviadas;
 
     } catch (err) {
         console.error(`\n❌ [RECADO #${recado.id}] ERRO CRÍTICO: ${err.message}`);
@@ -541,7 +568,35 @@ _© damas da night_`;
 }
 
 // ============================================
-// 🗑️ REMOVER RECADO (soft delete)
+// 🆕 v2.10.0 — APAGAR AS MENSAGENS DE VERDADE NO WHATSAPP
+// ============================================
+
+// Apaga (delete for everyone) todas as mensagens de um recado no WhatsApp,
+// usando as chaves completas guardadas em msg_keys. Cada erro é isolado:
+// se uma mensagem não puder ser apagada, as outras ainda são tentadas.
+async function apagarMensagensDoWhatsapp(sock, from, msgKeysRaw, recadoId) {
+    if (!msgKeysRaw || msgKeysRaw.length === 0) {
+        console.log(`⚠️  [DEL] Recado #${recadoId} não tem msg_keys salvo (recado antigo, de antes da v2.10.0) — não dá pra apagar do WhatsApp, só fica marcado como removido no banco.`);
+        return { apagadas: 0, total: 0 };
+    }
+
+    let apagadas = 0;
+    for (const raw of msgKeysRaw) {
+        try {
+            const key = JSON.parse(raw);
+            await sock.sendMessage(from, { delete: key });
+            apagadas++;
+            console.log(`🗑️  [DEL] Mensagem ${key.id} apagada do WhatsApp (delete for everyone)`);
+        } catch (err) {
+            console.error(`⚠️  [DEL] Não consegui apagar uma das mensagens do recado #${recadoId}: ${err.message}`);
+        }
+        await esperar(300); // pequeno intervalo entre deletes, evita flood
+    }
+    return { apagadas, total: msgKeysRaw.length };
+}
+
+// ============================================
+// 🗑️ REMOVER RECADO (soft delete + apagar de verdade no WhatsApp)
 //   • respondendo a mensagem do recado:  #rmsn   |   #r msn   |   # r msn
 //   • digitando o código:                #rmsn VGv78 | #rmsnVGv78 | #r msn VGv78 | # r msn VGv78
 // ============================================
@@ -597,6 +652,16 @@ async function handleDelRecado(sock, message, from, codigoDigitado) {
         }
 
         console.log(`🗑️  [DEL] Recado #${removido.id} (código ${codigo}, status ${removido.status}) marcado como removido por ${senderId}`);
+
+        // 🆕 v2.10.0 — apaga de verdade a(s) mensagem(ns) do WhatsApp antes de confirmar
+        const { apagadas, total } = await apagarMensagensDoWhatsapp(sock, from, removido.msg_keys, removido.id);
+
+        const avisoApagamento = total === 0
+            ? '\n\n⚠️ _Esse recado é antigo e não pôde ser apagado do WhatsApp automaticamente. Apague manualmente se precisar._'
+            : (apagadas < total
+                ? `\n\n⚠️ _${total - apagadas} de ${total} mensagem(ns) desse recado não puderam ser apagadas automaticamente._`
+                : '');
+
         await enviar(sock, from, {
             text: `╭━━〔 🗑️ 𝐑𝐄𝐂𝐀𝐃𝐎 𝐑𝐄𝐌𝐎𝐕𝐈𝐃𝐎 〕━━╮
 
@@ -605,7 +670,7 @@ por conter conteúdo inadequado.
 
 🛡️ 𝐌𝐨𝐝𝐞𝐫𝐚𝐜̧𝐚̃𝐨 𝐃𝐚𝐦𝐚𝐬 𝐝𝐚 𝐍𝐢𝐠𝐡𝐭
 
-╰━━━━━━━━━━━━━━━━━━━━╯`,
+╰━━━━━━━━━━━━━━━━━━━━╯${avisoApagamento}`,
             mentions: [senderId]
         }, message);
     } catch (err) {
@@ -646,7 +711,7 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
     console.log(`\n${'█'.repeat(60)}`);
     console.log(`█ COMANDO #MSN DETECTADO`);
     console.log(`█ Grupo: ${from}`);
-    console.log(`█ Versão: 2.9.2 (BASE64 + STATUS + CÓDIGO + SOFT DELETE + REMOVER POR RESPOSTA + MODERAÇÃO OBRIGATÓRIA)`);
+    console.log(`█ Versão: 2.10.0 (BASE64 + STATUS + CÓDIGO + SOFT DELETE + REMOVER POR RESPOSTA + MODERAÇÃO OBRIGATÓRIA + APAGAR DE VERDADE)`);
     console.log(`█ Modo: ${modoTeste ? '🧪 TESTE (pendentes ainda não vistos no teste, marca enviado_teste, mostra código)' : '🚀 NORMAL (só pendentes já revisados no teste, marca como enviado)'}`);
     console.log(`${'█'.repeat(60)}\n`);
 
@@ -697,8 +762,8 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
             console.log(`📭 Nenhum recado pendente encontrado`);
             await enviar(sock, from, {
                 text: modoTeste
-                    ? '📭 Nenhum recado anônimo pendente.'
-                    : '📭 Nenhum recado anônimo pendente. Lembre-se: recados só chegam aqui depois de passar pelo grupo de teste.',
+                    ? '📭 *NENHUM RECADO ANÔNIMO PENDENTE.*'
+                    : '📭 *NENHUM RECADO ANÔNIMO PENDENTE.*\n\n*LEMBRE-SE:* os recados só chegam aqui depois de passar pela Moderação de Recados.',
                 mentions: [senderId]
             }, message);
             return true;
@@ -728,11 +793,12 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
             const recado = recados[i];
             try {
                 console.log(`\n[${i + 1}/${recados.length}] Processando recado #${recado.id} (código ${recado.codigo})...`);
-                const idsEnviados = await enviarRecado(sock, from, recado, mostrarCodigoNoTexto);
+                const chavesEnviadas = await enviarRecado(sock, from, recado, mostrarCodigoNoTexto);
                 enviados++;
 
-                // ✨ v2.9: guarda os IDs das mensagens enviadas (permite remover respondendo a mensagem)
-                await salvarMsgIds(recado.id, idsEnviados);
+                // ✨ v2.9 / 🆕 v2.10.0: guarda IDs + chaves completas das mensagens enviadas
+                // (permite remover respondendo a mensagem E apagar de verdade no WhatsApp)
+                await salvarMsgsEnviadas(recado.id, chavesEnviadas);
 
                 // Marca SÓ depois do envio ter dado certo:
                 //  - teste:     marca enviado_teste (o principal continua vendo como pendente
