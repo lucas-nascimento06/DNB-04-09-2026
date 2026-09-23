@@ -4,6 +4,7 @@
 import pool from '../../../../db.js';
 import { anunciosCache } from './leilaoCache.js';
 import { flushDC } from '../../features/dcTracker.js';
+import { arremaverLeilao } from './arrematarHandler.js';
 
 function extractDigits(number) {
     if (!number) return null;
@@ -162,6 +163,25 @@ export async function handleLanceCommand(sock, message, content) {
         );
 
         await client.query('COMMIT');
+
+        // 🚨 Se o lance bateu ou passou do valor máximo do leilão, encerra
+        // automaticamente AGORA, cobrando o valor do LANCE (não o máximo).
+        // Reaproveita a mesma lógica do #arrematar manual (arrematarHandler.js):
+        // debita saldo, credita o admin, marca 'arrematado' e forma o casal.
+        const bateuMaximo = valorLance >= Number(leilao.valor_maximo);
+
+        if (bateuMaximo) {
+            await sock.sendMessage(from, {
+                text: `🚨 *Valor máximo atingido!* [${leilao.codigo}]\n\n` +
+                      `💵 @${userId} arrematou com *${valorLance.toLocaleString('pt-BR')} DC* 💎\n\n` +
+                      `🔨 Encerrando o leilão automaticamente...`,
+                mentions: [`${userId}@s.whatsapp.net`]
+            }, quoted);
+
+            await arremaverLeilao(sock, from, message);
+
+            return true;
+        }
 
         const confirmacao = await sock.sendMessage(from, {
             text: `🔨 *NOVO LANCE NO LEILÃO* 🔨\n\n` +

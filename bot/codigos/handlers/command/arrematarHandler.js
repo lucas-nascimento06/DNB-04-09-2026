@@ -41,6 +41,8 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
     await flushDC();
 
     const client = await pool.connect();
+    let leilao = null;
+
     try {
         await client.query('BEGIN');
 
@@ -54,11 +56,8 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
             return { ok: false, motivo: 'sem_leilao_aberto' };
         }
 
-        const leilao = leilaoResult.rows[0];
+        leilao = leilaoResult.rows[0];
         const quoted = { quoted: quotedDoAnuncio(leilao.id, quotedFallback) };
-
-        const liderJid = `${leilao.lider_id}@s.whatsapp.net`;
-        const leiloadoJid = `${leilao.leiloado_id}@s.whatsapp.net`;
 
         if (!leilao.lider_id) {
             await client.query('ROLLBACK');
@@ -83,11 +82,20 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
                 [leilao.id]
             );
             await client.query('COMMIT');
-            await sock.sendMessage(grupoId, {
-                text: `🔨 Leilão [${leilao.codigo}]: @${leilao.lider_id} venceu com ${valorFinal.toLocaleString('pt-BR')} DC ` +
-                      `mas não tem mais saldo suficiente. Arremate cancelado.`,
-                mentions: [liderJid]
-            }, quoted);
+
+            // 🔧 Pós-commit: falha de envio aqui não deve ser tratada como erro
+            // de arremate (a transação já foi finalizada com sucesso).
+            try {
+                const liderJid = `${leilao.lider_id}@s.whatsapp.net`;
+                await sock.sendMessage(grupoId, {
+                    text: `🔨 Leilão [${leilao.codigo}]: @${leilao.lider_id} venceu com ${valorFinal.toLocaleString('pt-BR')} DC ` +
+                          `mas não tem mais saldo suficiente. Arremate cancelado.`,
+                    mentions: [liderJid]
+                }, quoted);
+            } catch (postErr) {
+                console.error('[arremaverLeilao] Erro ao notificar saldo insuficiente (pós-commit):', postErr.message);
+            }
+
             anunciosCache.delete(leilao.id);
             return { ok: false, motivo: 'saldo_insuficiente' };
         }
@@ -113,41 +121,66 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
 
         await client.query('COMMIT');
 
-        // 🆕 Marca TODO MUNDO do grupo na mensagem de "vendido/casal formado"
-        // (mesma técnica do #leilao e do #lance) — assim o grupo inteiro é
-        // notificado de que o casal foi formado, não só quem tava de olho.
-        // Marcação "silenciosa": só @lider_id e @leiloado_id aparecem
-        // escritos no texto, o resto do grupo entra só no "mentions".
-        const participantesGrupo = await obterParticipantesGrupo(sock, grupoId);
-        const mentionsTodos = Array.from(new Set([liderJid, leiloadoJid, ...participantesGrupo]));
+        // ============================================================
+        // 🔧 A PARTIR DAQUI: a transação já foi confirmada no banco —
+        // débito, crédito e bloqueio de casal JÁ ACONTECERAM DE VERDADE.
+        // Tudo abaixo é só notificação/registro (efeito colateral). Se
+        // algo falhar aqui (mensagem pro grupo de organização, busca de
+        // participantes, etc.), NÃO deve cair no catch geral nem mandar
+        // "❌ Erro ao arrematar o leilão." — isso mascararia um arremate
+        // que na verdade deu certo. Cada envio é isolado em seu próprio
+        // try/catch, só logando o problema no console.
+        // ============================================================
 
-        await sock.sendMessage(grupoId, {
-            text: `🔨 *Dou-lhe uma... Dou-lhe duas... Vendido por ${valorFinal.toLocaleString('pt-BR')} DC!* Parabéns ao arrematante!\n\n` +
-                  `💑 Casal formado: @${leilao.lider_id} e @${leilao.leiloado_id}\n` +
-                  `📅 Válido por *3 dias*!\n\n` +
-                  `🎯 Os desafios serão enviados pelos admins. Aguardem e sejam felizes! 💕`,
-            mentions: mentionsTodos
-        }, quoted);
+        const liderJid = `${leilao.lider_id}@s.whatsapp.net`;
+        const leiloadoJid = `${leilao.leiloado_id}@s.whatsapp.net`;
 
-        if (GRUPO_ORGANIZACAO_ID) {
-            await sock.sendMessage(GRUPO_ORGANIZACAO_ID, {
-                text: `📋 *REGISTRO DE LEILÃO ENCERRADO*\n` +
-                      `━━━━━━━━━━━━━━\n` +
-                      `🔨 Vendido por: ${valorFinal.toLocaleString('pt-BR')} DC\n` +
+        try {
+            // Marca TODO MUNDO do grupo na mensagem de "vendido/casal formado"
+            // (mesma técnica do #leilao e do #lance) — assim o grupo inteiro é
+            // notificado de que o casal foi formado, não só quem tava de olho.
+            // Marcação "silenciosa": só @lider_id e @leiloado_id aparecem
+            // escritos no texto, o resto do grupo entra só no "mentions".
+            const participantesGrupo = await obterParticipantesGrupo(sock, grupoId);
+            const mentionsTodos = Array.from(new Set([liderJid, leiloadoJid, ...participantesGrupo]));
+
+            await sock.sendMessage(grupoId, {
+                text: `🔨 *Dou-lhe uma... Dou-lhe duas... Vendido por ${valorFinal.toLocaleString('pt-BR')} DC!* Parabéns ao arrematante!\n\n` +
                       `💑 Casal formado: @${leilao.lider_id} e @${leilao.leiloado_id}\n` +
-                      `📅 Válido por: 3 dias\n` +
-                      `━━━━━━━━━━━━━━`,
-                mentions: [liderJid, leiloadoJid]
-            });
-        } else {
-            console.warn('[arrematarHandler] GRUPO_LEILOES_ID não configurado no .env');
+                      `📅 Válido por *3 dias*!\n\n` +
+                      `🎯 Os desafios serão enviados pelos admins. Aguardem e sejam felizes! 💕`,
+                mentions: mentionsTodos
+            }, quoted);
+        } catch (postErr) {
+            console.error('[arremaverLeilao] Erro ao enviar anúncio de vendido (pós-commit):', postErr.message);
+        }
+
+        try {
+            if (GRUPO_ORGANIZACAO_ID) {
+                await sock.sendMessage(GRUPO_ORGANIZACAO_ID, {
+                    text: `📋 *REGISTRO DE LEILÃO ENCERRADO*\n` +
+                          `━━━━━━━━━━━━━━\n` +
+                          `🔨 Vendido por: ${valorFinal.toLocaleString('pt-BR')} DC\n` +
+                          `💑 Casal formado: @${leilao.lider_id} e @${leilao.leiloado_id}\n` +
+                          `📅 Válido por: 3 dias\n` +
+                          `━━━━━━━━━━━━━━`,
+                    mentions: [liderJid, leiloadoJid]
+                });
+            } else {
+                console.warn('[arrematarHandler] GRUPO_LEILOES_ID não configurado no .env');
+            }
+        } catch (postErr) {
+            console.error('[arremaverLeilao] Erro ao enviar registro pro grupo de organização (pós-commit):', postErr.message);
         }
 
         anunciosCache.delete(leilao.id);
         return { ok: true };
 
     } catch (err) {
-        await client.query('ROLLBACK');
+        // Esse catch só cobre erros ANTES do COMMIT (ou o próprio COMMIT
+        // falhando) — nesse caso o ROLLBACK é real e a mensagem de erro
+        // reflete a verdade: o arremate não aconteceu.
+        await client.query('ROLLBACK').catch(() => {});
         console.error('[arremaverLeilao] Erro:', err.message);
         if (quotedFallback) {
             await sock.sendMessage(grupoId, { text: '❌ Erro ao arrematar o leilão.' }, { quoted: quotedFallback });

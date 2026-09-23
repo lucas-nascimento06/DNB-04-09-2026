@@ -169,7 +169,7 @@ const MODELO_POSTER =
 // ============================================
 // 🏠 IDs DOS GRUPOS
 // ============================================
-const GRUPO_PRINCIPAL = '120363412511975026@g.us';
+const GRUPO_PRINCIPAL = '120363431192212791@g.us';
 const GRUPO_ADMINS = '120363409228091157@g.us';
 const GRUPO_CONTROLE = '120363409394983918@g.us';
 
@@ -229,6 +229,26 @@ function resolverRemetenteReal(message) {
 }
 
 // ============================================
+// ✍️ NORMALIZAÇÃO DE COMANDOS COM ESPAÇO
+// Permite que "# play", "#  golpe", "oi # ban" etc. funcionem
+// exatamente como "#play", "#golpe", "oi #ban".
+// Só remove o(s) espaço(s) que vêm IMEDIATAMENTE depois do "#"
+// (ou do "!" no início da mensagem), sem tocar em mais nada do texto.
+// ============================================
+function normalizarComando(texto) {
+    if (!texto) return texto;
+
+    let normalizado = texto
+        // "# play" -> "#play" | "#   golpe" -> "#golpe" (em qualquer posição do texto)
+        .replace(/#[ \t]+(?=\S)/g, '#');
+
+    // "! gado" -> "!gado" apenas quando "!" abre a mensagem (prefixo alternativo de comando)
+    normalizado = normalizado.replace(/^!\s+(?=\S)/, '!');
+
+    return normalizado;
+}
+
+// ============================================
 // 🎯 HANDLER PRINCIPAL
 // ============================================
 export async function handleMessages(sock, message) {
@@ -250,13 +270,33 @@ export async function handleMessages(sock, message) {
         const messageType = messageKeys.find(k => MEDIA_TYPES.includes(k)) || messageKeys[0];
         const isMediaMessage = MEDIA_TYPES.includes(messageType);
 
-        const content =
+        let content =
             message.message.conversation ||
             message.message.extendedTextMessage?.text ||
             message.message.imageMessage?.caption ||
             message.message.videoMessage?.caption ||
             message.message.documentWithCaptionMessage?.message?.documentMessage?.caption ||
             '';
+
+        // ✍️ Normaliza "# comando" -> "#comando" antes de qualquer comparação
+        content = normalizarComando(content);
+
+        // ✍️ Grava o texto normalizado DE VOLTA na mensagem, pra que os handlers
+        // que releem message.message.* (musicaHandler, dedicatoriaHandler,
+        // recadosAnonimosHandler, dadosHandler...) também enxerguem "#play"
+        // e não "# play". Só mexe no texto de conversa/legenda, nada mais.
+        if (message.message.conversation) {
+            message.message.conversation = normalizarComando(message.message.conversation);
+        }
+        if (message.message.extendedTextMessage?.text) {
+            message.message.extendedTextMessage.text = normalizarComando(message.message.extendedTextMessage.text);
+        }
+        if (message.message.imageMessage?.caption) {
+            message.message.imageMessage.caption = normalizarComando(message.message.imageMessage.caption);
+        }
+        if (message.message.videoMessage?.caption) {
+            message.message.videoMessage.caption = normalizarComando(message.message.videoMessage.caption);
+        }
 
         // ============================================
         // 🛡️ CONTROLE DE MENSAGENS DO BOT

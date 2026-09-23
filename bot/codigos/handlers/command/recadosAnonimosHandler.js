@@ -2,11 +2,29 @@ import { randomInt } from 'crypto';
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📩 RECADOS ANÔNIMOS — Versão 2.9 (Base64, RÁPIDO & SEM FALHAS NO TERMUX)
+// 📩 RECADOS ANÔNIMOS — Versão 2.9.2 (Base64, RÁPIDO & SEM FALHAS NO TERMUX)
 //
 // Uso: #msn
 // Precisa ser digitado dentro do grupo pra onde os recados devem ir.
 // 🔒 Apenas administradores do grupo podem executar esse comando.
+//
+// 📦 NOVO: LIMITE POR RODADA — cada #msn envia no máximo LIMITE_POR_RODADA
+//   recados (10). Os que sobrarem continuam 'pendente' e saem no próximo #msn.
+//   Evita rajada de mensagens e risco do WhatsApp entender como spam.
+//
+// 🩹 v2.9.2 - CORREÇÃO:
+//   • O grupo PRINCIPAL agora só envia recados que JÁ passaram pelo grupo de
+//     TESTE (enviado_teste = TRUE). Antes, o principal buscava qualquer
+//     recado 'pendente' e 'removido = FALSE', sem checar se ele tinha sido
+//     revisado no teste — então recados nunca moderados podiam ir direto
+//     pro principal. Agora a moderação no teste é obrigatória antes do envio
+//     real.
+//
+// 🩹 v2.9.1 - CORREÇÃO:
+//   • Comandos com espaço depois do # agora funcionam:
+//     "# msn", "# r msn", "# rmsn VGv78", "#r msn VGv78"...
+//   • O handler agora normaliza o texto sozinho (não depende só do messageHandler).
+//   • Ler mensagem respondida também funciona com vídeo (legenda).
 //
 // ✨ v2.9 - NOVA:
 //   • REMOVER RESPONDENDO A MENSAGEM: responda o recado com #rmsn (ou #r msn)
@@ -31,18 +49,24 @@ import pool from '../../../../db.js';
 // ✨ v2.7: Teste não gasta pendentes do principal
 // ✨ v2.8: SOFT DELETE - recados removidos preservam auditoria
 // ✨ v2.9: REMOVER RESPONDENDO A MENSAGEM DO RECADO
+// 🩹 v2.9.1: aceita espaço depois do # (# r msn)
+// 🩹 v2.9.2: principal exige enviado_teste = TRUE (moderação obrigatória)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // IDs dos grupos de TESTE (mesmo comportamento do principal, mas mostra o código)
 const GRUPOS_TESTE = [
-    '120363410625671149@g.us', // grupo de teste
+    '120363429782268080@g.us', // grupo de teste
 ];
 
 // ID do grupo PRINCIPAL (envia só os pendentes e marca como 'enviado')
-const GRUPO_PRINCIPAL = '120363412511975026@g.us';
+const GRUPO_PRINCIPAL = '120363431192212791@g.us';
 
 // 🔖 Mostrar o código dentro da mensagem do recado no grupo principal?
 const MOSTRAR_CODIGO_NO_PRINCIPAL = false;
+
+// 📦 Quantos recados enviar por cada #msn (evita rajada de mensagens = risco de spam).
+// Os que sobrarem continuam 'pendente' e saem no próximo #msn.
+const LIMITE_POR_RODADA = 10;
 
 // 🎲 Códigos aleatórios alfanuméricos (ex: VGv78). Começam com 5 caracteres e
 // crescem sozinhos (6, 7...) quando mais da metade das combinações está ocupada.
@@ -65,6 +89,12 @@ function enviar(sock, jid, content, quoted) {
 
 function esperar(ms) {
     return new Promise(r => setTimeout(r, ms));
+}
+
+// ✍️ v2.9.1 — "# msn" -> "#msn" | "# r msn" -> "#r msn" (só tira o espaço logo depois do #)
+function normalizarTexto(texto) {
+    if (!texto) return '';
+    return texto.replace(/#[ \t]+(?=\S)/g, '#');
 }
 
 function resolverSenderId(message) {
@@ -274,6 +304,7 @@ function lerMensagemRespondida(message) {
     const ctx =
         message.message?.extendedTextMessage?.contextInfo ||
         message.message?.imageMessage?.contextInfo ||
+        message.message?.videoMessage?.contextInfo || // v2.9.1
         null;
 
     if (!ctx?.stanzaId) return null;
@@ -305,9 +336,10 @@ async function descobrirCodigoPelaResposta(message) {
         return rows[0].codigo;
     }
 
+    const textoNormalizado = normalizarTexto(resposta.texto);
     const m =
-        resposta.texto.match(/C[óo]d:\s*\*?\s*([a-z0-9]{2,})/i) ||
-        resposta.texto.match(/#r\s*msn\s*([a-z0-9]{2,})/i);
+        textoNormalizado.match(/C[óo]d:\s*\*?\s*([a-z0-9]{2,})/i) ||
+        textoNormalizado.match(/#\s*r\s*msn\s*([a-z0-9]{2,})/i);
     if (m) {
         console.log(`↩️  [DEL] Código ${m[1]} achado no texto da mensagem respondida`);
         return m[1];
@@ -317,19 +349,27 @@ async function descobrirCodigoPelaResposta(message) {
 }
 
 // Busca os recados do banco (COM BASE64!)
-//  - principal: status = 'pendente' E NOT removido
 //  - teste:     status = 'pendente' E ainda não enviado no teste E NOT removido
+//  - principal: status = 'pendente' E JÁ revisado no teste (enviado_teste = TRUE) E NOT removido
+//               🩹 v2.9.2: o principal agora EXIGE enviado_teste = TRUE, pra nunca
+//               mandar um recado que ainda não passou pela moderação do grupo de teste.
+//  📦 Traz no máximo LIMITE_POR_RODADA recados (os mais antigos primeiro).
+//     Os demais continuam pendentes pro próximo #msn.
 async function buscarRecados(modoTeste = false) {
     try {
-        console.log(`🗄️  [DEBUG] Buscando recados (${modoTeste ? 'pendentes ainda não enviados no teste' : 'só pendentes'})...`);
+        console.log(`🗄️  [DEBUG] Buscando recados (${modoTeste ? 'pendentes ainda não enviados no teste' : 'já revisados no teste e ainda pendentes'}) — limite de ${LIMITE_POR_RODADA} por rodada...`);
 
         const sql = modoTeste
             ? `SELECT * FROM recados_anonimos
                WHERE status = 'pendente' AND enviado_teste IS NOT TRUE AND removido = FALSE
-               ORDER BY id ASC`
-            : `SELECT * FROM recados_anonimos WHERE status = 'pendente' AND removido = FALSE ORDER BY id ASC`;
+               ORDER BY id ASC
+               LIMIT $1`
+            : `SELECT * FROM recados_anonimos
+               WHERE status = 'pendente' AND enviado_teste = TRUE AND removido = FALSE
+               ORDER BY id ASC
+               LIMIT $1`;
 
-        const { rows } = await pool.query(sql);
+        const { rows } = await pool.query(sql, [LIMITE_POR_RODADA]);
         console.log(`✅ [DEBUG] ${rows.length} recado(s) encontrado(s)`);
 
         if (rows.length > 0) {
@@ -502,8 +542,8 @@ _© damas da night_`;
 
 // ============================================
 // 🗑️ REMOVER RECADO (soft delete)
-//   • respondendo a mensagem do recado:  #rmsn   |   #r msn
-//   • digitando o código:                #rmsn VGv78 | #rmsnVGv78 | #r msn VGv78
+//   • respondendo a mensagem do recado:  #rmsn   |   #r msn   |   # r msn
+//   • digitando o código:                #rmsn VGv78 | #rmsnVGv78 | #r msn VGv78 | # r msn VGv78
 // ============================================
 async function handleDelRecado(sock, message, from, codigoDigitado) {
     // Só age nos grupos liberados. Em qualquer outro grupo ignora em silêncio
@@ -580,18 +620,22 @@ por conter conteúdo inadequado.
 }
 
 export async function handleRecadosAnonimosCommand(sock, message, from) {
-    const content =
+    const contentBruto =
         message.message?.conversation ||
         message.message?.extendedTextMessage?.text || '';
 
-    // 🗑️ #rmsn  (respondendo o recado)  |  #rmsn VGv78  |  #rmsnVGv78  |  #r msn VGv78
+    // ✍️ v2.9.1: "# msn" -> "#msn" | "# r msn" -> "#r msn"
+    // (o messageHandler normaliza o texto dele, mas aqui a mensagem é relida crua)
+    const content = normalizarTexto(contentBruto);
+
+    // 🗑️ #rmsn  (respondendo o recado)  |  #rmsn VGv78  |  #rmsnVGv78  |  #r msn VGv78  |  # r msn VGv78
     // O código é OPCIONAL: sem ele, o bot descobre pela mensagem respondida.
-    const matchDel = content.trim().match(/^#r\s*msn(?:\s*([a-z0-9]{2,}))?$/i);
+    const matchDel = content.trim().match(/^#\s*r\s*msn(?:\s*([a-z0-9]{2,}))?$/i);
     if (matchDel) {
         return await handleDelRecado(sock, message, from, matchDel[1] || null);
     }
 
-    if (!/^#msn$/i.test(content.trim())) return false;
+    if (!/^#\s*msn$/i.test(content.trim())) return false;
 
     // 🧪 Grupo de teste? (funciona igual ao principal, mas mostra o código no recado)
     const modoTeste = GRUPOS_TESTE.includes(from);
@@ -602,8 +646,8 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
     console.log(`\n${'█'.repeat(60)}`);
     console.log(`█ COMANDO #MSN DETECTADO`);
     console.log(`█ Grupo: ${from}`);
-    console.log(`█ Versão: 2.9 (BASE64 + STATUS + CÓDIGO + SOFT DELETE + REMOVER POR RESPOSTA)`);
-    console.log(`█ Modo: ${modoTeste ? '🧪 TESTE (pendentes ainda não vistos no teste, marca enviado_teste, mostra código)' : '🚀 NORMAL (só pendentes, marca como enviado)'}`);
+    console.log(`█ Versão: 2.9.2 (BASE64 + STATUS + CÓDIGO + SOFT DELETE + REMOVER POR RESPOSTA + MODERAÇÃO OBRIGATÓRIA)`);
+    console.log(`█ Modo: ${modoTeste ? '🧪 TESTE (pendentes ainda não vistos no teste, marca enviado_teste, mostra código)' : '🚀 NORMAL (só pendentes já revisados no teste, marca como enviado)'}`);
     console.log(`${'█'.repeat(60)}\n`);
 
     // 🚫 Só funciona no grupo de teste e no grupo principal
@@ -652,7 +696,9 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
         if (recados.length === 0) {
             console.log(`📭 Nenhum recado pendente encontrado`);
             await enviar(sock, from, {
-                text: '📭 Nenhum recado anônimo pendente.',
+                text: modoTeste
+                    ? '📭 Nenhum recado anônimo pendente.'
+                    : '📭 Nenhum recado anônimo pendente. Lembre-se: recados só chegam aqui depois de passar pelo grupo de teste.',
                 mentions: [senderId]
             }, message);
             return true;
@@ -689,7 +735,9 @@ export async function handleRecadosAnonimosCommand(sock, message, from) {
                 await salvarMsgIds(recado.id, idsEnviados);
 
                 // Marca SÓ depois do envio ter dado certo:
-                //  - teste:     marca enviado_teste (o principal continua vendo como pendente)
+                //  - teste:     marca enviado_teste (o principal continua vendo como pendente
+                //               até esse recado ser marcado — e agora SÓ é elegível pro principal
+                //               depois disso, veja buscarRecados)
                 //  - principal: marca status = 'enviado'
                 if (modoTeste) {
                     await marcarComoEnviadoTeste(recado.id);

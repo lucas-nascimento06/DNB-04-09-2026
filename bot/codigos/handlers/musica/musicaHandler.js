@@ -47,6 +47,17 @@ function limparNomeArquivo(nome) {
 }
 
 // ============================================
+// ✍️ v2 — NORMALIZA "# play" -> "#play"
+// Remove só o(s) espaço(s) logo depois do "#". Necessário porque este
+// handler relê a mensagem crua (message.message.*) e não o texto que o
+// messageHandler já normalizou.
+// ============================================
+function normalizarTexto(texto) {
+    if (!texto) return '';
+    return texto.replace(/#[ \t]+(?=\S)/g, '#');
+}
+
+// ============================================
 // 🧹 REMOVE SUFIXO "- Topic" DO NOME DO ARTISTA
 // (vem de canais auto-gerados do YouTube, ex: "Leandro & Leonardo - Topic")
 // ============================================
@@ -441,8 +452,11 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
 }
 
 export async function handleMusicaCommands(sock, message, from) {
-    const content = message.message?.conversation ||
-                    message.message?.extendedTextMessage?.text || '';
+    const contentBruto = message.message?.conversation ||
+                         message.message?.extendedTextMessage?.text || '';
+
+    // ✍️ "# play" -> "#play" (este handler relê a mensagem crua)
+    const content = normalizarTexto(contentBruto);
     const contentTrim = content.trim();
 
     // Aceita "#play" seguido de dígito, espaço, ou fim de string —

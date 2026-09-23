@@ -147,20 +147,29 @@ export { handleDadosCommand };
 // #desafio/#pronto (desafios do casal)
 // ============================================
 export async function handleLeilaoCommands(sock, message, content, from) {
-    const lowerContent = content.toLowerCase().trim();
+    // 🆕 Tolera espaço opcional logo após o "#" em QUALQUER comando de leilão
+    // (ex: "# leilão", "# lance", "# arrematar", "# fl", "# dcasal"...).
+    // Normaliza ANTES de rotear e repassa esse texto já normalizado pros
+    // handlers individuais — senão a checagem interna de cada um (que
+    // também espera "#comando" colado) rejeitaria o comando mesmo depois
+    // de passar por aqui. Só remove o espaço entre "#" e a palavra — o
+    // resto da mensagem (@pessoa, valores, etc.) fica intocado.
+    const contentNormalizado = content.replace(/^(\s*)#\s+/, '$1#');
+
+    const lowerContent = contentNormalizado.toLowerCase().trim();
     const lowerContentSemAcento = lowerContent.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     // #leilao / #leilão — abrir leilão
     if (lowerContentSemAcento.startsWith('#leilao')) {
         console.log('🔨 Comando #leilao detectado!');
-        const handled = await handleLeilaoCommand(sock, message, content);
+        const handled = await handleLeilaoCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #lance — dar lance
     if (lowerContent.startsWith('#lance')) {
         console.log('🔨 Comando #lance detectado!');
-        const handled = await handleLanceCommand(sock, message, content);
+        const handled = await handleLanceCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
@@ -168,21 +177,21 @@ export async function handleLeilaoCommands(sock, message, content, from) {
     // ⚠️ Checa ANTES do #fecharleilao/#fl pra não ter conflito de prefixo.
     if (lowerContent.startsWith('#arrematar')) {
         console.log('🔨 Comando #arrematar detectado!');
-        const handled = await handleArrematarCommand(sock, message, content);
+        const handled = await handleArrematarCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #fecharleilao / #fl — encerrar leilão
     if (lowerContent.startsWith('#fecharleilao') || lowerContent.startsWith('#fl')) {
         console.log('🔨 Comando #fecharleilao/#fl detectado!');
-        const handled = await handleFecharLeilaoCommand(sock, message, content);
+        const handled = await handleFecharLeilaoCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #dcasal — libera casal(is) bloqueado(s) do grupo, sem precisar de #fl
     if (lowerContent.startsWith('#dcasal')) {
         console.log('🔓 Comando #dcasal detectado!');
-        const handled = await handleDCasalCommand(sock, message, content);
+        const handled = await handleDCasalCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
@@ -191,30 +200,31 @@ export async function handleLeilaoCommands(sock, message, content, from) {
     // acidentalmente pelo startsWith('#rl') ou similar.
     if (lowerContentSemAcento.startsWith('#resetartudo')) {
         console.log('🧹💥 Comando #resetartudo detectado!');
-        const handled = await handleResetTudoCommand(sock, message, content);
+        const handled = await handleResetTudoCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #resetardc — resetar TODO o histórico de DC de TODOS os grupos (restrito ao dono/dev)
     if (lowerContentSemAcento.startsWith('#resetardc')) {
         console.log('🧹💰 Comando #resetardc detectado!');
-        const handled = await handleResetDcCommand(sock, message, content);
+        const handled = await handleResetDcCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #rl / #resetarleilao / #resetarleilão — resetar leilões do grupo atual
     if (lowerContentSemAcento.startsWith('#rl') || lowerContentSemAcento.startsWith('#resetarleilao')) {
         console.log('🧹 Comando #rl/#resetarleilao detectado!');
-        const handled = await handleResetLeilaoCommand(sock, message, content);
+        const handled = await handleResetLeilaoCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
     // #desafio / #pronto — desafios do casal formado no leilão
     // Detecta o comando em QUALQUER posição da mensagem (não só no início),
     // pois é comum a pessoa escrever um texto antes ou depois do comando.
-    if (from.endsWith('@g.us') && (/#desafio\b/i.test(lowerContent) || /#pronto\b/i.test(lowerContent))) {
+    // Usa \s* também aqui pra cobrir "# desafio" / "# pronto" em qualquer lugar.
+    if (from.endsWith('@g.us') && (/#\s*desafio\b/i.test(lowerContent) || /#\s*pronto\b/i.test(lowerContent))) {
         console.log('🎯 Comando #desafio/#pronto detectado!');
-        const handled = await handleDesafioleilaoCommand(sock, message, content);
+        const handled = await handleDesafioleilaoCommand(sock, message, contentNormalizado);
         if (handled) return true;
     }
 
