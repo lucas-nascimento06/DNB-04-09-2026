@@ -121,7 +121,7 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
 
         await client.query('COMMIT');
 
-        // ============================================================
+        // ==========================================================
         // 🔧 A PARTIR DAQUI: a transação já foi confirmada no banco —
         // débito, crédito e bloqueio de casal JÁ ACONTECERAM DE VERDADE.
         // Tudo abaixo é só notificação/registro (efeito colateral). Se
