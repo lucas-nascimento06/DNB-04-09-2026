@@ -67,11 +67,11 @@ import pool from '../../../../db.js';
 
 // IDs dos grupos de TESTE (mesmo comportamento do principal, mas mostra o código)
 const GRUPOS_TESTE = [
-    '120363429782268080@g.us', // grupo de teste
+    '120363410625671149@g.us', // grupo de teste
 ];
 
 // ID do grupo PRINCIPAL (envia só os pendentes e marca como 'enviado')
-const GRUPO_PRINCIPAL = '120363431192212791@g.us';
+const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 
 // 🔖 Mostrar o código dentro da mensagem do recado no grupo principal?
 const MOSTRAR_CODIGO_NO_PRINCIPAL = false;
