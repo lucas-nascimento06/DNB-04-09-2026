@@ -26,17 +26,13 @@ function getNumeroReal(message) {
 /**
  * Menções e reply ficam em lugares diferentes dependendo do tipo da mensagem:
  * texto puro -> extendedTextMessage.contextInfo
- * foto/vídeo com legenda -> imageMessage.contextInfo / videoMessage.contextInfo
+ * foto com legenda -> imageMessage.contextInfo
  */
 function getContextInfo(message) {
     const m = message.message;
     if (!m) return null;
     return m.extendedTextMessage?.contextInfo
         || m.imageMessage?.contextInfo
-        || m.videoMessage?.contextInfo
-        || m.documentMessage?.contextInfo
-        || m.audioMessage?.contextInfo
-        || m.stickerMessage?.contextInfo
         || null;
 }
 
@@ -47,8 +43,6 @@ function extrairTextoDaMensagem(message) {
     return m.conversation
         || m.extendedTextMessage?.text
         || m.imageMessage?.caption
-        || m.videoMessage?.caption
-        || m.documentMessage?.caption
         || '';
 }
 
@@ -159,21 +153,21 @@ async function gerarThumbnail(buffer, size = 256) {
     }
 }
 
+/**
+ * Reenvia uma FOTO "limpa" (sem o comando na legenda) para o grupo de destino.
+ * Só funciona com imageMessage — qualquer outro tipo de mídia é ignorado.
+ */
 async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes = {}) {
     const { caption = '', mentions = [] } = opcoes;
     const conteudo = mensagemComMidia.message;
-    if (!conteudo) return false;
-
-    const tipo = ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'stickerMessage']
-        .find(t => conteudo[t]);
-    if (!tipo) return false;
+    if (!conteudo || !conteudo.imageMessage) return false;
 
     const mensagemSemComando = {
         ...mensagemComMidia,
         message: {
             ...conteudo,
-            [tipo]: {
-                ...conteudo[tipo],
+            imageMessage: {
+                ...conteudo.imageMessage,
                 caption: ''
             }
         }
@@ -186,28 +180,11 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
         { reuploadRequest: sock.updateMediaMessage }
     );
 
-    const suportaCaption = tipo === 'imageMessage' || tipo === 'videoMessage' || tipo === 'documentMessage';
+    const payload = { image: buffer };
+    const thumb = await gerarThumbnail(buffer, 256);
+    if (thumb) payload.jpegThumbnail = thumb;
 
-    const payload = {};
-    if (tipo === 'imageMessage') {
-        payload.image = buffer;
-        const thumb = await gerarThumbnail(buffer, 256);
-        if (thumb) payload.jpegThumbnail = thumb;
-    } else if (tipo === 'videoMessage') {
-        payload.video = buffer;
-    } else if (tipo === 'documentMessage') {
-        payload.document = buffer;
-        payload.mimetype = conteudo.documentMessage.mimetype;
-        payload.fileName = conteudo.documentMessage.fileName || 'comprovacao';
-    } else if (tipo === 'audioMessage') {
-        payload.audio = buffer;
-        payload.mimetype = conteudo.audioMessage.mimetype || 'audio/ogg; codecs=opus';
-        payload.ptt = !!conteudo.audioMessage.ptt;
-    } else if (tipo === 'stickerMessage') {
-        payload.sticker = buffer;
-    }
-
-    if (suportaCaption && caption) {
+    if (caption) {
         payload.caption = caption;
         if (mentions.length) payload.mentions = mentions;
     }
@@ -219,99 +196,63 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
         return false;
     }
 
-    if (!suportaCaption && caption) {
-        await sock.sendMessage(grupoDestino, { text: caption, mentions });
-    }
-
     return true;
 }
 
 /**
  * Detecta o tipo de comprovação esperado a partir da descrição do desafio
- * Retorna: 'foto', 'video', 'texto', 'foto_texto', 'video_texto', 'qualquer'
+ * Retorna: 'foto', 'texto', 'foto_texto', 'qualquer'
+ * (Vídeo não é mais um tipo válido — tudo que mencionar vídeo cai em 'foto')
  */
 function detectarTipoComprovacao(descricao) {
     const desc = descricao.toLowerCase();
-    const temFoto = desc.includes('foto') || desc.includes('selfie') || desc.includes('screenshot');
-    const temVideo = desc.includes('vídeo') || desc.includes('video');
+    const temFoto = desc.includes('foto')
+        || desc.includes('selfie')
+        || desc.includes('screenshot')
+        || desc.includes('vídeo')
+        || desc.includes('video');
     const temTexto = desc.includes('texto') || desc.includes('escrever') || desc.includes('poema');
 
-    if (temVideo && temTexto) return 'video_texto';
     if (temFoto && temTexto) return 'foto_texto';
-    if (temVideo) return 'video';
     if (temFoto) return 'foto';
     if (temTexto) return 'texto';
-    
-    return 'qualquer'; // Padrão: aceita qualquer coisa
+
+    return 'qualquer'; // Padrão: aceita foto ou texto
 }
 
 /**
- * Valida se a comprovação correspond ao tipo esperado
+ * Valida se a comprovação corresponde ao tipo esperado.
+ * Só imagens contam como mídia válida — vídeo, documento, áudio e sticker são rejeitados.
  */
 function validarComprovacao(message, content, tipoEsperado) {
     const msg = message.message;
     if (!msg) return false;
 
-    const temMidiaDireta = !!(
-        msg.imageMessage ||
-        msg.videoMessage ||
-        msg.documentMessage ||
-        msg.audioMessage ||
-        msg.stickerMessage
-    );
-
+    const temImagemDireta = !!msg.imageMessage;
     const temTexto = extrairTextoExtra(content).length >= 3;
 
     const quoted = getContextInfo(message)?.quotedMessage;
-    const temMidiaNoQuote = !!(
-        quoted?.imageMessage ||
-        quoted?.videoMessage ||
-        quoted?.documentMessage ||
-        quoted?.audioMessage
-    );
+    const temImagemNoQuote = !!quoted?.imageMessage;
 
-    const temMidia = temMidiaDireta || temMidiaNoQuote;
+    const temImagem = temImagemDireta || temImagemNoQuote;
 
-    // Validação rigorosa por tipo
     if (tipoEsperado === 'foto') {
-        // Só aceita foto/vídeo/documento, não aceita texto puro
-        return temMidia;
-    }
-
-    if (tipoEsperado === 'video') {
-        // Só aceita vídeo especificamente
-        if (temMidiaDireta) {
-            return !!msg.videoMessage;
-        }
-        if (temMidiaNoQuote) {
-            return !!quoted.videoMessage;
-        }
-        return false;
+        // Só aceita imagem, não aceita texto puro
+        return temImagem;
     }
 
     if (tipoEsperado === 'texto') {
-        // Só aceita texto, sem mídia
-        return temTexto && !temMidia;
+        // Só aceita texto, sem imagem
+        return temTexto && !temImagem;
     }
 
     if (tipoEsperado === 'foto_texto') {
-        // Obrigatório: foto/vídeo/documento + texto
-        return temMidia && temTexto;
+        // Obrigatório: imagem + texto
+        return temImagem && temTexto;
     }
 
-    if (tipoEsperado === 'video_texto') {
-        // Obrigatório: vídeo + texto
-        let temVideo = false;
-        if (temMidiaDireta) {
-            temVideo = !!msg.videoMessage;
-        } else if (temMidiaNoQuote) {
-            temVideo = !!quoted.videoMessage;
-        }
-        return temVideo && temTexto;
-    }
-
-    // 'qualquer': aceita foto/vídeo/documento ou texto
-    return temMidia || temTexto;
+    // 'qualquer': aceita imagem ou texto
+    return temImagem || temTexto;
 }
 
 /**
@@ -319,47 +260,34 @@ function validarComprovacao(message, content, tipoEsperado) {
  */
 function gerarMensagemErroComprovacao(tipoEsperado) {
     const mensagens = {
-        'foto': `📸 Esse desafio pede *FOTO* (ou vídeo/documento).\n\n` +
-                `Envie uma foto/vídeo e tente novamente!`,
-        'video': `🎥 Esse desafio pede *VÍDEO*.\n\n` +
-                `Envie um vídeo e tente novamente!`,
+        'foto': `📸 Esse desafio pede *FOTO*.\n\n` +
+                `Envie uma foto e tente novamente!`,
         'texto': `✍️ Esse desafio pede apenas *TEXTO*.\n\n` +
-                `Envie uma mensagem de texto (sem foto/vídeo) e tente novamente!`,
+                `Envie uma mensagem de texto (sem foto) e tente novamente!`,
         'foto_texto': `📸 + ✍️ Esse desafio pede *FOTO E TEXTO*.\n\n` +
                      `Você precisa enviar:\n` +
-                     `1️⃣ Uma foto/vídeo com legenda\n` +
+                     `1️⃣ Uma foto com legenda\n` +
                      `2️⃣ OU responder a foto com um texto explicando\n\n` +
-                     `E depois mandar \`#pronto\``,
-        'video_texto': `🎥 + ✍️ Esse desafio pede *VÍDEO E TEXTO*.\n\n` +
-                      `Você precisa enviar:\n` +
-                      `1️⃣ Um vídeo com legenda\n` +
-                      `2️⃣ OU responder ao vídeo com um texto explicando\n\n` +
-                      `E depois mandar \`#pronto\``
+                     `E depois mandar \`#pronto\``
     };
 
     return mensagens[tipoEsperado] || `❌ Tipo de comprovação inválido.`;
 }
 
 /**
- * Extrai e serializa a comprovação (mídia ou texto) para armazenar no banco
+ * Extrai e serializa a comprovação (imagem ou texto) para armazenar no banco
  * Também armazena a mensagem completa em cache para poder recuperar depois
  */
 async function extrairComprovacao(message, content, userId) {
     const msg = message.message;
     if (!msg) return null;
 
-    const temMidiaDireta = !!(
-        msg.imageMessage ||
-        msg.videoMessage ||
-        msg.documentMessage ||
-        msg.audioMessage ||
-        msg.stickerMessage
-    );
+    const temImagemDireta = !!msg.imageMessage;
 
-    if (temMidiaDireta) {
-        // Recupera o texto que pode vir junto da mídia
+    if (temImagemDireta) {
+        // Recupera o texto que pode vir junto da imagem
         const textoExtra = extrairTextoExtra(content);
-        
+
         // Armazena a mensagem completa em cache
         const chaveCache = `prova_${userId}_${Date.now()}`;
         cacheProvas.set(chaveCache, {
@@ -381,42 +309,34 @@ async function extrairComprovacao(message, content, userId) {
 
     const contextInfo = getContextInfo(message);
     const quotedMsg = contextInfo?.quotedMessage;
-    if (quotedMsg) {
-        const temMidiaNoQuote = !!(
-            quotedMsg.imageMessage ||
-            quotedMsg.videoMessage ||
-            quotedMsg.documentMessage ||
-            quotedMsg.audioMessage
-        );
-        if (temMidiaNoQuote) {
-            // Recupera o texto que pode vir junto do reply
-            const textoExtra = extrairTextoExtra(content);
-            
-            // Armazena o quote em cache
-            const chaveCache = `prova_${userId}_${Date.now()}`;
-            cacheProvas.set(chaveCache, {
-                message: {
-                    key: {
-                        remoteJid: message.key.remoteJid,
-                        id: contextInfo.stanzaId,
-                        participant: contextInfo.participant,
-                        fromMe: false
-                    },
-                    message: quotedMsg
-                },
-                tipo: 'midia_quoted',
-                userId,
-                textoExtra: textoExtra.length >= 3 ? textoExtra : null,
-                timestamp: Date.now()
-            });
+    if (quotedMsg?.imageMessage) {
+        // Recupera o texto que pode vir junto do reply
+        const textoExtra = extrairTextoExtra(content);
 
-            return JSON.stringify({
-                tipo: 'midia_quoted',
-                cacheKey: chaveCache,
-                userId,
-                textoExtra: textoExtra.length >= 3 ? textoExtra : null
-            });
-        }
+        // Armazena o quote em cache
+        const chaveCache = `prova_${userId}_${Date.now()}`;
+        cacheProvas.set(chaveCache, {
+            message: {
+                key: {
+                    remoteJid: message.key.remoteJid,
+                    id: contextInfo.stanzaId,
+                    participant: contextInfo.participant,
+                    fromMe: false
+                },
+                message: quotedMsg
+            },
+            tipo: 'midia_quoted',
+            userId,
+            textoExtra: textoExtra.length >= 3 ? textoExtra : null,
+            timestamp: Date.now()
+        });
+
+        return JSON.stringify({
+            tipo: 'midia_quoted',
+            cacheKey: chaveCache,
+            userId,
+            textoExtra: textoExtra.length >= 3 ? textoExtra : null
+        });
     }
 
     const textoRestante = extrairTextoExtra(content);
@@ -437,7 +357,7 @@ async function extrairComprovacao(message, content, userId) {
 function recuperarComprovacao(comprovacaoJson) {
     try {
         const comprovacao = JSON.parse(comprovacaoJson);
-        
+
         if (comprovacao.tipo === 'midia_direta' || comprovacao.tipo === 'midia_quoted') {
             if (comprovacao.cacheKey && cacheProvas.has(comprovacao.cacheKey)) {
                 const cached = cacheProvas.get(comprovacao.cacheKey);
@@ -448,7 +368,7 @@ function recuperarComprovacao(comprovacaoJson) {
                 return cached;
             }
         }
-        
+
         if (comprovacao.tipo === 'texto') {
             return {
                 tipo: 'texto',
@@ -459,7 +379,7 @@ function recuperarComprovacao(comprovacaoJson) {
     } catch (err) {
         console.warn('[desafioleilaoHandler] Erro ao recuperar comprovação:', err.message);
     }
-    
+
     return null;
 }
 
@@ -560,14 +480,10 @@ async function handleDesafioCommand(sock, message, content) {
         let instrucaoTipo = '';
         if (tipoComprovacao === 'foto') {
             instrucaoTipo = `📸 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra tirar a FOTO e completar!\n\n`;
-        } else if (tipoComprovacao === 'video') {
-            instrucaoTipo = `🎥 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra gravar o VÍDEO e completar!\n\n`;
         } else if (tipoComprovacao === 'texto') {
             instrucaoTipo = `✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra escrever e completar!\n\n`;
         } else if (tipoComprovacao === 'foto_texto') {
             instrucaoTipo = `📸 + ✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra enviar FOTO + TEXTO!\n\n`;
-        } else if (tipoComprovacao === 'video_texto') {
-            instrucaoTipo = `🎥 + ✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra enviar VÍDEO + TEXTO!\n\n`;
         } else {
             instrucaoTipo = `📸 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra completar!\n\n`;
         }
@@ -667,9 +583,9 @@ async function handleProntoCommand(sock, message, content) {
             return true;
         }
 
-        // ⚠️ VALIDAÇÃO RIGOROSA DO TIPO DE COMPROVAÇÃO
+        // ⚠️ VALIDAÇÃO RIGOROSA DO TIPO DE COMPROVAÇÃO (só imagem ou texto)
         const tipoEsperado = desafio.tipo_comprovacao_requerida || 'qualquer';
-        
+
         if (!validarComprovacao(message, content, tipoEsperado)) {
             await sock.sendMessage(from, {
                 text: `🚨 *COMPROVAÇÃO INVÁLIDA!* 🚨\n\n` +
@@ -818,7 +734,7 @@ async function handleProntoCommand(sock, message, content) {
                             });
                         } else if (comprov1.tipo === 'midia_direta' || comprov1.tipo === 'midia_quoted') {
                             let legendaAtribuicao1 = `📸 *Comprovação de:* @${desafio.casal_id1}`;
-                            
+
                             // Recupera o texto se houver (da cache ou da comprovação serializada)
                             try {
                                 const comprovJson1 = JSON.parse(desafioAtualizado.prova_casal_1);
@@ -828,21 +744,21 @@ async function handleProntoCommand(sock, message, content) {
                             } catch (err) {
                                 // Ignora se não conseguir fazer parse
                             }
-                            
+
                             // Se não tiver na serialização, tenta da cache
                             if (comprov1.textoExtra) {
                                 legendaAtribuicao1 = `📸 *Comprovação de:* @${desafio.casal_id1}\n💬 _"${comprov1.textoExtra}"_`;
                             }
-                            
+
                             const mentionsAtribuicao1 = [`${desafio.casal_id1}@s.whatsapp.net`];
-                            
+
                             try {
                                 await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov1.message, {
                                     caption: legendaAtribuicao1,
                                     mentions: mentionsAtribuicao1
                                 });
                             } catch (err) {
-                                console.warn('[desafioleilaoHandler] Erro ao enviar mídia do casal 1:', err.message);
+                                console.warn('[desafioleilaoHandler] Erro ao enviar imagem do casal 1:', err.message);
                             }
                         }
                     }
@@ -859,7 +775,7 @@ async function handleProntoCommand(sock, message, content) {
                             });
                         } else if (comprov2.tipo === 'midia_direta' || comprov2.tipo === 'midia_quoted') {
                             let legendaAtribuicao2 = `📸 *Comprovação de:* @${desafio.casal_id2}`;
-                            
+
                             // Recupera o texto se houver (da cache ou da comprovação serializada)
                             try {
                                 const comprovJson2 = JSON.parse(desafioAtualizado.prova_casal_2);
@@ -869,21 +785,21 @@ async function handleProntoCommand(sock, message, content) {
                             } catch (err) {
                                 // Ignora se não conseguir fazer parse
                             }
-                            
+
                             // Se não tiver na serialização, tenta da cache
                             if (comprov2.textoExtra) {
                                 legendaAtribuicao2 = `📸 *Comprovação de:* @${desafio.casal_id2}\n💬 _"${comprov2.textoExtra}"_`;
                             }
-                            
+
                             const mentionsAtribuicao2 = [`${desafio.casal_id2}@s.whatsapp.net`];
-                            
+
                             try {
                                 await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov2.message, {
                                     caption: legendaAtribuicao2,
                                     mentions: mentionsAtribuicao2
                                 });
                             } catch (err) {
-                                console.warn('[desafioleilaoHandler] Erro ao enviar mídia do casal 2:', err.message);
+                                console.warn('[desafioleilaoHandler] Erro ao enviar imagem do casal 2:', err.message);
                             }
                         }
                     }
@@ -967,7 +883,7 @@ export function iniciarVerificadorDesafiosExpirados(sock, intervaloMinutos = 30)
 export async function handleDesafioleilaoCommand(sock, message, content) {
     // Além do "content" recebido, lê o texto/legenda direto da mensagem.
     // Assim o comando funciona em qualquer posição e em qualquer tipo de mensagem
-    // (texto, foto ou vídeo com legenda), mesmo que o "content" venha incompleto.
+    // (texto ou foto com legenda), mesmo que o "content" venha incompleto.
     const textos = [];
     if (typeof content === 'string' && content.trim()) textos.push(content);
 
