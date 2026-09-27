@@ -4,6 +4,7 @@ import { Jimp } from "jimp";
 
 const PRAZO_DESAFIO_HORAS = 24;
 const INTERVALO_EXPIRACAO_SQL = '24 hours';
+const MAX_PESSOAS_DESAFIO = 50;
 
 // Cache do metadata dos grupos (evita chamar a API do WhatsApp a cada mensagem)
 const METADATA_TTL_MS = 5 * 60 * 1000;
@@ -383,6 +384,49 @@ function recuperarComprovacao(comprovacaoJson) {
     return null;
 }
 
+/**
+ * ✅ RETROCOMPATÍVEL: Extrai lista de participantes de um desafio
+ * Se for novo (com participantes_json), usa isso
+ * Se for antigo (com casal_id1/2), reconstrói a lista
+ */
+function extrairParticipantes(desafio) {
+    if (desafio.participantes_json) {
+        return desafio.participantes_json.split(',').filter(p => p);
+    }
+    // Fallback para desafios antigos (casal)
+    const participantes = [];
+    if (desafio.casal_id1) participantes.push(desafio.casal_id1);
+    if (desafio.casal_id2) participantes.push(desafio.casal_id2);
+    return participantes;
+}
+
+/**
+ * ✅ RETROCOMPATÍVEL: Extrai provas de um desafio
+ * Se for novo (com provas_json), usa isso
+ * Se for antigo (com prova_casal_1/2), reconstrói o objeto
+ */
+function extrairProvas(desafio) {
+    if (desafio.provas_json) {
+        try {
+            return typeof desafio.provas_json === 'string' 
+                ? JSON.parse(desafio.provas_json) 
+                : desafio.provas_json;
+        } catch (err) {
+            console.warn('[desafioleilaoHandler] Erro ao parsear provas_json:', err.message);
+            return {};
+        }
+    }
+    // Fallback para desafios antigos (casal)
+    const provas = {};
+    if (desafio.prova_casal_1 && desafio.casal_id1) {
+        provas[desafio.casal_id1] = desafio.prova_casal_1;
+    }
+    if (desafio.prova_casal_2 && desafio.casal_id2) {
+        provas[desafio.casal_id2] = desafio.prova_casal_2;
+    }
+    return provas;
+}
+
 async function handleDesafioCommand(sock, message, content) {
     const from = message.key.remoteJid;
     if (!from.endsWith('@g.us')) return false;
@@ -392,11 +436,9 @@ async function handleDesafioCommand(sock, message, content) {
 
     try {
         const remetenteCompleto = getNumeroReal(message);
-
-        // Dígitos "crus" do remetente (podem ser LID) — usados só para checar se é admin
         const adminIdBruto = extractDigits(remetenteCompleto);
-
         const ehAdmin = await isAdmin(sock, from, adminIdBruto);
+        
         if (!ehAdmin) {
             await sock.sendMessage(from, {
                 text: '🚫 Só administradores podem enviar desafios.'
@@ -404,23 +446,67 @@ async function handleDesafioCommand(sock, message, content) {
             return true;
         }
 
-        // Número de telefone REAL do admin — é esse que vai pro banco e pras menções
         const adminId = await resolverNumeroRealDoMencionado(sock, from, remetenteCompleto);
-
         const mentions = getContextInfo(message)?.mentionedJid || [];
-        if (mentions.length < 2) {
+        
+        if (mentions.length < 1 || mentions.length > MAX_PESSOAS_DESAFIO) {
             await sock.sendMessage(from, {
-                text: '⚠️ Marque 2 pessoas pra receber o desafio.\n\n*Exemplo:* `#desafio @maria @joão tirar uma selfie juntos 📸`'
+                text: `⚠️ Marque entre 1 e ${MAX_PESSOAS_DESAFIO} pessoas para receber o desafio.\n\n*Exemplo:* \`#desafio @maria @joão tirar uma selfie juntos 📸\``
             }, { quoted: message });
             return true;
         }
 
-        const pessoa1 = await resolverNumeroRealDoMencionado(sock, from, mentions[0]);
-        const pessoa2 = await resolverNumeroRealDoMencionado(sock, from, mentions[1]);
+        // Resolve todos os números
+        const pessoas = [];
+        for (const mention of mentions) {
+            const numero = await resolverNumeroRealDoMencionado(sock, from, mention);
+            if (numero && !pessoas.includes(numero)) {
+                pessoas.push(numero);
+            }
+        }
 
-        if (pessoa1 === pessoa2) {
+        if (pessoas.length < 1) {
             await sock.sendMessage(from, {
-                text: '⚠️ As duas pessoas do casal não podem ser a mesma!'
+                text: '⚠️ Não consegui resolver os números das pessoas mencionadas.'
+            }, { quoted: message });
+            return true;
+        }
+
+        // Verifica se há desafio pendente para esse grupo de pessoas
+        const pessoasOrdenadas = pessoas.sort().join(',');
+        
+        // ✅ RETROCOMPATÍVEL: busca em ambos os formatos
+        let ativo = null;
+        
+        if (pessoas.length === 2) {
+            // Verifica formato antigo (casal)
+            ativo = await pool.query(
+                `SELECT id FROM damas_desafios 
+                 WHERE grupo_id = $1 
+                 AND status = 'pendente'
+                 AND (
+                    (casal_id1 = $2 AND casal_id2 = $3) OR
+                    (casal_id1 = $3 AND casal_id2 = $2)
+                 )`,
+                [from, pessoas[0], pessoas[1]]
+            );
+        }
+        
+        // Se não achou, ou se são 3+, verifica formato novo
+        if (ativo?.rowCount === 0 || !ativo) {
+            ativo = await pool.query(
+                `SELECT id FROM damas_desafios 
+                 WHERE grupo_id = $1 
+                 AND status = 'pendente'
+                 AND participantes_json = $2`,
+                [from, pessoasOrdenadas]
+            );
+        }
+
+        if (ativo && ativo.rowCount > 0) {
+            await sock.sendMessage(from, {
+                text: `⚠️ Esse grupo de pessoas já tem um desafio pendente! ⏳\n\nConcluam o atual antes de receber um novo.`,
+                mentions: pessoas.map(p => `${p}@s.whatsapp.net`)
             }, { quoted: message });
             return true;
         }
@@ -434,42 +520,35 @@ async function handleDesafioCommand(sock, message, content) {
 
         if (!descricao || descricao.length < 3) {
             await sock.sendMessage(from, {
-                text: '⚠️ Descreva o desafio.\n\n*Exemplo:* `#desafio @maria @joão tirar uma selfie juntos 📸`'
+                text: `⚠️ Descreva o desafio.\n\n*Exemplo:* \`#desafio @maria @joão tirar uma selfie juntos 📸\``
             }, { quoted: message });
             return true;
         }
 
-        // Detecta o tipo de comprovação esperado
         const tipoComprovacao = detectarTipoComprovacao(descricao);
 
-        const ativo = await pool.query(
-            `SELECT id FROM damas_desafios 
-             WHERE grupo_id = $1 
-             AND status = 'pendente'
-             AND (
-                (casal_id1 = $2 AND casal_id2 = $3) OR
-                (casal_id1 = $3 AND casal_id2 = $2)
-             )`,
-            [from, pessoa1, pessoa2]
-        );
-
-        if (ativo.rowCount > 0) {
-            await sock.sendMessage(from, {
-                text: `⚠️ Esse casal já tem um desafio pendente! ⏳\n\nConcluam o atual antes de receber um novo.`
-            }, { 
-                mentions: [`${pessoa1}@s.whatsapp.net`, `${pessoa2}@s.whatsapp.net`],
-                quoted: message 
-            });
-            return true;
+        // ✅ RETROCOMPATÍVEL: insere em ambos os formatos
+        let insertResult;
+        
+        if (pessoas.length === 2) {
+            // Formato antigo + novo
+            insertResult = await pool.query(
+                `INSERT INTO damas_desafios 
+                 (grupo_id, casal_id1, casal_id2, participantes_json, descricao, admin_id, status, tipo_comprovacao_requerida)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pendente', $7)
+                 RETURNING id`,
+                [from, pessoas[0], pessoas[1], pessoasOrdenadas, descricao, adminId, tipoComprovacao]
+            );
+        } else {
+            // Formato novo
+            insertResult = await pool.query(
+                `INSERT INTO damas_desafios 
+                 (grupo_id, participantes_json, descricao, admin_id, status, tipo_comprovacao_requerida)
+                 VALUES ($1, $2, $3, $4, 'pendente', $5)
+                 RETURNING id`,
+                [from, pessoasOrdenadas, descricao, adminId, tipoComprovacao]
+            );
         }
-
-        const insertResult = await pool.query(
-            `INSERT INTO damas_desafios 
-             (grupo_id, casal_id1, casal_id2, descricao, admin_id, status, tipo_comprovacao_requerida)
-             VALUES ($1, $2, $3, $4, $5, 'pendente', $6)
-             RETURNING id`,
-            [from, pessoa1, pessoa2, descricao, adminId, tipoComprovacao]
-        );
 
         const desafioId = insertResult.rows[0].id;
         const agora = new Date().toLocaleString('pt-BR', { 
@@ -488,9 +567,19 @@ async function handleDesafioCommand(sock, message, content) {
             instrucaoTipo = `📸 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra completar!\n\n`;
         }
 
+        const listaParticipantes = pessoas.map(p => `@${p}`).join(', ');
+
+        // ✅ DELETE da mensagem do usuário
+        try {
+            await sock.sendMessage(from, { delete: message.key });
+        } catch (err) {
+            console.warn('[desafioleilaoHandler] Erro ao deletar mensagem do usuário:', err.message);
+        }
+
+        // Envia a resposta do bot
         await sock.sendMessage(from, {
             text: `🎯 *DESAFIO RECEBIDO!* 🎯\n\n` +
-                  `👥 Casal: @${pessoa1} & @${pessoa2}\n\n` +
+                  `👥 Participantes: ${listaParticipantes}\n\n` +
                   `💪 *Tarefa:* ${descricao}\n\n` +
                   `⏰ *Horário:* ${agora}\n` +
                   `👮 *Enviado por:* @${adminId}\n\n` +
@@ -499,11 +588,11 @@ async function handleDesafioCommand(sock, message, content) {
                   `✅ Quando acabar, um de vocês manda:\n` +
                   `*#pronto* (marcando um admin, se quiser notificar direto)\n\n` +
                   `🔥 Vamos lá! 💪`,
-            mentions: [`${pessoa1}@s.whatsapp.net`, `${pessoa2}@s.whatsapp.net`, `${adminId}@s.whatsapp.net`]
+            mentions: [...pessoas.map(p => `${p}@s.whatsapp.net`), `${adminId}@s.whatsapp.net`]
         });
 
         console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} criado`);
-        console.log(`   Casal: ${pessoa1} & ${pessoa2}`);
+        console.log(`   Participantes: ${pessoas.join(', ')}`);
         console.log(`   Descrição: ${descricao}`);
         console.log(`   Tipo comprovação: ${tipoComprovacao}`);
         console.log(`   Admin: ${adminId}`);
@@ -527,8 +616,6 @@ async function handleProntoCommand(sock, message, content) {
 
     try {
         const numeroCompleto = getNumeroReal(message);
-
-        // Número real de quem mandou o #pronto (mesmo formato salvo em casal_id1/casal_id2)
         const userId = await resolverNumeroRealDoMencionado(sock, from, numeroCompleto);
 
         let desafioId = match[1] ? parseInt(match[1], 10) : null;
@@ -540,15 +627,29 @@ async function handleProntoCommand(sock, message, content) {
         }
 
         if (!desafioId) {
-            const desafioResult = await pool.query(
+            // ✅ RETROCOMPATÍVEL: busca em ambos os formatos
+            let desafioResult = await pool.query(
                 `SELECT id FROM damas_desafios 
                  WHERE grupo_id = $1 
-                 AND status IN ('pendente', 'confirmado_por_um')
+                 AND status IN ('pendente', 'confirmado', 'confirmado_por_um')
                  AND (casal_id1 = $2 OR casal_id2 = $2)
                  ORDER BY criado_em DESC
                  LIMIT 1`,
                 [from, userId]
             );
+
+            if (desafioResult.rowCount === 0) {
+                // Tenta formato novo
+                desafioResult = await pool.query(
+                    `SELECT id FROM damas_desafios 
+                     WHERE grupo_id = $1 
+                     AND status IN ('pendente', 'confirmado')
+                     AND participantes_json LIKE $2
+                     ORDER BY criado_em DESC
+                     LIMIT 1`,
+                    [from, `%${userId}%`]
+                );
+            }
 
             if (desafioResult.rowCount === 0) {
                 await sock.sendMessage(from, {
@@ -573,17 +674,17 @@ async function handleProntoCommand(sock, message, content) {
         }
 
         const desafio = desafioResult.rows[0];
+        const participantes = extrairParticipantes(desafio);
 
-        if (userId !== desafio.casal_id1 && userId !== desafio.casal_id2) {
+        if (!participantes.includes(userId)) {
             await sock.sendMessage(from, {
                 text: `🚫 *Acesso negado!*\n\n` +
-                      `Só @${desafio.casal_id1} ou @${desafio.casal_id2} podem completar esse desafio.`,
-                mentions: [`${desafio.casal_id1}@s.whatsapp.net`, `${desafio.casal_id2}@s.whatsapp.net`]
+                      `Só os participantes do desafio podem confirmá-lo.`,
+                mentions: participantes.map(p => `${p}@s.whatsapp.net`)
             }, { quoted: message });
             return true;
         }
 
-        // ⚠️ VALIDAÇÃO RIGOROSA DO TIPO DE COMPROVAÇÃO (só imagem ou texto)
         const tipoEsperado = desafio.tipo_comprovacao_requerida || 'qualquer';
 
         if (!validarComprovacao(message, content, tipoEsperado)) {
@@ -604,69 +705,116 @@ async function handleProntoCommand(sock, message, content) {
             return true;
         }
 
-        // Extrai a comprovação para armazenar
         const comprovacao = await extrairComprovacao(message, content, userId);
-
-        let jaConfirmou = false;
-        let novoStatus = 'confirmado_por_um';
+        let provas = extrairProvas(desafio);
         
-        if (desafio.status === 'confirmado_por_um') {
-            if ((userId === desafio.casal_id1 && desafio.confirmado_por_casal_1) ||
-                (userId === desafio.casal_id2 && desafio.confirmado_por_casal_2)) {
-                jaConfirmou = true;
-            } else {
-                novoStatus = 'concluido';
-            }
-        }
-
-        if (jaConfirmou) {
+        if (provas[userId]) {
             await sock.sendMessage(from, {
-                text: `ℹ️ Você já confirmou este desafio. Aguarde a confirmação do outro membro do casal.`
+                text: `ℹ️ Você já confirmou este desafio. Aguarde os outros participantes.`
             }, { quoted: message });
             return true;
         }
 
+        provas[userId] = comprovacao;
+        const todosConfirmaram = Object.keys(provas).length === participantes.length;
+
+        // ✅ RETROCOMPATÍVEL: atualiza em ambos os formatos quando aplicável
         let updateQuery, updateParams;
-        if (novoStatus === 'confirmado_por_um') {
-            if (userId === desafio.casal_id1) {
+        
+        if (participantes.length === 2 && desafio.casal_id1 && desafio.casal_id2) {
+            // Formato antigo com 2 pessoas
+            if (todosConfirmaram) {
+                // Ambas confirmaram - atualiza formato antigo
+                const colunaPróxima = userId === desafio.casal_id1 ? 'prova_casal_1' : 'prova_casal_2';
                 updateQuery = `UPDATE damas_desafios 
-                 SET status = $1, confirmado_por_casal_1 = $2, prova_casal_1 = $3
+                 SET status = 'concluido', concluido_em = NOW(), concluido_por = $1, ${colunaPróxima} = $2, provas_json = $3
                  WHERE id = $4
                  RETURNING *`;
-                updateParams = [novoStatus, userId, comprovacao, desafioId];
+                updateParams = [userId, comprovacao, JSON.stringify(provas), desafioId];
             } else {
-                updateQuery = `UPDATE damas_desafios 
-                 SET status = $1, confirmado_por_casal_2 = $2, prova_casal_2 = $3
-                 WHERE id = $4
-                 RETURNING *`;
-                updateParams = [novoStatus, userId, comprovacao, desafioId];
+                // Apenas uma confirmou - usa formato antigo
+                if (userId === desafio.casal_id1) {
+                    updateQuery = `UPDATE damas_desafios 
+                     SET status = 'confirmado_por_um', confirmado_por_casal_1 = $1, prova_casal_1 = $2, provas_json = $3
+                     WHERE id = $4
+                     RETURNING *`;
+                } else {
+                    updateQuery = `UPDATE damas_desafios 
+                     SET status = 'confirmado_por_um', confirmado_por_casal_2 = $1, prova_casal_2 = $2, provas_json = $3
+                     WHERE id = $4
+                     RETURNING *`;
+                }
+                updateParams = [userId, comprovacao, JSON.stringify(provas), desafioId];
             }
         } else {
-            // Segundo membro confirmando - armazena sua prova também
-            const colunaPróxima = userId === desafio.casal_id1 ? 'prova_casal_1' : 'prova_casal_2';
-            updateQuery = `UPDATE damas_desafios 
-             SET status = 'concluido', concluido_em = NOW(), concluido_por = $1, ${colunaPróxima} = $2
-             WHERE id = $3
-             RETURNING *`;
-            updateParams = [userId, comprovacao, desafioId];
+            // Formato novo (3+ pessoas ou desafio novo)
+            if (todosConfirmaram) {
+                updateQuery = `UPDATE damas_desafios 
+                 SET status = 'concluido', concluido_em = NOW(), concluido_por = $1, provas_json = $2
+                 WHERE id = $3
+                 RETURNING *`;
+                updateParams = [userId, JSON.stringify(provas), desafioId];
+            } else {
+                updateQuery = `UPDATE damas_desafios 
+                 SET status = 'confirmado', provas_json = $1
+                 WHERE id = $2
+                 RETURNING *`;
+                updateParams = [JSON.stringify(provas), desafioId];
+            }
         }
 
         const updateResult = await pool.query(updateQuery, updateParams);
         const desafioAtualizado = updateResult.rows[0];
 
-        if (novoStatus === 'confirmado_por_um') {
-            const outraMembro = userId === desafio.casal_id1 ? desafio.casal_id2 : desafio.casal_id1;
+        if (!todosConfirmaram) {
+            const confirmados = Object.keys(provas).length;
+            const faltam = participantes.length - confirmados;
+            
+            // ✅ DELETE da mensagem do usuário
+            try {
+                await sock.sendMessage(from, { delete: message.key });
+            } catch (err) {
+                console.warn('[desafioleilaoHandler] Erro ao deletar mensagem #pronto:', err.message);
+            }
+            
+            // ✅ Construir lista de confirmados e faltantes
+            const confirmadosIds = Object.keys(provas);
+            const listaConfirmados = confirmadosIds.map(id => `✅ @${id}`).join('\n');
+            const faltantesIds = participantes.filter(p => !confirmadosIds.includes(p));
+            const listaFaltantes = faltantesIds.map(id => `⏳ @${id}`).join('\n');
+            
+            const mensagemProgresso = `📋 *PROGRESSO DO DESAFIO #${desafioId}*\n\n` +
+                                     `🎯 *Tarefa:* ${desafio.descricao}\n\n` +
+                                     `✅ *Confirmados (${confirmados}/${participantes.length}):*\n${listaConfirmados}\n\n` +
+                                     `⏳ *Faltando (${faltam}):*\n${listaFaltantes}`;
+            
+            // Envia no grupo principal
             await sock.sendMessage(from, {
                 text: `✅ *CONFIRMAÇÃO RECEBIDA!* ✨\n\n` +
-                      `@${userId} confirmou que o desafio foi realizado!\n\n` +
-                      `⏳ Agora é a vez de @${outraMembro} confirmar também.\n\n` +
+                      `@${userId} confirmou o desafio!\n\n` +
+                      `⏳ Faltam ${faltam} participante(s) para completar.\n\n` +
                       `🎯 *Desafio:* ${desafio.descricao}`,
-                mentions: [`${userId}@s.whatsapp.net`, `${outraMembro}@s.whatsapp.net`]
+                mentions: participantes.map(p => `${p}@s.whatsapp.net`)
             });
-            console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} confirmado por ${userId}`);
+            
+            // ✅ Envia lista atualizada para sala de registro
+            const GRUPO_LEILOES = process.env.GRUPO_LEILOES_ID;
+            if (GRUPO_LEILOES) {
+                try {
+                    await sock.sendMessage(GRUPO_LEILOES, {
+                        text: mensagemProgresso,
+                        mentions: [...confirmadosIds.map(p => `${p}@s.whatsapp.net`), ...faltantesIds.map(p => `${p}@s.whatsapp.net`)]
+                    });
+                } catch (err) {
+                    console.warn('[desafioleilaoHandler] Erro ao enviar progresso para grupo de registro:', err.message);
+                }
+            }
+            
+            console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} confirmado por ${userId} (${confirmados}/${participantes.length})`);
             return true;
         }
 
+        // Todos confirmaram
         const dataEnvio = new Date(desafio.criado_em).toLocaleString('pt-BR', { 
             dateStyle: 'short', 
             timeStyle: 'short' 
@@ -676,36 +824,70 @@ async function handleProntoCommand(sock, message, content) {
             timeStyle: 'short'
         });
 
-        const mentionsConclusao = [`${desafio.casal_id1}@s.whatsapp.net`, `${desafio.casal_id2}@s.whatsapp.net`];
+        const mentionsConclusao = participantes.map(p => `${p}@s.whatsapp.net`);
+        const listaParticipantesStr = participantes.map(p => `@${p}`).join(', ');
+        
         let linhaAdminMencionado = '';
-        if (adminMencionadoId) {
+        if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
             mentionsConclusao.push(`${adminMencionadoId}@s.whatsapp.net`);
             linhaAdminMencionado = `\n👮 *Admin notificado:* @${adminMencionadoId}`;
         }
 
+        // ✅ DELETE da mensagem do usuário
+        try {
+            await sock.sendMessage(from, { delete: message.key });
+        } catch (err) {
+            console.warn('[desafioleilaoHandler] Erro ao deletar mensagem final:', err.message);
+        }
+
+        // Mensagem de conclusão
+        const mensagemConclusao = `✅ *DESAFIO COMPLETADO!* 🎉\n\n` +
+                                 `👏 Parabéns ${listaParticipantesStr}!\n\n` +
+                                 `🎯 *Desafio:* ${desafio.descricao}\n` +
+                                 `📅 *Concluído:* ${dataConclusao}` +
+                                 linhaAdminMencionado + `\n\n` +
+                                 `🔥 Vocês foram incríveis!`;
+
+        // Envia no grupo principal
         await sock.sendMessage(from, {
-            text: `✅ *DESAFIO COMPLETADO!* 🎉\n\n` +
-                  `👏 Parabéns @${desafio.casal_id1} e @${desafio.casal_id2}!\n\n` +
-                  `🎯 *Desafio:* ${desafio.descricao}\n` +
-                  `📅 *Concluído:* ${dataConclusao}` +
-                  linhaAdminMencionado + `\n\n` +
-                  `🔥 Vocês foram incríveis!`,
+            text: mensagemConclusao,
             mentions: mentionsConclusao
         });
+        
+        // ✅ Envia também na sala de registro
+        const GRUPO_LEILOES_CONCLUSAO = process.env.GRUPO_LEILOES_ID;
+        if (GRUPO_LEILOES_CONCLUSAO) {
+            try {
+                const adminCriadorReal = await resolverIdSalvo(sock, from, desafio.admin_id);
+                const mentionsConclusaoRegistro = [
+                    ...participantes.map(p => `${p}@s.whatsapp.net`),
+                    `${adminCriadorReal}@s.whatsapp.net`
+                ];
+                
+                if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
+                    mentionsConclusaoRegistro.push(`${adminMencionadoId}@s.whatsapp.net`);
+                }
+                
+                await sock.sendMessage(GRUPO_LEILOES_CONCLUSAO, {
+                    text: mensagemConclusao,
+                    mentions: mentionsConclusaoRegistro
+                });
+            } catch (err) {
+                console.warn('[desafioleilaoHandler] Erro ao enviar conclusão para grupo de registro:', err.message);
+            }
+        }
 
         const GRUPO_LEILOES = process.env.GRUPO_LEILOES_ID;
 
         if (GRUPO_LEILOES) {
-            // Garante o número real do admin que criou (corrige desafios antigos salvos com LID)
             const adminCriadorReal = await resolverIdSalvo(sock, from, desafio.admin_id);
-
             const mentionsRegistro = [
-                `${desafio.casal_id1}@s.whatsapp.net`,
-                `${desafio.casal_id2}@s.whatsapp.net`,
+                ...participantes.map(p => `${p}@s.whatsapp.net`),
                 `${adminCriadorReal}@s.whatsapp.net`
             ];
+            
             let linhaAdminMencionadoRegistro = '';
-            if (adminMencionadoId) {
+            if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
                 mentionsRegistro.push(`${adminMencionadoId}@s.whatsapp.net`);
                 linhaAdminMencionadoRegistro = `\n🔔 *Notificado:* @${adminMencionadoId}`;
             }
@@ -714,7 +896,7 @@ async function handleProntoCommand(sock, message, content) {
                 `📋 *DESAFIO CONCLUÍDO* ✅\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
                 `🆔 *ID:* #${desafioId}\n` +
-                `👥 *Casal:* @${desafio.casal_id1} & @${desafio.casal_id2}\n` +
+                `👥 *Participantes:* ${listaParticipantesStr}\n` +
                 `🎯 *Tarefa:* ${desafio.descricao}\n` +
                 `👮 *Admin que criou:* @${adminCriadorReal}` +
                 linhaAdminMencionadoRegistro + `\n` +
@@ -723,84 +905,39 @@ async function handleProntoCommand(sock, message, content) {
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
             try {
-                // PROVA DO CASAL 1
-                if (desafioAtualizado.prova_casal_1) {
-                    const comprov1 = recuperarComprovacao(desafioAtualizado.prova_casal_1);
-                    if (comprov1) {
-                        if (comprov1.tipo === 'texto') {
-                            await sock.sendMessage(GRUPO_LEILOES, {
-                                text: `📸 *Comprovação de:* @${desafio.casal_id1}\n💬 _"${comprov1.conteudo}"_`,
-                                mentions: [`${desafio.casal_id1}@s.whatsapp.net`]
-                            });
-                        } else if (comprov1.tipo === 'midia_direta' || comprov1.tipo === 'midia_quoted') {
-                            let legendaAtribuicao1 = `📸 *Comprovação de:* @${desafio.casal_id1}`;
+                // Envia provas de todos
+                for (const [userProva, comprovacaoJson] of Object.entries(provas)) {
+                    const comprov = recuperarComprovacao(comprovacaoJson);
+                    if (!comprov) continue;
 
-                            // Recupera o texto se houver (da cache ou da comprovação serializada)
-                            try {
-                                const comprovJson1 = JSON.parse(desafioAtualizado.prova_casal_1);
-                                if (comprovJson1.textoExtra) {
-                                    legendaAtribuicao1 += `\n💬 _"${comprovJson1.textoExtra}"_`;
-                                }
-                            } catch (err) {
-                                // Ignora se não conseguir fazer parse
+                    if (comprov.tipo === 'texto') {
+                        await sock.sendMessage(GRUPO_LEILOES, {
+                            text: `📸 *Comprovação de:* @${userProva}\n💬 _"${comprov.conteudo}"_`,
+                            mentions: [`${userProva}@s.whatsapp.net`]
+                        });
+                    } else if (comprov.tipo === 'midia_direta' || comprov.tipo === 'midia_quoted') {
+                        let legenda = `📸 *Comprovação de:* @${userProva}`;
+
+                        try {
+                            const comprovJsonParsed = JSON.parse(comprovacaoJson);
+                            if (comprovJsonParsed.textoExtra) {
+                                legenda += `\n💬 _"${comprovJsonParsed.textoExtra}"_`;
                             }
-
-                            // Se não tiver na serialização, tenta da cache
-                            if (comprov1.textoExtra) {
-                                legendaAtribuicao1 = `📸 *Comprovação de:* @${desafio.casal_id1}\n💬 _"${comprov1.textoExtra}"_`;
-                            }
-
-                            const mentionsAtribuicao1 = [`${desafio.casal_id1}@s.whatsapp.net`];
-
-                            try {
-                                await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov1.message, {
-                                    caption: legendaAtribuicao1,
-                                    mentions: mentionsAtribuicao1
-                                });
-                            } catch (err) {
-                                console.warn('[desafioleilaoHandler] Erro ao enviar imagem do casal 1:', err.message);
-                            }
+                        } catch (err) {
+                            // Ignora
                         }
-                    }
-                }
 
-                // PROVA DO CASAL 2
-                if (desafioAtualizado.prova_casal_2) {
-                    const comprov2 = recuperarComprovacao(desafioAtualizado.prova_casal_2);
-                    if (comprov2) {
-                        if (comprov2.tipo === 'texto') {
-                            await sock.sendMessage(GRUPO_LEILOES, {
-                                text: `📸 *Comprovação de:* @${desafio.casal_id2}\n💬 _"${comprov2.conteudo}"_`,
-                                mentions: [`${desafio.casal_id2}@s.whatsapp.net`]
+                        if (comprov.textoExtra && !legenda.includes(comprov.textoExtra)) {
+                            legenda = `📸 *Comprovação de:* @${userProva}\n💬 _"${comprov.textoExtra}"_`;
+                        }
+
+                        try {
+                            await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov.message, {
+                                caption: legenda,
+                                mentions: [`${userProva}@s.whatsapp.net`]
                             });
-                        } else if (comprov2.tipo === 'midia_direta' || comprov2.tipo === 'midia_quoted') {
-                            let legendaAtribuicao2 = `📸 *Comprovação de:* @${desafio.casal_id2}`;
-
-                            // Recupera o texto se houver (da cache ou da comprovação serializada)
-                            try {
-                                const comprovJson2 = JSON.parse(desafioAtualizado.prova_casal_2);
-                                if (comprovJson2.textoExtra) {
-                                    legendaAtribuicao2 += `\n💬 _"${comprovJson2.textoExtra}"_`;
-                                }
-                            } catch (err) {
-                                // Ignora se não conseguir fazer parse
-                            }
-
-                            // Se não tiver na serialização, tenta da cache
-                            if (comprov2.textoExtra) {
-                                legendaAtribuicao2 = `📸 *Comprovação de:* @${desafio.casal_id2}\n💬 _"${comprov2.textoExtra}"_`;
-                            }
-
-                            const mentionsAtribuicao2 = [`${desafio.casal_id2}@s.whatsapp.net`];
-
-                            try {
-                                await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov2.message, {
-                                    caption: legendaAtribuicao2,
-                                    mentions: mentionsAtribuicao2
-                                });
-                            } catch (err) {
-                                console.warn('[desafioleilaoHandler] Erro ao enviar imagem do casal 2:', err.message);
-                            }
+                        } catch (err) {
+                            console.warn(`[desafioleilaoHandler] Erro ao enviar imagem de ${userProva}:`, err.message);
                         }
                     }
                 }
@@ -816,7 +953,7 @@ async function handleProntoCommand(sock, message, content) {
         }
 
         console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} concluído`);
-        console.log(`   Casal: ${desafio.casal_id1} & ${desafio.casal_id2}`);
+        console.log(`   Participantes: ${participantes.join(', ')}`);
         console.log(`   Concluído por: ${userId}`);
         if (adminMencionadoId) console.log(`   Admin notificado: ${adminMencionadoId}`);
         return true;
@@ -843,19 +980,19 @@ async function verificarDesafiosExpirados(sock) {
 
         for (const desafio of expirados.rows) {
             try {
-                // Garante o número real do admin (corrige desafios antigos salvos com LID)
                 const adminCriadorReal = await resolverIdSalvo(sock, desafio.grupo_id, desafio.admin_id);
+                const participantes = extrairParticipantes(desafio);
+                const listaParticipantesStr = participantes.map(p => `@${p}`).join(', ');
 
                 await sock.sendMessage(GRUPO_LEILOES, {
                     text: `⏰ *DESAFIO NÃO CUMPRIDO!* ⚠️\n\n` +
                           `🆔 *ID:* #${desafio.id}\n` +
-                          `👥 *Casal:* @${desafio.casal_id1} & @${desafio.casal_id2}\n` +
+                          `👥 *Participantes:* ${listaParticipantesStr}\n` +
                           `🎯 *Tarefa:* ${desafio.descricao}\n` +
                           `👮 *Admin que criou:* @${adminCriadorReal}\n\n` +
                           `🚫 O prazo de *${PRAZO_DESAFIO_HORAS} horas* acabou e eles não concluíram o desafio.`,
                     mentions: [
-                        `${desafio.casal_id1}@s.whatsapp.net`,
-                        `${desafio.casal_id2}@s.whatsapp.net`,
+                        ...participantes.map(p => `${p}@s.whatsapp.net`),
                         `${adminCriadorReal}@s.whatsapp.net`
                     ]
                 });
@@ -881,9 +1018,6 @@ export function iniciarVerificadorDesafiosExpirados(sock, intervaloMinutos = 30)
 }
 
 export async function handleDesafioleilaoCommand(sock, message, content) {
-    // Além do "content" recebido, lê o texto/legenda direto da mensagem.
-    // Assim o comando funciona em qualquer posição e em qualquer tipo de mensagem
-    // (texto ou foto com legenda), mesmo que o "content" venha incompleto.
     const textos = [];
     if (typeof content === 'string' && content.trim()) textos.push(content);
 
