@@ -583,7 +583,7 @@ async function handleDesafioCommand(sock, message, content) {
 
         const listaParticipantes = pessoas.map(p => `@${p}`).join(', ');
 
-        // ✅ DELETE da mensagem do usuário
+        // ✅ DELETE da mensagem do usuário (mensagem do ADMIN que criou o desafio)
         try {
             await sock.sendMessage(from, { delete: message.key });
         } catch (err) {
@@ -781,14 +781,7 @@ async function handleProntoCommand(sock, message, content) {
         if (!todosConfirmaram) {
             const confirmados = Object.keys(provas).length;
             const faltam = participantes.length - confirmados;
-            
-            // ✅ DELETE da mensagem do usuário
-            try {
-                await sock.sendMessage(from, { delete: message.key });
-            } catch (err) {
-                console.warn('[desafioleilaoHandler] Erro ao deletar mensagem #pronto:', err.message);
-            }
-            
+
             // ✅ Construir lista de confirmados e faltantes
             const confirmadosIds = Object.keys(provas);
             const listaConfirmados = confirmadosIds.map(id => `✅ @${id}`).join('\n');
@@ -842,13 +835,6 @@ async function handleProntoCommand(sock, message, content) {
         if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
             mentionsConclusao.push(jidParaMencao(adminMencionadoId));
             linhaAdminMencionado = `\n👮 *Admin notificado:* @${adminMencionadoId}`;
-        }
-
-        // ✅ DELETE da mensagem do usuário
-        try {
-            await sock.sendMessage(from, { delete: message.key });
-        } catch (err) {
-            console.warn('[desafioleilaoHandler] Erro ao deletar mensagem final:', err.message);
         }
 
         // Mensagem de conclusão
