@@ -18,6 +18,20 @@ function extractDigits(number) {
     return number.replace(/@.*$/, '').replace(/\D/g, '');
 }
 
+/**
+ * Monta o JID usado para @mencionar alguém no sendMessage.
+ * Se o valor guardado já é um JID completo (ex.: "146690715685110@lid",
+ * porque não foi possível resolver o telefone real), usa ele direto —
+ * assim o WhatsApp consegue pelo menos tentar resolver a menção certa,
+ * em vez de virar um número solto sem nome e sem link (o LID colado
+ * com "@s.whatsapp.net" na ponta é um JID inválido).
+ * Se for só dígitos (telefone real já resolvido), completa com @s.whatsapp.net.
+ */
+function jidParaMencao(id) {
+    if (!id) return null;
+    return String(id).includes('@') ? id : `${id}@s.whatsapp.net`;
+}
+
 function getNumeroReal(message) {
     if (message.key.participantAlt) return message.key.participantAlt;
     if (message.key.participant) return message.key.participant;
@@ -28,12 +42,14 @@ function getNumeroReal(message) {
  * Menções e reply ficam em lugares diferentes dependendo do tipo da mensagem:
  * texto puro -> extendedTextMessage.contextInfo
  * foto com legenda -> imageMessage.contextInfo
+ * vídeo com legenda -> videoMessage.contextInfo
  */
 function getContextInfo(message) {
     const m = message.message;
     if (!m) return null;
     return m.extendedTextMessage?.contextInfo
         || m.imageMessage?.contextInfo
+        || m.videoMessage?.contextInfo
         || null;
 }
 
@@ -44,6 +60,7 @@ function extrairTextoDaMensagem(message) {
     return m.conversation
         || m.extendedTextMessage?.text
         || m.imageMessage?.caption
+        || m.videoMessage?.caption
         || '';
 }
 
@@ -106,7 +123,13 @@ async function resolverNumeroRealDoMencionado(sock, groupId, mentionedJid) {
         console.error('[resolverNumeroRealDoMencionado] Erro:', err.message);
     }
 
-    return extractDigits(mentionedJid);
+    // Não conseguiu achar o telefone real (comum quando a pessoa só aparece
+    // como @lid no grupo). Mantém o JID original completo (com "@lid"),
+    // em vez de extrair só os dígitos — dígitos de LID colados com
+    // "@s.whatsapp.net" na hora de mencionar viram um JID inválido, e o
+    // WhatsApp mostra um número gigante solto ao invés do nome da pessoa.
+    console.warn(`[resolverNumeroRealDoMencionado] Não resolvi telefone real para ${mentionedJid}, mantendo JID original`);
+    return mentionedJid;
 }
 
 /**
@@ -155,20 +178,28 @@ async function gerarThumbnail(buffer, size = 256) {
 }
 
 /**
- * Reenvia uma FOTO "limpa" (sem o comando na legenda) para o grupo de destino.
- * Só funciona com imageMessage — qualquer outro tipo de mídia é ignorado.
+ * Reenvia uma mídia "limpa" (sem o comando na legenda) para o grupo de destino.
+ * Funciona com imageMessage e videoMessage — qualquer outro tipo de mídia é ignorado.
  */
 async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes = {}) {
     const { caption = '', mentions = [] } = opcoes;
     const conteudo = mensagemComMidia.message;
-    if (!conteudo || !conteudo.imageMessage) return false;
+    if (!conteudo) return false;
+
+    const tipoMidia = conteudo.imageMessage
+        ? 'imageMessage'
+        : conteudo.videoMessage
+            ? 'videoMessage'
+            : null;
+
+    if (!tipoMidia) return false;
 
     const mensagemSemComando = {
         ...mensagemComMidia,
         message: {
             ...conteudo,
-            imageMessage: {
-                ...conteudo.imageMessage,
+            [tipoMidia]: {
+                ...conteudo[tipoMidia],
                 caption: ''
             }
         }
@@ -181,9 +212,18 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
         { reuploadRequest: sock.updateMediaMessage }
     );
 
-    const payload = { image: buffer };
-    const thumb = await gerarThumbnail(buffer, 256);
-    if (thumb) payload.jpegThumbnail = thumb;
+    const payload = tipoMidia === 'imageMessage'
+        ? { image: buffer }
+        : { video: buffer };
+
+    if (tipoMidia === 'imageMessage') {
+        const thumb = await gerarThumbnail(buffer, 256);
+        if (thumb) payload.jpegThumbnail = thumb;
+    } else {
+        // Vídeo: não geramos thumbnail com Jimp (não é imagem), reaproveita o thumb original se existir
+        const thumbOriginal = conteudo.videoMessage?.jpegThumbnail;
+        if (thumbOriginal) payload.jpegThumbnail = thumbOriginal;
+    }
 
     if (caption) {
         payload.caption = caption;
@@ -201,92 +241,70 @@ async function reenviarMidiaLimpa(sock, grupoDestino, mensagemComMidia, opcoes =
 }
 
 /**
- * Detecta o tipo de comprovação esperado a partir da descrição do desafio
- * Retorna: 'foto', 'texto', 'foto_texto', 'qualquer'
- * (Vídeo não é mais um tipo válido — tudo que mencionar vídeo cai em 'foto')
+ * Detecta um "tipo sugerido" de comprovação a partir da descrição do desafio.
+ * Isso é usado só para exibir uma instrução mais bonitinha na mensagem de criação
+ * do desafio — NÃO é mais usado para bloquear a confirmação (ver validarComprovacao).
  */
 function detectarTipoComprovacao(descricao) {
     const desc = descricao.toLowerCase();
-    const temFoto = desc.includes('foto')
-        || desc.includes('selfie')
-        || desc.includes('screenshot')
-        || desc.includes('vídeo')
-        || desc.includes('video');
+    const temFoto = desc.includes('foto') || desc.includes('selfie') || desc.includes('screenshot');
+    const temVideo = desc.includes('vídeo') || desc.includes('video');
     const temTexto = desc.includes('texto') || desc.includes('escrever') || desc.includes('poema');
 
-    if (temFoto && temTexto) return 'foto_texto';
+    if ((temFoto || temVideo) && temTexto) return 'foto_texto';
+    if (temVideo) return 'video';
     if (temFoto) return 'foto';
     if (temTexto) return 'texto';
 
-    return 'qualquer'; // Padrão: aceita foto ou texto
+    return 'qualquer';
 }
 
 /**
- * Valida se a comprovação corresponde ao tipo esperado.
- * Só imagens contam como mídia válida — vídeo, documento, áudio e sticker são rejeitados.
+ * Valida a comprovação enviada.
+ * Regra atual: aceita QUALQUER combinação de foto, vídeo ou texto — sozinhos ou juntos.
+ * Ou seja: só texto ✅ | só foto ✅ | só vídeo ✅ | foto+texto ✅ | vídeo+texto ✅.
+ * Só é rejeitado se não vier nada disso (ex.: só um sticker, áudio, ou mensagem vazia).
  */
-function validarComprovacao(message, content, tipoEsperado) {
+function validarComprovacao(message, content) {
     const msg = message.message;
     if (!msg) return false;
 
     const temImagemDireta = !!msg.imageMessage;
+    const temVideoDireto = !!msg.videoMessage;
     const temTexto = extrairTextoExtra(content).length >= 3;
 
     const quoted = getContextInfo(message)?.quotedMessage;
     const temImagemNoQuote = !!quoted?.imageMessage;
+    const temVideoNoQuote = !!quoted?.videoMessage;
 
     const temImagem = temImagemDireta || temImagemNoQuote;
+    const temVideo = temVideoDireto || temVideoNoQuote;
 
-    if (tipoEsperado === 'foto') {
-        // Só aceita imagem, não aceita texto puro
-        return temImagem;
-    }
-
-    if (tipoEsperado === 'texto') {
-        // Só aceita texto, sem imagem
-        return temTexto && !temImagem;
-    }
-
-    if (tipoEsperado === 'foto_texto') {
-        // Obrigatório: imagem + texto
-        return temImagem && temTexto;
-    }
-
-    // 'qualquer': aceita imagem ou texto
-    return temImagem || temTexto;
+    return temImagem || temVideo || temTexto;
 }
 
 /**
- * Gera mensagem de erro clara sobre qual tipo de comprovação é esperado
+ * Gera mensagem de erro quando nenhuma comprovação válida foi encontrada
+ * (nem foto, nem vídeo, nem texto).
  */
-function gerarMensagemErroComprovacao(tipoEsperado) {
-    const mensagens = {
-        'foto': `📸 Esse desafio pede *FOTO*.\n\n` +
-                `Envie uma foto e tente novamente!`,
-        'texto': `✍️ Esse desafio pede apenas *TEXTO*.\n\n` +
-                `Envie uma mensagem de texto (sem foto) e tente novamente!`,
-        'foto_texto': `📸 + ✍️ Esse desafio pede *FOTO E TEXTO*.\n\n` +
-                     `Você precisa enviar:\n` +
-                     `1️⃣ Uma foto com legenda\n` +
-                     `2️⃣ OU responder a foto com um texto explicando\n\n` +
-                     `E depois mandar \`#pronto\``
-    };
-
-    return mensagens[tipoEsperado] || `❌ Tipo de comprovação inválido.`;
+function gerarMensagemErroComprovacao() {
+    return `📸🎥✍️ Você precisa enviar uma *foto*, um *vídeo* ou um *texto* como comprovação ` +
+           `(ou responder a uma foto/vídeo com uma explicação).\n\n` +
+           `Tente novamente!`;
 }
 
 /**
- * Extrai e serializa a comprovação (imagem ou texto) para armazenar no banco
+ * Extrai e serializa a comprovação (imagem, vídeo ou texto) para armazenar no banco
  * Também armazena a mensagem completa em cache para poder recuperar depois
  */
 async function extrairComprovacao(message, content, userId) {
     const msg = message.message;
     if (!msg) return null;
 
-    const temImagemDireta = !!msg.imageMessage;
+    const temMidiaDireta = !!msg.imageMessage || !!msg.videoMessage;
 
-    if (temImagemDireta) {
-        // Recupera o texto que pode vir junto da imagem
+    if (temMidiaDireta) {
+        // Recupera o texto que pode vir junto da mídia
         const textoExtra = extrairTextoExtra(content);
 
         // Armazena a mensagem completa em cache
@@ -310,7 +328,7 @@ async function extrairComprovacao(message, content, userId) {
 
     const contextInfo = getContextInfo(message);
     const quotedMsg = contextInfo?.quotedMessage;
-    if (quotedMsg?.imageMessage) {
+    if (quotedMsg?.imageMessage || quotedMsg?.videoMessage) {
         // Recupera o texto que pode vir junto do reply
         const textoExtra = extrairTextoExtra(content);
 
@@ -506,17 +524,19 @@ async function handleDesafioCommand(sock, message, content) {
         if (ativo && ativo.rowCount > 0) {
             await sock.sendMessage(from, {
                 text: `⚠️ Esse grupo de pessoas já tem um desafio pendente! ⏳\n\nConcluam o atual antes de receber um novo.`,
-                mentions: pessoas.map(p => `${p}@s.whatsapp.net`)
+                mentions: pessoas.map(p => jidParaMencao(p))
             }, { quoted: message });
             return true;
         }
 
-        let descricao = content.replace(/#desafio\b\s*/i, '');
-        mentions.forEach(mention => {
-            descricao = descricao.replace(new RegExp(`@[\\w.]+`), '').trim();
-        });
-
-        descricao = descricao.trim();
+        // Remove o #desafio e TODAS as menções (@numero, @lid, etc.) do texto,
+        // não importa quantas sejam — assim nenhum resto de ID/LID fica
+        // grudado na descrição, tipo "@146690715685110 @37753383346386".
+        let descricao = content
+            .replace(/#desafio\b\s*/i, '')
+            .replace(/@[\w.]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
 
         if (!descricao || descricao.length < 3) {
             await sock.sendMessage(from, {
@@ -556,16 +576,10 @@ async function handleDesafioCommand(sock, message, content) {
             timeStyle: 'short' 
         });
 
-        let instrucaoTipo = '';
-        if (tipoComprovacao === 'foto') {
-            instrucaoTipo = `📸 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra tirar a FOTO e completar!\n\n`;
-        } else if (tipoComprovacao === 'texto') {
-            instrucaoTipo = `✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra escrever e completar!\n\n`;
-        } else if (tipoComprovacao === 'foto_texto') {
-            instrucaoTipo = `📸 + ✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra enviar FOTO + TEXTO!\n\n`;
-        } else {
-            instrucaoTipo = `📸 Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra completar!\n\n`;
-        }
+        // A comprovação aceita qualquer combinação de foto, vídeo ou texto,
+        // então a instrução é sempre a mesma, independente do que a descrição sugere.
+        const instrucaoTipo = `📸🎥✍️ Vocês têm *${PRAZO_DESAFIO_HORAS} horas* pra completar! ` +
+            `Pode mandar foto, vídeo, texto ou uma combinação deles.\n\n`;
 
         const listaParticipantes = pessoas.map(p => `@${p}`).join(', ');
 
@@ -588,13 +602,13 @@ async function handleDesafioCommand(sock, message, content) {
                   `✅ Quando acabar, um de vocês manda:\n` +
                   `*#pronto* (marcando um admin, se quiser notificar direto)\n\n` +
                   `🔥 Vamos lá! 💪`,
-            mentions: [...pessoas.map(p => `${p}@s.whatsapp.net`), `${adminId}@s.whatsapp.net`]
+            mentions: [...pessoas.map(p => jidParaMencao(p)), jidParaMencao(adminId)]
         });
 
         console.log(`✅ [desafioleilaoHandler] Desafio #${desafioId} criado`);
         console.log(`   Participantes: ${pessoas.join(', ')}`);
         console.log(`   Descrição: ${descricao}`);
-        console.log(`   Tipo comprovação: ${tipoComprovacao}`);
+        console.log(`   Tipo comprovação (sugerido): ${tipoComprovacao}`);
         console.log(`   Admin: ${adminId}`);
         return true;
 
@@ -680,17 +694,15 @@ async function handleProntoCommand(sock, message, content) {
             await sock.sendMessage(from, {
                 text: `🚫 *Acesso negado!*\n\n` +
                       `Só os participantes do desafio podem confirmá-lo.`,
-                mentions: participantes.map(p => `${p}@s.whatsapp.net`)
+                mentions: participantes.map(p => jidParaMencao(p))
             }, { quoted: message });
             return true;
         }
 
-        const tipoEsperado = desafio.tipo_comprovacao_requerida || 'qualquer';
-
-        if (!validarComprovacao(message, content, tipoEsperado)) {
+        if (!validarComprovacao(message, content)) {
             await sock.sendMessage(from, {
                 text: `🚨 *COMPROVAÇÃO INVÁLIDA!* 🚨\n\n` +
-                      gerarMensagemErroComprovacao(tipoEsperado) + `\n\n` +
+                      gerarMensagemErroComprovacao() + `\n\n` +
                       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
                       `*Tarefa:* ${desafio.descricao}`
             }, { quoted: message });
@@ -784,17 +796,16 @@ async function handleProntoCommand(sock, message, content) {
             const listaFaltantes = faltantesIds.map(id => `⏳ @${id}`).join('\n');
             
             const mensagemProgresso = `📋 *PROGRESSO DO DESAFIO #${desafioId}*\n\n` +
-                                     `🎯 *Tarefa:* ${desafio.descricao}\n\n` +
                                      `✅ *Confirmados (${confirmados}/${participantes.length}):*\n${listaConfirmados}\n\n` +
                                      `⏳ *Faltando (${faltam}):*\n${listaFaltantes}`;
             
-            // Envia no grupo principal
+            // Envia no grupo principal — marca especificamente quem ainda falta confirmar
             await sock.sendMessage(from, {
                 text: `✅ *CONFIRMAÇÃO RECEBIDA!* ✨\n\n` +
                       `@${userId} confirmou o desafio!\n\n` +
-                      `⏳ Faltam ${faltam} participante(s) para completar.\n\n` +
+                      `⏳ Faltam ${faltam} participante(s):\n${listaFaltantes}\n\n` +
                       `🎯 *Desafio:* ${desafio.descricao}`,
-                mentions: participantes.map(p => `${p}@s.whatsapp.net`)
+                mentions: faltantesIds.map(p => jidParaMencao(p))
             });
             
             // ✅ Envia lista atualizada para sala de registro
@@ -803,7 +814,7 @@ async function handleProntoCommand(sock, message, content) {
                 try {
                     await sock.sendMessage(GRUPO_LEILOES, {
                         text: mensagemProgresso,
-                        mentions: [...confirmadosIds.map(p => `${p}@s.whatsapp.net`), ...faltantesIds.map(p => `${p}@s.whatsapp.net`)]
+                        mentions: [...confirmadosIds.map(p => jidParaMencao(p)), ...faltantesIds.map(p => jidParaMencao(p))]
                     });
                 } catch (err) {
                     console.warn('[desafioleilaoHandler] Erro ao enviar progresso para grupo de registro:', err.message);
@@ -824,12 +835,12 @@ async function handleProntoCommand(sock, message, content) {
             timeStyle: 'short'
         });
 
-        const mentionsConclusao = participantes.map(p => `${p}@s.whatsapp.net`);
+        const mentionsConclusao = participantes.map(p => jidParaMencao(p));
         const listaParticipantesStr = participantes.map(p => `@${p}`).join(', ');
         
         let linhaAdminMencionado = '';
         if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
-            mentionsConclusao.push(`${adminMencionadoId}@s.whatsapp.net`);
+            mentionsConclusao.push(jidParaMencao(adminMencionadoId));
             linhaAdminMencionado = `\n👮 *Admin notificado:* @${adminMencionadoId}`;
         }
 
@@ -860,12 +871,12 @@ async function handleProntoCommand(sock, message, content) {
             try {
                 const adminCriadorReal = await resolverIdSalvo(sock, from, desafio.admin_id);
                 const mentionsConclusaoRegistro = [
-                    ...participantes.map(p => `${p}@s.whatsapp.net`),
-                    `${adminCriadorReal}@s.whatsapp.net`
+                    ...participantes.map(p => jidParaMencao(p)),
+                    jidParaMencao(adminCriadorReal)
                 ];
                 
                 if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
-                    mentionsConclusaoRegistro.push(`${adminMencionadoId}@s.whatsapp.net`);
+                    mentionsConclusaoRegistro.push(jidParaMencao(adminMencionadoId));
                 }
                 
                 await sock.sendMessage(GRUPO_LEILOES_CONCLUSAO, {
@@ -882,13 +893,13 @@ async function handleProntoCommand(sock, message, content) {
         if (GRUPO_LEILOES) {
             const adminCriadorReal = await resolverIdSalvo(sock, from, desafio.admin_id);
             const mentionsRegistro = [
-                ...participantes.map(p => `${p}@s.whatsapp.net`),
-                `${adminCriadorReal}@s.whatsapp.net`
+                ...participantes.map(p => jidParaMencao(p)),
+                jidParaMencao(adminCriadorReal)
             ];
             
             let linhaAdminMencionadoRegistro = '';
             if (adminMencionadoId && !participantes.includes(adminMencionadoId)) {
-                mentionsRegistro.push(`${adminMencionadoId}@s.whatsapp.net`);
+                mentionsRegistro.push(jidParaMencao(adminMencionadoId));
                 linhaAdminMencionadoRegistro = `\n🔔 *Notificado:* @${adminMencionadoId}`;
             }
 
@@ -913,7 +924,7 @@ async function handleProntoCommand(sock, message, content) {
                     if (comprov.tipo === 'texto') {
                         await sock.sendMessage(GRUPO_LEILOES, {
                             text: `📸 *Comprovação de:* @${userProva}\n💬 _"${comprov.conteudo}"_`,
-                            mentions: [`${userProva}@s.whatsapp.net`]
+                            mentions: [jidParaMencao(userProva)]
                         });
                     } else if (comprov.tipo === 'midia_direta' || comprov.tipo === 'midia_quoted') {
                         let legenda = `📸 *Comprovação de:* @${userProva}`;
@@ -934,7 +945,7 @@ async function handleProntoCommand(sock, message, content) {
                         try {
                             await reenviarMidiaLimpa(sock, GRUPO_LEILOES, comprov.message, {
                                 caption: legenda,
-                                mentions: [`${userProva}@s.whatsapp.net`]
+                                mentions: [jidParaMencao(userProva)]
                             });
                         } catch (err) {
                             console.warn(`[desafioleilaoHandler] Erro ao enviar imagem de ${userProva}:`, err.message);
@@ -992,8 +1003,8 @@ async function verificarDesafiosExpirados(sock) {
                           `👮 *Admin que criou:* @${adminCriadorReal}\n\n` +
                           `🚫 O prazo de *${PRAZO_DESAFIO_HORAS} horas* acabou e eles não concluíram o desafio.`,
                     mentions: [
-                        ...participantes.map(p => `${p}@s.whatsapp.net`),
-                        `${adminCriadorReal}@s.whatsapp.net`
+                        ...participantes.map(p => jidParaMencao(p)),
+                        jidParaMencao(adminCriadorReal)
                     ]
                 });
 
