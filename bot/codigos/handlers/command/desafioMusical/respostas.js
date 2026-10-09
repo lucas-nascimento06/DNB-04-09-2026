@@ -6,7 +6,7 @@ import { jogos } from './state.js';
 import { jidDe, tag } from './utils.js';
 import { getTimeDoUsuario, pagarPremio } from './dados.js';
 import { zoeiraAtraso } from './zoeira.js';
-import { proximaRodada } from './jogo.js';
+import { proximaRodada, finalizar } from './jogo.js';
 
 export async function tratarResposta(sock, message, texto, from, jid, userId) {
     const jogo = jogos.get(from);
@@ -96,6 +96,11 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     clearTimeout(jogo.timer);
     jogo.placar[time] += 1;
 
+    // conta o acerto para o MVP
+    const reg = jogo.acertos.get(userId) || { jid, n: 0 };
+    reg.n += 1;
+    jogo.acertos.set(userId, reg);
+
     const emoji = time === 'homens' ? '👨🏻' : '👩🏻';
     const nomeTime = time.toUpperCase();
 
@@ -116,10 +121,10 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
             textoDC += `\n💰 Como você é o único do time, ficou com *${p.parteAcertador} DCs*.`;
         } else {
             // sem listar nomes (time grande deixaria a mensagem enorme)
-            textoDC += `\n💰 Você fica com *${p.parteAcertador} DCs* e os *${p.resto} DCs* restantes são divididos com a equipe *${nomeTime}*:`;
-            textoDC += p.sorteio
-                ? `\n🎲 Como o time é grande, *${p.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`
-                : `\n➡️ *${p.porMembro} DC* para cada um dos *${p.beneficiados.length}* colegas de time.`;
+            textoDC += `\n💰 Você fica com *${p.parteAcertador} DCs* e os *${p.resto} DCs* restantes são divididos com a equipe *${nomeTime}*.`;
+            if (p.sorteio) {
+                textoDC += `\n🎲 Como o time é grande, *${p.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
+            }
         }
         if (p.sobra > 0) textoDC += `\n_(sobraram ${p.sobra} DC que ficam no pote)_`;
     } else if (pagamento.motivo === 'pote-vazio') {
@@ -147,13 +152,20 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
         { quoted: message }
     );
 
-    if (CONFIG.proximaManual) {
-        jogo.aguardando = true;
-        const ultima = jogo.rodadaAtual >= jogo.total;
+    const ultima = jogo.rodadaAtual >= jogo.total;
+
+    if (ultima) {
+        // última rodada: o resultado sai sozinho, sem precisar do ADM
+        jogo.finalizando = true;
+        const delay = CONFIG.delayFinalMs ?? 15000;
         await sock.sendMessage(from, {
-            text: ultima
-                ? '⏸️ *ADM:* quando o desafio de cantar terminar, digite *#next* (ou *#n*) para ver o resultado final.'
-                : '⏸️ *ADM:* quando o desafio de cantar terminar, digite *#next* (ou *#n*) para tocar a próxima música.',
+            text: `🏁 *Foi a última rodada!* Cante à vontade, o resultado final sai em ${Math.round(delay / 1000)}s... 🥁`,
+        });
+        jogo.timer = setTimeout(() => finalizar(sock, from), delay);
+    } else if (CONFIG.proximaManual) {
+        jogo.aguardando = true;
+        await sock.sendMessage(from, {
+            text: '⏸️ *ADM:* quando o desafio de cantar terminar, digite *#next* (ou *#n*) para tocar a próxima música.',
         });
         jogo.timer = setTimeout(() => {
             jogo.aguardando = false;

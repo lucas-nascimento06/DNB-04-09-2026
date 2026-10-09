@@ -24,7 +24,7 @@ export const CONFIG = {
     premioDC: 100,          // DC por rodada
     premioAcertadorDC: 60,  // parte de quem acertou (o resto é dividido entre os outros do time)
     poteInicial: 6000,      // DC que o bot tem para distribuir (criado na 1ª vez)
-    maxMencoes: 15,         // quantos membros listar na mensagem de vitória
+    maxMencoes: 15,         // quantos membros do time campeão marcar na mensagem final
     tempoRodadaMs: 60000,   // 1 minuto para responder. 0 = SEM LIMITE
     pausaMs: 6000,          // pausa quando ninguém acerta
     tentativasPorRodada: 5, // quantas respostas cada pessoa pode dar por rodada
@@ -32,6 +32,7 @@ export const CONFIG = {
     rodadasMax: 20,
     proximaManual: true,    // true = depois que alguém acerta, o ADM digita #next
     esperaMaxMs: 5 * 60 * 1000, // se o ADM esquecer, segue sozinho depois de 5 min
+    delayFinalMs: 15000,    // na última rodada, tempo para cantar antes do resultado sair sozinho
     minDCParaEntrar: 200,   // saldo mínimo de DCs para entrar em um time (0 = sem exigência)
     minPorTime: 1,          // mínimo de participantes em CADA time para o ADM iniciar
     limparTimesAoAbrir: true,   // #dmabrir zera os times antigos

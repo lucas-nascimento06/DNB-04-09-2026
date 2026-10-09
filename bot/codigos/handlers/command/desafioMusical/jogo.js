@@ -44,11 +44,13 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         total,
         rodadaAtual: 0,
         placar: { homens: 0, mulheres: 0 },
+        acertos: new Map(), // userId -> { jid, n }
         usadas: new Set(),
         rodada: null,
         timer: null,
         banco,
         aguardando: false,
+        finalizando: false,
     });
 
     await sock.sendMessage(groupId, {
@@ -125,21 +127,59 @@ export async function acabouTempo(sock, groupId, manual = false) {
 export async function finalizar(sock, groupId) {
     const jogo = jogos.get(groupId);
     if (!jogo) return;
-    const { homens, mulheres } = jogo.placar;
+    clearTimeout(jogo.timer);
+    jogos.delete(groupId); // evita finalizar duas vezes
 
-    let resultado;
-    if (homens > mulheres) resultado = '👨🏻 *HOMENS venceram!* 🏆';
-    else if (mulheres > homens) resultado = '👩🏻 *MULHERES venceram!* 🏆';
-    else resultado = '🤝 *EMPATE!*';
+    const { homens, mulheres } = jogo.placar;
+    const mentions = [];
+
+    // 🌟 MVP: quem mais acertou (até 3 em caso de empate)
+    const ranking = [...jogo.acertos.values()].sort((a, b) => b.n - a.n);
+    let textoMvp = '';
+    if (ranking.length > 0) {
+        const melhor = ranking[0].n;
+        const mvps = ranking.filter(x => x.n === melhor).slice(0, 3);
+        mvps.forEach(x => mentions.push(x.jid));
+        textoMvp =
+            `🌟 *MVP DA NOITE${mvps.length > 1 ? 'S' : ''}:* ${mvps.map(x => tag(x.jid)).join(', ')}\n` +
+            `🎯 ${melhor} acerto${melhor > 1 ? 's' : ''} — ${mvps.length > 1 ? 'mandaram' : 'mandou'} muito bem! 👏\n\n`;
+    }
+
+    let titulo;
+    let rodape = '';
+    if (homens === mulheres) {
+        titulo = '🤝 *EMPATE!* Ninguém ganhou, ninguém perdeu... só a música saiu vencedora! 🎶';
+    } else {
+        const vencedor = homens > mulheres ? 'homens' : 'mulheres';
+        const emoji = vencedor === 'homens' ? '👨🏻' : '👩🏻';
+        titulo = `${emoji} *O TIME ${vencedor.toUpperCase()} É O GRANDE CAMPEÃO!* 🏆👑`;
+
+        try {
+            const membros = (await membrosDoTime(groupId, vencedor)).slice(0, CONFIG.maxMencoes);
+            if (membros.length > 0) {
+                const jids = membros.map(jidDe);
+                mentions.push(...jids);
+                rodape = `🎉 *Parabéns, campeões!*\n${jids.map(tag).join(' ')}\n\n`;
+            }
+        } catch (e) {
+            console.error('[desafioMusical] erro ao listar vencedores:', e.message);
+        }
+    }
 
     await sock.sendMessage(groupId, {
         text:
-            '🎶 *FIM DO DESAFIO MUSICAL* 🎶\n\n' +
-            `👨🏻 Homens: *${homens}* pontos\n` +
-            `👩🏻 Mulheres: *${mulheres}* pontos\n\n${resultado}`,
+            '🎊🎉🎊🎉🎊🎉🎊🎉🎊🎉\n' +
+            '🎤 *FIM DO DESAFIO MUSICAL* 🎤\n' +
+            '🎊🎉🎊🎉🎊🎉🎊🎉🎊🎉\n\n' +
+            '📊 *PLACAR FINAL*\n' +
+            `👨🏻 Homens: *${homens}* ponto${homens !== 1 ? 's' : ''}\n` +
+            `👩🏻 Mulheres: *${mulheres}* ponto${mulheres !== 1 ? 's' : ''}\n\n` +
+            `${titulo}\n\n` +
+            textoMvp +
+            rodape +
+            '🥳 Obrigado a todo mundo que participou! Que venha a próxima! 🔥🎶',
+        mentions,
     }).catch(() => {});
-
-    jogos.delete(groupId);
 }
 
 export async function pararDesafio(sock, groupId) {
