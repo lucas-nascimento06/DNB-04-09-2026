@@ -9,7 +9,7 @@ import { configurarDespedida } from '../codigos/features/despedidaMembro.js';
  * @param {object} update - Objeto de atualização completo do grupo
  */
 export async function handleUserRemove(sock, update) {
-    console.log(`\n👋 ========= PROCESSANDO SAÍDA/REMOÇÃO (removeHandler) =========`);
+    console.log(`\n👋 ========= PROCESSANDO SAÍDA/REMOÇÃO (removeHandler) ========`);
     console.log(`🎬 Ação detectada: "${update.action}"`);
     console.log(`👮 Author (quem executou): ${update.author || 'N/A'}`);
     console.log(`👥 Total de participantes afetados: ${update.participants.length}`);
