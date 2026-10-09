@@ -49,7 +49,7 @@ const negrito = (texto) =>
 let saudacoesData   = null;
 let dadosCarregados = false;
 
-// ── Filas sem repetição — textos e fotos por período ──────────────────────
+// ── Filas sem repetição — textos e fotos por período ─────────────────────
 
 const filas = {
     bom_dia:   [],
