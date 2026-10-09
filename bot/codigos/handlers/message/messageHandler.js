@@ -135,6 +135,11 @@ import {
     handleDadosCommand
 } from '../command/dadosHandler.js';
 
+// 🎤 IMPORT — desafio musical (#dm)
+import {
+    handleDesafioMusical
+} from '../command/desafioMusicalHandler.js';
+
 const autoTag = new AutoTagHandler();
 const replyTag = new ReplyTagHandler();
 
@@ -344,6 +349,16 @@ export async function handleMessages(sock, message) {
                     console.error('❌ [dcTracker] trackDC:', err.message)
                 );
             }
+        }
+
+        // ============================================
+        // 🎤 DESAFIO MUSICAL (#dm, #dp, #h, #m e respostas A/B/C/D)
+        // Fica antes da IA e dos outros comandos, para que a letra "A"
+        // não seja respondida pela Maya como conversa normal.
+        // ============================================
+        if (from.endsWith('@g.us')) {
+            const dmHandled = await handleDesafioMusical(sock, message, content, from, OWNER_NUMBERS);
+            if (dmHandled) return;
         }
 
         // 💾 #salva / #s e #contato / #c
