@@ -43,7 +43,21 @@ export const CONFIG = {
     // e a pessoa precisa esperar "intervaloMs" para mandar uma nova sequência desse tamanho.
     // Nesse intervalo ela pode mandar 1 ou 2 músicas normalmente; uma nova sequência de 3 seguidas é removida.
     // ("tamanho" deve ser igual ao max da regra 'áudios/músicas' acima)
-    audioLote: { enabled: true, tamanho: 3, janelaMs: 20000, intervaloMs: 180000, avisar: true },
+    // (DESATIVADO: substituído pelo "audioAviso" logo abaixo. Para voltar ao modelo lote + intervalo de 3 min, troque para true.)
+    audioLote: { enabled: false, tamanho: 3, janelaMs: 20000, intervaloMs: 180000, avisar: true },
+
+    // Aviso de espera entre músicas: até 3 músicas seguidas dentro de "janelaMs" passam (a 4ª remove, regra 'áudios/músicas').
+    // Quando a pessoa manda a "avisarNaQtd"-ésima música dentro da janela, o bot avisa 1x para aguardar antes de mandar outra.
+    // O aviso espera "atrasoMs" e NÃO sai se a pessoa for removida nesse meio tempo (ex.: mandou a 4ª logo em seguida).
+    // "janelaMs" deve ser igual ao da regra 'áudios/músicas'.
+    audioAviso: { enabled: true, avisarNaQtd: 1, janelaMs: 20000, atrasoMs: 2000, avisar: true },
+
+    // Espera entre músicas: depois de uma música aceita, TODA música enviada antes de fechar "janelaMs" é APAGADA,
+    // e o bot avisa sempre (com os segundos que faltam). Só é REMOVIDO(A) quem manda 2 músicas seguidas ignorando o aviso:
+    // a 2ª música apagada chegando em até "seguidasMs" depois da anterior apagada.
+    // Ex.: 1ª passa e avisa; 2ª é apagada e avisa; 3ª logo em seguida (até seguidasMs) remove.
+    // "janelaMs" deve ser igual ao do audioAviso.
+    audioEspera: { enabled: true, janelaMs: 20000, seguidasMs: 5000, avisar: true },
 
     // A MESMA mensagem repetida várias vezes (ex.: "oi" x30, propaganda colada de novo e de novo)
     repeticao: { enabled: true, max: 5, janelaMs: 30000 },
@@ -108,13 +122,14 @@ export const CONFIG = {
     avisarBloqueioPosRemocao: true, // avisa 1x no grupo se a pessoa VOLTAR (ou continuar) e mandar algo durante o bloqueio
     avisoPosRemocaoAposMs: 15000,   // só avisa se a mensagem chegar mais de 15s depois da remoção (ignora o flood em andamento)
     punirNovamenteNoBloqueio: true, // se a pessoa voltar/continuar e fizer flood de novo DURANTE o bloqueio, remove de novo (usa o mesmo prazo acima)
-    delayEntreDeletesMs: 300,       // evita flood de deletes (risco de ban do número)
+    delayEntreDeletesMs: 2000,      // evita flood de deletes (risco de ban do número)
 };
 
 const MAX_JANELA = Math.max(
     ...CONFIG.rules.map(r => r.janelaMs),
     CONFIG.repeticao?.enabled ? CONFIG.repeticao.janelaMs : 0,
     CONFIG.audioLote?.enabled ? CONFIG.audioLote.janelaMs : 0,
+    CONFIG.audioAviso?.enabled ? CONFIG.audioAviso.janelaMs : 0,
 );
 
 // Só guarda mensagens de texto no histórico se existir alguma regra que use o tipo 'text'
@@ -151,6 +166,9 @@ const avisoSemAdmin = new Map(); // grupo -> último log "bot não é admin"
 const avisadosPunido = new Set(); // "grupo:user" -> já avisou nesta punição (aviso do bloqueio pós-remoção)
 const removidoEm = new Map();    // "grupo:user" -> timestamp em que a remoção terminou
 const loteAudioAte = new Map();  // "grupo:user" -> timestamp até quando vale o intervalo após um lote de músicas
+const avisoParAudioAte = new Map(); // "grupo:user" -> até quando não repete o aviso de "2 músicas seguidas"
+const avisoEsperaAudioAte = new Map(); // "grupo:user" -> até quando não repete o aviso de espera entre músicas
+const audioEstado = new Map();   // "grupo:user" -> { ok: hora da última música aceita, strikes: apagadas desde então, ultimaApagada: hora da última apagada }
 
 const soNumero = (jid = '') => String(jid).split('@')[0].split(':')[0];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -407,7 +425,8 @@ const dataHora = () =>
     });
 
 // Avisa (1x por lote) que a pessoa completou a sequência de músicas permitida. Não bloqueia o fluxo.
-async function avisarLoteAudio(sock, msg, groupJid, user, idUser, ownerNumbers) {
+// tipoAviso: 'lote' (completou as 3 permitidas) ou 'par' (mandou 2 durante o intervalo: a próxima precisa esperar)
+async function avisarLoteAudio(sock, msg, groupJid, user, idUser, ownerNumbers, tipoAviso = 'lote') {
     try {
         const al = CONFIG.audioLote;
         const livres = new Set([...CONFIG.whitelist, ...ownerNumbers].map(soNumero));
@@ -421,16 +440,92 @@ async function avisarLoteAudio(sock, msg, groupJid, user, idUser, ownerNumbers) 
         }
         if (!al.avisar) return;
         const minutos = Math.max(1, Math.round(al.intervaloMs / 60000));
+        const segundos = Math.round(al.janelaMs / 1000);
+        const texto = tipoAviso === 'par'
+            ? `⏳ @${soNumero(user)}, você mandou *${al.tamanho - 1} músicas* seguidas. ` +
+              `Espere uns *${segundos} segundos* para mandar a próxima, senão será removido(a) por flood/spam.`
+            : `🎵 @${soNumero(user)}, você mandou *${al.tamanho} músicas* seguidas. ` +
+              `Esse é o máximo permitido de uma vez pelo anti-flood/spam.\n` +
+              `Espere uns *${minutos} min* para enviar uma nova sequência de ${al.tamanho} músicas. ` +
+              `Até lá você pode enviar 1 ou 2 normalmente.`;
+        await sock.sendMessage(groupJid, { text: texto, mentions: [user] });
+    } catch (err) {
+        console.error('[antiflood] erro ao avisar lote de músicas:', err.message);
+    }
+}
+
+// Avisa (1x por janela) para aguardar antes de mandar outra música. Não bloqueia o fluxo.
+// Espera um instante e só envia se a pessoa NÃO tiver sido removida nesse meio tempo.
+async function avisarEsperaAudio(sock, msg, groupJid, user, idUser, ownerNumbers) {
+    try {
+        const aa = CONFIG.audioAviso;
+        const livres = new Set([...CONFIG.whitelist, ...ownerNumbers].map(soNumero));
+        if (livres.has(soNumero(user)) || (msg.key.participantAlt && livres.has(soNumero(msg.key.participantAlt)))) return;
+        const meta = await getMeta(sock, groupJid);
+        if (ehAdmin(meta, user) || (msg.key.participantAlt && ehAdmin(meta, msg.key.participantAlt))) return;
+        await sleep(aa.atrasoMs);
+        if (punidos.has(idUser)) return; // foi removido(a) enquanto esperávamos: não faz sentido avisar
+        if (CONFIG.modoTeste) {
+            console.log(`[antiflood][TESTE] avisaria espera entre músicas: ${user} em ${groupJid}`);
+            return;
+        }
+        if (!aa.avisar) return;
+        const segundos = Math.round(aa.janelaMs / 1000);
         await sock.sendMessage(groupJid, {
             text:
-                `🎵 @${soNumero(user)}, você mandou *${al.tamanho} músicas* seguidas. ` +
-                `Esse é o máximo permitido de uma vez pelo anti-flood/spam.\n` +
-                `Espere uns *${minutos} min* para enviar uma nova sequência de ${al.tamanho} músicas. ` +
-                `Até lá você pode enviar 1 ou 2 normalmente.`,
+                `🚨⚠️ *ATENÇÃO* ⚠️🚨\n` +
+                `━━━━━━━━━━━━━━━━━━\n\n` +
+                `🎵 @${soNumero(user)}, aguarde ⏳ *${segundos} SEGUNDOS* para enviar outra música novamente, para não abusar.\n\n` +
+                `🛡️ O sistema *ANTI-FLOOD/SPAM* está *ATIVO*.\n` +
+                `❌ Se continuar mandando músicas em curto intervalo, você poderá ser *REMOVIDO(A)* do grupo.\n\n` +
+                `━━━━━━━━━━━━━━━━━━`,
             mentions: [user],
         });
     } catch (err) {
-        console.error('[antiflood] erro ao avisar lote de músicas:', err.message);
+        console.error('[antiflood] erro ao avisar espera entre músicas:', err.message);
+    }
+}
+
+// Música enviada antes de fechar a janela de espera: apaga SÓ essa mensagem e avisa. Retorna true se tratou a mensagem.
+async function apagarMusicaEspera(sock, msg, groupJid, user, idUser, ownerNumbers, restanteMs) {
+    const livres = new Set([...CONFIG.whitelist, ...ownerNumbers].map(soNumero));
+    if (livres.has(soNumero(user)) || (msg.key.participantAlt && livres.has(soNumero(msg.key.participantAlt)))) return false;
+    const meta = await getMeta(sock, groupJid);
+    if (ehAdmin(meta, user) || (msg.key.participantAlt && ehAdmin(meta, msg.key.participantAlt))) return false;
+    if (!botEhAdmin(sock, meta)) return false; // sem admin não dá para apagar mensagem de outra pessoa
+    if (CONFIG.modoTeste) {
+        console.log(`[antiflood][TESTE] apagaria música enviada antes da espera: ${user} em ${groupJid}`);
+        return false;
+    }
+    if (CONFIG.apagarMensagens) enfileirarDelete(sock, groupJid, [msg.key]);
+    console.log(`[antiflood] música apagada (antes da espera) de ${user} em ${groupJid}`);
+    if (CONFIG.audioEspera.avisar && !punidos.has(idUser)) {
+        avisarMusicaApagada(sock, groupJid, user, idUser, restanteMs);
+    }
+    return true;
+}
+
+// Aviso de que a música foi apagada. Espera um instante e não envia se a pessoa for removida nesse meio tempo.
+async function avisarMusicaApagada(sock, groupJid, user, idUser, restanteMs) {
+    try {
+        const atraso = CONFIG.audioAviso?.atrasoMs ?? 2000;
+        await sleep(atraso);
+        if (punidos.has(idUser)) return; // foi removido(a) enquanto esperávamos
+        const janela = Math.round(CONFIG.audioEspera.janelaMs / 1000);
+        const faltam = Math.max(1, Math.ceil((restanteMs - atraso) / 1000));
+        await sock.sendMessage(groupJid, {
+            text:
+                `🚨⚠️ *ATENÇÃO* ⚠️🚨\n` +
+                `━━━━━━━━━━━━━━━━━━\n\n` +
+                `⛔ @${soNumero(user)}, ainda não fechou os *${janela} SEGUNDOS*!\n` +
+                `🗑️ Sua música foi *APAGADA*. Aguarde mais uns *${faltam} segundos* para enviar a próxima. Não seja teimoso(a)!\n\n` +
+                `🛡️ O sistema *ANTI-FLOOD/SPAM* está *ATIVO*.\n` +
+                `❌ Se insistir, você será *REMOVIDO(A)* do grupo.\n\n` +
+                `━━━━━━━━━━━━━━━━━━`,
+            mentions: [user],
+        });
+    } catch (err) {
+        console.error('[antiflood] erro ao avisar música apagada:', err.message);
     }
 }
 
@@ -520,6 +615,10 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
         let violada = null;
         let qtdViolada = 0;
         let loteCompleto = false;
+        let avisoPar = false;
+        let avisoEspera = false;
+        let esperaApagar = false;
+        let esperaRestanteMs = 0;
 
         if (gatilho) {
             // Trava / convite / comando de outro bot: punição imediata na primeira mensagem
@@ -557,10 +656,48 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
                         loteAudioAte.set(idUser, agora + al.intervaloMs);
                         loteCompleto = true;
                     }
+                } else if (qtdAudio === al.tamanho - 1 && agora < (loteAudioAte.get(idUser) || 0) &&
+                           agora >= (avisoParAudioAte.get(idUser) || 0)) {
+                    // durante o intervalo: mandou 2 seguidas -> avisa para esperar antes da próxima (1x por janela)
+                    avisoParAudioAte.set(idUser, agora + al.janelaMs);
+                    avisoPar = true;
+                }
+            }
+            // Espera entre músicas: outra música antes de fechar a janela é apagada; insistir remove
+            if (!violada && tipoHist === 'audio' && CONFIG.audioEspera?.enabled && !punidoAgora) {
+                const ae = CONFIG.audioEspera;
+                const est = audioEstado.get(idUser);
+                if (!est || agora - est.ok >= ae.janelaMs) {
+                    audioEstado.set(idUser, { ok: agora, strikes: 0 });
+                } else {
+                    // música antes de fechar a janela: sempre apaga e avisa; se vier outra logo em seguida, remove
+                    const seguida = !!est.ultimaApagada && agora - est.ultimaApagada <= ae.seguidasMs;
+                    est.ultimaApagada = agora;
+                    est.strikes++;
+                    if (seguida) {
+                        violada = { nome: 'músicas seguidas ignorando o aviso de espera', janelaMs: ae.janelaMs };
+                        qtdViolada = est.strikes + 1;
+                    } else {
+                        esperaApagar = true;
+                        esperaRestanteMs = est.ok + ae.janelaMs - agora;
+                    }
+                }
+            }
+            if (esperaApagar) return await apagarMusicaEspera(sock, msg, groupJid, user, idUser, ownerNumbers, esperaRestanteMs);
+
+            // Aviso de espera entre músicas (1x por janela)
+            if (!violada && tipoHist === 'audio' && CONFIG.audioAviso?.enabled) {
+                const aa = CONFIG.audioAviso;
+                const qtdAudio = lista.filter(e => e.tipo === 'audio' && agora - e.t <= aa.janelaMs).length;
+                if (qtdAudio >= aa.avisarNaQtd && agora >= (avisoEsperaAudioAte.get(idUser) || 0)) {
+                    avisoEsperaAudioAte.set(idUser, agora + aa.janelaMs);
+                    avisoEspera = true;
                 }
             }
             if (!violada) {
                 if (loteCompleto && !punidoAgora) avisarLoteAudio(sock, msg, groupJid, user, idUser, ownerNumbers);
+                if (avisoPar && !punidoAgora) avisarLoteAudio(sock, msg, groupJid, user, idUser, ownerNumbers, 'par');
+                if (avisoEspera && !punidoAgora) avisarEsperaAudio(sock, msg, groupJid, user, idUser, ownerNumbers);
                 return saiSemPunir();
             }
         }
@@ -618,6 +755,7 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
         punidos.set(idUser, agora + CONFIG.bloqueioPosRemocaoMs);
         avisadosPunido.delete(idUser); // nova punição = pode avisar de novo
         removidoEm.delete(idUser);
+        audioEstado.delete(idUser);
         const keys = lista.map(e => e.key);
         historico.delete(idUser);
 
@@ -705,4 +843,7 @@ setInterval(() => {
     }
     for (const [k, v] of cacheMeta) if (agora - v.t > 120000) cacheMeta.delete(k);
     for (const [k, ate] of loteAudioAte) if (agora > ate) loteAudioAte.delete(k);
+    for (const [k, ate] of avisoParAudioAte) if (agora > ate) avisoParAudioAte.delete(k);
+    for (const [k, ate] of avisoEsperaAudioAte) if (agora > ate) avisoEsperaAudioAte.delete(k);
+    for (const [k, e] of audioEstado) if (agora - e.ok > (CONFIG.audioEspera?.janelaMs || 20000) * 3) audioEstado.delete(k);
 }, 60000).unref();
