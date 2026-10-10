@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/dados.js
-// Tudo que fala com o banco de dados (times, pote, carteiras, prêmio).
+// Tudo que fala com o banco de dados (times, pote, carteiras, prêmio, músicas usadas).
 
 import pool from '../../../../../db.js';
 import { CONFIG } from './config.js';
@@ -33,6 +33,16 @@ export async function garantirTabelas() {
         `INSERT INTO damas_dm_pote (id, saldo) VALUES (1, $1) ON CONFLICT (id) DO NOTHING`,
         [CONFIG.poteInicial]
     );
+
+    // histórico de músicas já tocadas (para nunca repetir entre desafios)
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS damas_dm_usadas (
+            grupo_id TEXT NOT NULL,
+            musica_id INT NOT NULL,
+            usado_em TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (grupo_id, musica_id)
+        )
+    `);
 
     tabelasOk = true;
 }
@@ -89,6 +99,28 @@ export async function membrosDoTime(grupoId, time) {
 
 export async function limparTimes(grupoId) {
     await pool.query(`DELETE FROM damas_dm_times WHERE grupo_id = $1`, [grupoId]);
+}
+
+// ---------- músicas já usadas (histórico entre desafios) ----------
+
+export async function getUsadas(grupoId) {
+    const { rows } = await pool.query(
+        `SELECT musica_id FROM damas_dm_usadas WHERE grupo_id = $1`,
+        [grupoId]
+    );
+    return new Set(rows.map(r => r.musica_id));
+}
+
+export async function marcarUsada(grupoId, musicaId) {
+    await pool.query(
+        `INSERT INTO damas_dm_usadas (grupo_id, musica_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [grupoId, musicaId]
+    );
+}
+
+export async function limparUsadas(grupoId) {
+    await pool.query(`DELETE FROM damas_dm_usadas WHERE grupo_id = $1`, [grupoId]);
 }
 
 // Prêmio da rodada: parte maior para quem acertou, o resto dividido entre os OUTROS do time.

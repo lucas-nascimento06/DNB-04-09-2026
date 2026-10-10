@@ -12,13 +12,14 @@
 //   #time | #times             -> mostra os times (ADM)
 //   #pote [valor]              -> mostra / define o pote de DCs (ADM)
 //   #limpartimes               -> apaga os times deste grupo (ADM)
+//   #limparmusicas             -> zera o histórico de músicas já tocadas (ADM)
 // Respostas: apenas a letra A, B, C, D ou E.
 //
 // Módulos (pasta ./desafioMusical/):
 //   config.js        -> CONFIG, grupos, caminhos
 //   state.js         -> jogos, inscricoes, pendentes (memória)
 //   utils.js         -> helpers (tag, embaralhar, ehAdmin, resolverAlvo...)
-//   dados.js         -> banco de dados (times, pote, carteira, prêmio)
+//   dados.js         -> banco de dados (times, pote, carteira, prêmio, músicas usadas)
 //   musicas.js       -> banco de músicas e pegadinhas
 //   zoeira.js        -> mensagens de zoeira
 //   jogo.js          -> fluxo do jogo (rodadas, fim, parar)
@@ -34,7 +35,7 @@ import { tratarComandoAdmin } from './desafioMusical/comandosAdmin.js';
 import { tratarEntradaTime } from './desafioMusical/comandosTime.js';
 import { tratarResposta } from './desafioMusical/respostas.js';
 
-console.log('[desafioMusical] v7 carregado (modular)');
+console.log('[desafioMusical] v8 carregado (modular)');
 
 // Retorna true se a mensagem foi consumida pelo desafio.
 export async function handleDesafioMusical(sock, message, content, from, ownerNumbers = []) {
@@ -44,7 +45,7 @@ export async function handleDesafioMusical(sock, message, content, from, ownerNu
     const lower = texto.toLowerCase();
 
     // filtro rápido: só continua se for comando do desafio ou resposta A/B/C/D/E
-    const ehComando = /^#add(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|next|n|proxima|time|times|pote|limpartimes|h|homens|m|mulheres)(\s+\d+)?$/.test(lower);
+    const ehComando = /^#add(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres)(\s+\d+)?$/.test(lower);
     const ehLetra = /^[a-e]$/i.test(texto) && jogos.has(from);
     if (!ehComando && !ehLetra) return false;
 

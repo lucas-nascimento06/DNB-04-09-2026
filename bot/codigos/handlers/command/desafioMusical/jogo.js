@@ -6,7 +6,7 @@ import path from 'path';
 import { CONFIG, PASTA_TRECHOS } from './config.js';
 import { jogos, inscricoes } from './state.js';
 import { carregarBanco, montarRodada } from './musicas.js';
-import { getPote, membrosDoTime } from './dados.js';
+import { getPote, membrosDoTime, getUsadas, marcarUsada, limparUsadas } from './dados.js';
 import { jidDe, tag } from './utils.js';
 
 export async function iniciarDesafio(sock, groupId, rodadas) {
@@ -35,7 +35,26 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         });
     }
 
-    const total = Math.max(1, Math.min(rodadas, CONFIG.rodadasMax, banco.length));
+    // músicas que já saíram em desafios anteriores deste grupo
+    let historico;
+    try {
+        historico = await getUsadas(groupId);
+    } catch (e) {
+        console.error('[desafioMusical] erro ao ler histórico de músicas:', e.message);
+        historico = new Set();
+    }
+
+    let livres = banco.filter(m => !historico.has(m.id));
+    let avisoReinicio = '';
+    if (livres.length === 0) {
+        await limparUsadas(groupId).catch(() => {});
+        historico = new Set();
+        livres = banco;
+        avisoReinicio = '🔄 Todas as músicas já foram tocadas, o ciclo recomeçou!\n\n';
+    }
+
+    // não pede mais rodadas do que músicas inéditas disponíveis
+    const total = Math.max(1, Math.min(rodadas, CONFIG.rodadasMax, livres.length));
 
     inscricoes.delete(groupId); // começou: inscrições fechadas
     const [timeH, timeM] = await Promise.all([membrosDoTime(groupId, 'homens'), membrosDoTime(groupId, 'mulheres')]);
@@ -45,7 +64,7 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         rodadaAtual: 0,
         placar: { homens: 0, mulheres: 0 },
         acertos: new Map(), // userId -> { jid, n }
-        usadas: new Set(),
+        usadas: new Set(historico), // começa com o histórico (ids das músicas)
         rodada: null,
         timer: null,
         banco,
@@ -67,6 +86,7 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
             (CONFIG.entrarDuranteJogo
                 ? '👇 *AINDA NÃO TEM TIME?* Digite *#h* (homens) ou *#m* (mulheres)\n\n'
                 : '🔒 Inscrições encerradas. Quem não entrou num time pode torcer! 📣\n\n') +
+            avisoReinicio +
             `🚀 Começando agora! (${total} rodadas)`,
     });
 
@@ -83,7 +103,9 @@ export async function proximaRodada(sock, groupId) {
     if (!dados) return finalizar(sock, groupId);
 
     jogo.rodadaAtual++;
-    jogo.usadas.add(dados.musica.titulo);
+    jogo.usadas.add(dados.musica.id);
+    marcarUsada(groupId, dados.musica.id).catch(e =>
+        console.error('[desafioMusical] erro ao salvar música usada:', e.message));
     jogo.rodada = { ...dados, tentaram: new Map(), avisados: new Set(), encerrada: false };
 
     try {
@@ -118,7 +140,9 @@ export async function acabouTempo(sock, groupId, manual = false) {
 
     const { letraCorreta, musica } = jogo.rodada;
     await sock.sendMessage(groupId, {
-        text: `${manual ? '⏭️ Rodada pulada pelo ADM.' : '⌛ Tempo esgotado!'} Ninguém acertou.\n✅ Era: *${letraCorreta}) ${musica.titulo}* — ${musica.artista}`,
+        text:
+            `${manual ? '⏭️ Rodada pulada pelo ADM.' : '⌛ Tempo esgotado!'} Ninguém acertou.\n` +
+            `✅ Era: *${letraCorreta}) ${musica.titulo}* — ${musica.artista}`,
     }).catch(() => {});
 
     jogo.timer = setTimeout(() => proximaRodada(sock, groupId), CONFIG.pausaMs);

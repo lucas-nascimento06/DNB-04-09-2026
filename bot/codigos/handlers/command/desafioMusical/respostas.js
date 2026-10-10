@@ -138,7 +138,8 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
         {
             text:
                 `🏆 ${tag(jid)} acertou primeiro!\n` +
-                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
+                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n` +
+                `🔢 Música nº *${r.musica.id}* — letra: *#letra ${r.musica.id}*\n\n` +
                 `${emoji} +1 ponto para o time *${nomeTime}*\n\n` +
                 `${textoDC}\n\n` +
                 `🎤 *Desafio de ${tag(jid)}:* agora cante um trecho da música!\n` +

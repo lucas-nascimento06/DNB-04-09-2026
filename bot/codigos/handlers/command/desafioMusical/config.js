@@ -10,6 +10,7 @@ export const BANCO = path.join(__dirname, '../../../../data/musicasDesafio.json'
 export const BANCO_FALSAS = path.join(__dirname, '../../../../data/falsasMesmoArtista.json');
 export const ARQUIVO_FALSAS = path.join(__dirname, '../../../../data/falsas.json');
 export const PASTA_TRECHOS = path.join(__dirname, '../../../musicas-desafio');
+export const PASTA_LETRAS = path.join(__dirname, '../../../../data/letras');
 
 // ⚠️ MODO TESTE: só o grupo de teste está ativo.
 // Quando terminar os testes, descomente os grupos originais e comente/remova o GRUPO_TESTE.

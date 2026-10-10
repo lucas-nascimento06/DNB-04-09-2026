@@ -4,14 +4,29 @@
 import fs from 'fs';
 import path from 'path';
 import {
-    BANCO, BANCO_FALSAS, ARQUIVO_FALSAS, PASTA_TRECHOS,
+    BANCO, BANCO_FALSAS, ARQUIVO_FALSAS, PASTA_TRECHOS, PASTA_LETRAS,
     LETRAS, NUM_FALSAS, FALSAS_MESMO_CANTOR,
 } from './config.js';
 import { embaralhar } from './utils.js';
 
+// Lê o JSON e garante um id em cada música (se não tiver "id", usa a posição: 1, 2, 3...)
+function lerTodas() {
+    return JSON.parse(fs.readFileSync(BANCO, 'utf8'))
+        .map((m, i) => ({ ...m, id: m.id ?? i + 1 }));
+}
+
 export function carregarBanco() {
-    const lista = JSON.parse(fs.readFileSync(BANCO, 'utf8'));
-    return lista.filter(m => fs.existsSync(path.join(PASTA_TRECHOS, m.arquivo)));
+    return lerTodas().filter(m => fs.existsSync(path.join(PASTA_TRECHOS, m.arquivo)));
+}
+
+export function buscarMusicaPorId(id) {
+    return lerTodas().find(m => m.id === id) || null;
+}
+
+export function lerLetra(id) {
+    const arq = path.join(PASTA_LETRAS, `${id}.txt`);
+    if (!fs.existsSync(arq)) return null;
+    return fs.readFileSync(arq, 'utf8').trim();
 }
 
 // Pegadinhas do MESMO cantor (lê a cada rodada: dá pra editar o JSON sem reiniciar)
@@ -38,8 +53,9 @@ function artistaDe(texto) {
     return texto.split(' — ').slice(1).join(' — ');
 }
 
+// "usadas" é um Set de IDs de músicas
 export function montarRodada(banco, usadas) {
-    const disponiveis = banco.filter(m => !usadas.has(m.titulo));
+    const disponiveis = banco.filter(m => !usadas.has(m.id));
     if (disponiveis.length === 0) return null;
 
     const correta = disponiveis[Math.floor(Math.random() * disponiveis.length)];

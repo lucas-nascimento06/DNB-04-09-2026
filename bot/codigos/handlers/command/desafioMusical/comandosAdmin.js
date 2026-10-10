@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/comandosAdmin.js
-// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #next, #add, #time, #pote, #limpartimes
+// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #next, #add, #time, #pote, #limpartimes, #limparmusicas
 //
 // Retorno: null  -> não era um comando de ADM (o handler segue adiante)
 //          true/false -> valor que o handler principal deve retornar
@@ -8,7 +8,7 @@ import { CONFIG } from './config.js';
 import { jogos, inscricoes, pendentes } from './state.js';
 import { ehAdmin, resolverAlvo, tag } from './utils.js';
 import {
-    getPote, definirPote, getTimeDoUsuario, salvarTime, membrosDoTime, limparTimes,
+    getPote, definirPote, getTimeDoUsuario, salvarTime, membrosDoTime, limparTimes, limparUsadas,
 } from './dados.js';
 import {
     iniciarDesafio, proximaRodada, acabouTempo, pararDesafio, mostrarTimes,
@@ -181,6 +181,14 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         if (!(await admin())) { await negar(); return true; }
         await limparTimes(from);
         await sock.sendMessage(from, { text: '🧹 Os times Homens e Mulheres foram zerados neste grupo.' }, { quoted: message });
+        return true;
+    }
+
+    // 10) zerar o histórico de músicas já tocadas (todas podem sair de novo)
+    if (lower === '#limparmusicas') {
+        if (!(await admin())) { await negar(); return true; }
+        await limparUsadas(from);
+        await sock.sendMessage(from, { text: '🧹 Histórico de músicas zerado. Todas podem tocar de novo.' }, { quoted: message });
         return true;
     }
 
