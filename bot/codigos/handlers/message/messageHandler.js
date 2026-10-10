@@ -149,6 +149,11 @@ import {
     GRUPOS_PERMITIDOS
 } from '../command/desafioMusical/config.js';
 
+// 🚫 IMPORT — anti-flood (remove quem manda muita mídia/figurinha em sequência)
+import {
+    antiFlood
+} from '../../moderation/antiflood.js';
+
 const autoTag = new AutoTagHandler();
 const replyTag = new ReplyTagHandler();
 
@@ -331,6 +336,22 @@ export async function handleMessages(sock, message) {
                 if (DEBUG_MODE) console.log('⏭️ Ignorado: mensagem comum do bot');
                 return;
             }
+        }
+
+        // ============================================
+        // 🚫 ANTI-FLOOD (fotos, vídeos, figurinhas, áudios em sequência, travas,
+        // convites de grupo, comandos de outros bots)
+        // Fica ANTES do filtro de mensagem vazia de propósito: contato, localização,
+        // enquete, convite de grupo, mensagem editada e "ver uma vez" não têm texto
+        // e seriam descartados pelo return logo abaixo, nunca chegando aqui.
+        // O spam também é descartado ANTES de contar em trackMensagem/trackDC
+        // e de passar pelos outros handlers.
+        // O antiFlood ignora mensagens do próprio bot, admins e OWNER_NUMBERS,
+        // e em caso de erro devolve false (o fluxo normal segue como sempre).
+        // ============================================
+        if (from.endsWith('@g.us') && !message.key.fromMe) {
+            const floodHandled = await antiFlood(sock, message, OWNER_NUMBERS);
+            if (floodHandled) return;
         }
 
         if (!content?.trim() && !isMediaMessage) return;
