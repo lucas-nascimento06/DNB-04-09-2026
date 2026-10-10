@@ -81,7 +81,7 @@ export async function golpeHandler(sock, message, from) {
 
     const { key, message: msg } = message;
 
-    // ─── Mesma lógica do banHandler ─────────────────────────────────────────
+    // ─── Mesma lógica do banHandler ────────────────────────────────────────
     // Pega o conteúdo de texto igual ao ban
     const messageContent = msg?.extendedTextMessage?.text || msg?.conversation || '';
     const contextInfo    = msg?.extendedTextMessage?.contextInfo;
