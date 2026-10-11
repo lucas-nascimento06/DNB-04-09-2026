@@ -6,7 +6,7 @@
 
 import { CONFIG } from './config.js';
 import { jogos, inscricoes, pendentes } from './state.js';
-import { ehAdmin, resolverAlvo, tag } from './utils.js';
+import { ehAdmin, resolverAlvo, tag, blocoTimes } from './utils.js';
 import {
     getPote, definirPote, getTimeDoUsuario, salvarTime, membrosDoTime, limparTimes, limparUsadas,
 } from './dados.js';
@@ -49,11 +49,14 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         }
         inscricoes.delete(from);
         const [h, m] = await Promise.all([membrosDoTime(from, 'homens'), membrosDoTime(from, 'mulheres')]);
+        const { texto, mentions } = blocoTimes(h, m);
         await sock.sendMessage(from, {
             text:
                 '🔒 *Inscrições encerradas!*\n\n' +
-                `👨🏻 Homens: *${h.length}*\n👩🏻 Mulheres: *${m.length}*\n\n` +
-                'ADM, use *#dm* para começar o desafio.',
+                'ADM, use *#dm* para começar o desafio.\n\n' +
+                '👥 *TIMES FORMADOS*\n' +
+                texto,
+            mentions,
         });
         return true;
     }

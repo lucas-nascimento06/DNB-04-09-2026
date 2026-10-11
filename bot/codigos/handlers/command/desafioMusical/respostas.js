@@ -6,7 +6,7 @@ import { jogos } from './state.js';
 import { jidDe, tag } from './utils.js';
 import { getTimeDoUsuario, pagarPremio } from './dados.js';
 import { zoeiraAtraso } from './zoeira.js';
-import { proximaRodada, finalizar } from './jogo.js';
+import { proximaRodada, finalizar, soltarPergunta, atualizarPlacarFixado } from './jogo.js';
 
 export async function tratarResposta(sock, message, texto, from, jid, userId) {
     const jogo = jogos.get(from);
@@ -94,6 +94,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     r.encerrada = true;
     r.vencedor = { jid, userId, time };
     clearTimeout(jogo.timer);
+    soltarPergunta(sock, from, r); // tira a pergunta da fixação
     jogo.placar[time] += 1;
 
     // conta o acerto para o MVP
@@ -137,21 +138,19 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
         from,
         {
             text:
-                `🏆 ${tag(jid)} acertou primeiro!\n` +
-                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n` +
-                `🔢 Música nº *${r.musica.id}* — letra: *#letra ${r.musica.id}*\n\n` +
-                `${emoji} +1 ponto para o time *${nomeTime}*\n\n` +
+                `🏆 ${tag(jid)} acertou primeiro!\n\n` +
+                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
                 `${textoDC}\n\n` +
                 `🎤 *Desafio de ${tag(jid)}:* agora cante um trecho da música!\n` +
                 '_(Só de brincadeira — a galera e os ADMs decidem se cumpriu 😄)_\n\n' +
-                '━━━━━━━━━━━━━━━━━━\n' +
-                '📊 *PLACAR*\n' +
-                `👨🏻 *HOMENS: ${jogo.placar.homens}*  ⚔️  *${jogo.placar.mulheres} :MULHERES* 👩🏻\n` +
-                '━━━━━━━━━━━━━━━━━━',
+                `_🔢 Música nº ${r.musica.id} — letra: #letra ${r.musica.id}_`,
             mentions,
         },
         { quoted: message }
     );
+
+    // 📊 placar atualizado, sozinho numa mensagem fixada (o placar antigo sai da fixação)
+    await atualizarPlacarFixado(sock, from, jogo);
 
     const ultima = jogo.rodadaAtual >= jogo.total;
 

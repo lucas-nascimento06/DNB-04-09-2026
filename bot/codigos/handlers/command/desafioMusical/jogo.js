@@ -7,7 +7,42 @@ import { CONFIG, PASTA_TRECHOS } from './config.js';
 import { jogos, inscricoes } from './state.js';
 import { carregarBanco, montarRodada } from './musicas.js';
 import { getPote, membrosDoTime, getUsadas, marcarUsada, limparUsadas } from './dados.js';
-import { jidDe, tag } from './utils.js';
+import { jidDe, tag, blocoTimes, fixarMensagem, desafixarMensagem } from './utils.js';
+
+// desafixa a pergunta da rodada (só uma vez por rodada)
+export function soltarPergunta(sock, groupId, rodada) {
+    if (!rodada?.pergunta) return;
+    const key = rodada.pergunta;
+    rodada.pergunta = null;
+    return desafixarMensagem(sock, groupId, key);
+}
+
+// 📊 Placar fixado: mensagem só com o placar. A cada acerto, tira o antigo e fixa o atualizado.
+function textoPlacar(placar) {
+    return (
+        '📊 *PLACAR*\n' +
+        `👨🏻 *HOMENS: ${placar.homens}*  ⚔️  *${placar.mulheres} :MULHERES* 👩🏻`
+    );
+}
+
+export async function atualizarPlacarFixado(sock, groupId, jogo) {
+    // só UMA mensagem fixada por vez: a pergunta sai antes de o placar entrar
+    await soltarPergunta(sock, groupId, jogo.rodada);
+
+    const antigo = jogo.placarKey;
+    jogo.placarKey = null;
+    if (antigo) await desafixarMensagem(sock, groupId, antigo);
+
+    const msg = await sock.sendMessage(groupId, { text: textoPlacar(jogo.placar) }).catch(() => null);
+    if (await fixarMensagem(sock, groupId, msg?.key)) jogo.placarKey = msg.key;
+}
+
+export function soltarPlacar(sock, groupId, jogo) {
+    if (!jogo?.placarKey) return;
+    const key = jogo.placarKey;
+    jogo.placarKey = null;
+    return desafixarMensagem(sock, groupId, key);
+}
 
 export async function iniciarDesafio(sock, groupId, rodadas) {
     if (jogos.has(groupId)) {
@@ -70,7 +105,11 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         banco,
         aguardando: false,
         finalizando: false,
+        placarKey: null, // chave da mensagem do placar fixado
     });
+
+    // lista dos times: 2 nomes + "..." e o resto atrás do "Ler mais" (vai por último na mensagem)
+    const { texto: textoTimes, mentions } = blocoTimes(timeH, timeM);
 
     await sock.sendMessage(groupId, {
         text:
@@ -80,14 +119,14 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
             `🪙 Prêmio de *${CONFIG.premioDC} DCs*: *${CONFIG.premioAcertadorDC}* para quem acertou e *${CONFIG.premioDC - CONFIG.premioAcertadorDC}* divididos entre o resto do time.\n` +
             (CONFIG.tempoRodadaMs > 0 ? `⏱️ Cada rodada dura *${CONFIG.tempoRodadaMs / 1000}s*.\n` : '') +
             `☝️ Cada pessoa tem *${CONFIG.tentativasPorRodada}* tentativa${CONFIG.tentativasPorRodada > 1 ? 's' : ''} por rodada.\n\n` +
-            '👥 *TIMES FORMADOS*\n' +
-            `👨🏻 Homens: *${timeH.length}*\n` +
-            `👩🏻 Mulheres: *${timeM.length}*\n\n` +
             (CONFIG.entrarDuranteJogo
                 ? '👇 *AINDA NÃO TEM TIME?* Digite *#h* (homens) ou *#m* (mulheres)\n\n'
                 : '🔒 Inscrições encerradas. Quem não entrou num time pode torcer! 📣\n\n') +
             avisoReinicio +
-            `🚀 Começando agora! (${total} rodadas)`,
+            `🚀 Começando agora! (${total} rodadas)\n\n` +
+            '👥 *TIMES FORMADOS*\n' +
+            textoTimes,
+        mentions,
     });
 
     await proximaRodada(sock, groupId);
@@ -96,6 +135,10 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
 export async function proximaRodada(sock, groupId) {
     const jogo = jogos.get(groupId);
     if (!jogo) return;
+
+    // garante que a pergunta da rodada anterior saiu da fixação antes de fixar a nova
+    // (evita acumular fixados; o WhatsApp só aceita 3 ao mesmo tempo)
+    await soltarPergunta(sock, groupId, jogo.rodada);
 
     if (jogo.rodadaAtual >= jogo.total) return finalizar(sock, groupId);
 
@@ -106,13 +149,14 @@ export async function proximaRodada(sock, groupId) {
     jogo.usadas.add(dados.musica.id);
     marcarUsada(groupId, dados.musica.id).catch(e =>
         console.error('[desafioMusical] erro ao salvar música usada:', e.message));
-    jogo.rodada = { ...dados, tentaram: new Map(), avisados: new Set(), encerrada: false };
+    jogo.rodada = { ...dados, tentaram: new Map(), avisados: new Set(), encerrada: false, pergunta: null };
+    const rodada = jogo.rodada;
 
     try {
         const buffer = fs.readFileSync(path.join(PASTA_TRECHOS, dados.musica.arquivo));
         await sock.sendMessage(groupId, { text: `🎵 *Rodada ${jogo.rodadaAtual}/${jogo.total}* — escute o trecho:` });
         await sock.sendMessage(groupId, { audio: buffer, mimetype: 'audio/mpeg', ptt: false });
-        await sock.sendMessage(groupId, {
+        const msgPergunta = await sock.sendMessage(groupId, {
             text:
                 '❓ *Qual é a música?*\n\n' +
                 dados.opcoes.map(o => `*${o.letra})* ${o.texto}`).join('\n') +
@@ -120,6 +164,15 @@ export async function proximaRodada(sock, groupId) {
                     ? `\n\n⏱️ ${CONFIG.tempoRodadaMs / 1000}s — responda só com a letra!`
                     : '\n\n✍️ Responda só com a letra! Vale até alguém acertar.'),
         });
+
+        // só UMA mensagem fixada por vez: tira o placar antes de fixar a pergunta
+        await soltarPlacar(sock, groupId, jogo);
+
+        // fixa a pergunta; se alguém acertou enquanto fixava, desafixa na hora
+        if (await fixarMensagem(sock, groupId, msgPergunta?.key)) {
+            rodada.pergunta = msgPergunta.key;
+            if (rodada.encerrada) soltarPergunta(sock, groupId, rodada);
+        }
     } catch (e) {
         console.error('[desafioMusical] erro ao enviar rodada:', e.message);
         jogos.delete(groupId);
@@ -137,6 +190,7 @@ export async function acabouTempo(sock, groupId, manual = false) {
     const jogo = jogos.get(groupId);
     if (!jogo?.rodada || jogo.rodada.encerrada) return;
     jogo.rodada.encerrada = true;
+    soltarPergunta(sock, groupId, jogo.rodada);
 
     const { letraCorreta, musica } = jogo.rodada;
     await sock.sendMessage(groupId, {
@@ -153,6 +207,7 @@ export async function finalizar(sock, groupId) {
     if (!jogo) return;
     clearTimeout(jogo.timer);
     jogos.delete(groupId); // evita finalizar duas vezes
+    soltarPlacar(sock, groupId, jogo); // tira o placar da fixação
 
     const { homens, mulheres } = jogo.placar;
     const mentions = [];
@@ -213,6 +268,8 @@ export async function pararDesafio(sock, groupId) {
     }
     clearTimeout(jogo.timer);
     if (jogo.rodada) jogo.rodada.encerrada = true;
+    soltarPergunta(sock, groupId, jogo.rodada);
+    soltarPlacar(sock, groupId, jogo);
     jogos.delete(groupId);
     await sock.sendMessage(groupId, { text: '🛑 Desafio musical encerrado por um ADM.' });
 }

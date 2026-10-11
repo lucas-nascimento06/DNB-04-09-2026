@@ -26,7 +26,7 @@ export const CONFIG = {
     premioAcertadorDC: 60,  // parte de quem acertou (o resto é dividido entre os outros do time)
     poteInicial: 6000,      // DC que o bot tem para distribuir (criado na 1ª vez)
     maxMencoes: 15,         // quantos membros do time campeão marcar na mensagem final
-    tempoRodadaMs: 60000,   // 1 minuto para responder. 0 = SEM LIMITE
+    tempoRodadaMs: 0,       // 0 = SEM LIMITE (vale até alguém acertar; ADM pula com #next). Ex.: 180000 = 3 min
     pausaMs: 6000,          // pausa quando ninguém acerta
     tentativasPorRodada: 5, // quantas respostas cada pessoa pode dar por rodada
     rodadasPadrao: 5,

@@ -63,3 +63,55 @@ export async function resolverAlvo(sock, groupId, message) {
 
     return userId ? { jid: alvoJid, userId } : null;
 }
+
+// ---------- lista de times com "Ler mais" ----------
+
+// Caracteres invisíveis: o WhatsApp recolhe tudo que vem depois com "Ler mais".
+export const LER_MAIS = String.fromCharCode(8206).repeat(4001);
+const PREVIA_TIME = 2; // quantos nomes aparecem antes de recolher
+
+function previaTime(membros) {
+    if (membros.length === 0) return '_ninguém ainda_';
+    const visiveis = membros.slice(0, PREVIA_TIME).map(m => tag(jidDe(m))).join(' ');
+    return membros.length > PREVIA_TIME ? `${visiveis} ...` : visiveis;
+}
+
+// Devolve { texto, mentions }. Com mais de 2 em algum time, a lista completa fica atrás do "Ler mais".
+// Coloque este bloco por ÚLTIMO na mensagem (o que vem depois do "Ler mais" fica escondido).
+export function blocoTimes(homens, mulheres) {
+    const lista = arr => arr.map(m => tag(jidDe(m))).join('\n');
+    let texto =
+        `👨🏻 Homens: *${homens.length}* — ${previaTime(homens)}\n` +
+        `👩🏻 Mulheres: *${mulheres.length}* — ${previaTime(mulheres)}`;
+
+    if (homens.length > PREVIA_TIME || mulheres.length > PREVIA_TIME) {
+        texto +=
+            `\n${LER_MAIS}\n` +
+            `👨🏻 *HOMENS (${homens.length})*\n${homens.length ? lista(homens) : '_ninguém ainda_'}\n\n` +
+            `👩🏻 *MULHERES (${mulheres.length})*\n${mulheres.length ? lista(mulheres) : '_ninguém ainda_'}`;
+    }
+
+    return { texto, mentions: [...homens, ...mulheres].map(jidDe) };
+}
+
+// ---------- fixar / desafixar mensagem ----------
+
+export async function fixarMensagem(sock, groupId, key, segundos = 86400) {
+    if (!key) return false;
+    try {
+        await sock.sendMessage(groupId, { pin: key, type: 1, time: segundos });
+        return true;
+    } catch (e) {
+        console.error('[desafioMusical] erro ao fixar mensagem:', e.message);
+        return false;
+    }
+}
+
+export async function desafixarMensagem(sock, groupId, key) {
+    if (!key) return;
+    try {
+        await sock.sendMessage(groupId, { pin: key, type: 2 });
+    } catch (e) {
+        console.error('[desafioMusical] erro ao desafixar mensagem:', e.message);
+    }
+}
