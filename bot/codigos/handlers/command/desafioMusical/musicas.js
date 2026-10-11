@@ -1,13 +1,26 @@
 // bot/codigos/handlers/command/desafioMusical/musicas.js
-// Banco de músicas, pegadinhas e montagem das opções de cada rodada.
+// Banco de músicas e montagem das opções de cada rodada.
+//
+// - musicasDesafio.json : as músicas que TOCAM (cada uma com "estilo").
+// - falsas.json         : lista de músicas REAIS de outros cantores, separadas por estilo
+//                         { "sertanejo": ["Título — Artista", ...], "mpb": [...], ... }
+//                         As alternativas erradas saem daqui, do MESMO estilo da música certa.
 
 import fs from 'fs';
 import path from 'path';
-import {
-    BANCO, BANCO_FALSAS, ARQUIVO_FALSAS, PASTA_TRECHOS, PASTA_LETRAS,
-    LETRAS, NUM_FALSAS, FALSAS_MESMO_CANTOR,
-} from './config.js';
+import { BANCO, ARQUIVO_FALSAS, PASTA_TRECHOS, PASTA_LETRAS, LETRAS, NUM_FALSAS } from './config.js';
 import { embaralhar } from './utils.js';
+
+// Se faltar opção no mesmo estilo, completa com estes estilos (nesta ordem).
+const ESTILOS_PROXIMOS = {
+    sertanejo: ['pagode', 'brega', 'pop'],
+    pagode: ['mpb', 'brega', 'sertanejo', 'pop'],
+    mpb: ['rock', 'pop', 'pagode'],
+    rock: ['pop', 'mpb'],
+    pop: ['rock', 'mpb', 'brega'],
+    brega: ['pop', 'sertanejo', 'pagode'],
+    urbano: ['pop', 'brega', 'rock'],
+};
 
 // Lê o JSON e garante um id em cada música (se não tiver "id", usa a posição: 1, 2, 3...)
 function lerTodas() {
@@ -29,28 +42,30 @@ export function lerLetra(id) {
     return fs.readFileSync(arq, 'utf8').trim();
 }
 
-// Pegadinhas do MESMO cantor (lê a cada rodada: dá pra editar o JSON sem reiniciar)
-function carregarFalsasMesmoArtista() {
-    try {
-        return JSON.parse(fs.readFileSync(BANCO_FALSAS, 'utf8'));
-    } catch (e) {
-        console.error('[desafioMusical] erro ao ler falsasMesmoArtista.json:', e.message);
-        return {};
-    }
-}
-
-// Pegadinhas de OUTROS cantores. Formato de cada item: "Título — Artista".
+// Lê a cada rodada: dá pra editar o falsas.json sem reiniciar o bot.
 function carregarFalsas() {
     try {
         return JSON.parse(fs.readFileSync(ARQUIVO_FALSAS, 'utf8'));
     } catch (e) {
         console.error('[desafioMusical] erro ao ler falsas.json:', e.message);
-        return [];
+        return {};
     }
 }
 
-function artistaDe(texto) {
-    return texto.split(' — ').slice(1).join(' — ');
+// compara nomes sem acento, maiúscula, "&" / " e "
+function norm(s) {
+    return String(s || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/&/g, ' e ')
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function partir(texto) {
+    const [titulo, ...resto] = texto.split(' — ');
+    return { titulo, artista: resto.join(' — '), texto };
 }
 
 // "usadas" é um Set de IDs de músicas
@@ -60,52 +75,70 @@ export function montarRodada(banco, usadas) {
 
     const correta = disponiveis[Math.floor(Math.random() * disponiveis.length)];
     const textoCorreto = `${correta.titulo} — ${correta.artista}`;
-    const titulosBanco = new Set(banco.map(m => m.titulo));
-    const textosUsados = new Set([textoCorreto]);
-    const falsas = [];
 
-    // 1) pegadinhas do MESMO cantor (nunca músicas que estão no banco)
-    const falsasMesmoArtista = carregarFalsasMesmoArtista();
-    const daMusica = embaralhar(correta.falsas || []);
-    const doArtista = embaralhar(falsasMesmoArtista[correta.artista] || []);
-    const doMesmo = [...daMusica, ...doArtista]
-        .filter(t => !titulosBanco.has(t) && t !== correta.titulo);
+    const artistaCorreto = norm(correta.artista);
+    const titulosBanco = new Set(banco.map(m => norm(m.titulo)));
+    const falsasPorEstilo = carregarFalsas();
 
-    for (const t of doMesmo) {
-        if (falsas.length >= FALSAS_MESMO_CANTOR) break;
-        const texto = `${t} — ${correta.artista}`;
-        if (textosUsados.has(texto)) continue;
-        falsas.push(texto);
-        textosUsados.add(texto);
+    // candidatas de um estilo: nunca do cantor certo, nunca música que está no banco
+    const doEstilo = (estilo) => embaralhar(falsasPorEstilo[estilo] || [])
+        .map(partir)
+        .filter(f => f.artista
+            && norm(f.artista) !== artistaCorreto
+            && norm(f.titulo) !== norm(correta.titulo)
+            && !titulosBanco.has(norm(f.titulo)));
+
+    // fases: 1º mesmo estilo, depois estilos próximos
+    if (!correta.estilo) {
+        console.warn(`[desafioMusical] a música ${correta.id} ("${correta.titulo}") está sem "estilo" no musicasDesafio.json. Use o JSON novo!`);
     }
-
-    if (falsas.length < FALSAS_MESMO_CANTOR) {
-        console.warn(`[desafioMusical] "${correta.artista}" tem só ${falsas.length} pegadinha(s) em falsasMesmoArtista.json (precisa de ${FALSAS_MESMO_CANTOR}). Complete a lista!`);
+    if (Object.keys(falsasPorEstilo).length === 0) {
+        console.warn('[desafioMusical] falsas.json vazio ou não encontrado em bot/data/. Alternativas vão sair só do banco!');
     }
+    const estilos = correta.estilo
+        ? [correta.estilo, ...(ESTILOS_PROXIMOS[correta.estilo] || [])]
+        : Object.keys(falsasPorEstilo); // sem estilo: mistura todos
+    const fases = estilos.map(doEstilo);
 
-    // 2) completa com pegadinhas de OUTROS cantores (um cantor por pegadinha)
+    const escolhidas = [];
     const artistasUsados = new Set();
-    const candidatas = embaralhar(carregarFalsas()).filter(
-        f => artistaDe(f) !== correta.artista && !titulosBanco.has(f.split(' — ')[0])
-    );
-    for (const f of candidatas) {
-        if (falsas.length >= NUM_FALSAS) break;
-        const a = artistaDe(f);
-        if (artistasUsados.has(a) || textosUsados.has(f)) continue;
-        falsas.push(f);
-        artistasUsados.add(a);
-        textosUsados.add(f);
+    const titulosUsados = new Set();
+
+    // 1) um cantor por alternativa, respeitando a ordem das fases
+    for (const fase of fases) {
+        for (const f of fase) {
+            if (escolhidas.length >= NUM_FALSAS) break;
+            const a = norm(f.artista);
+            const t = norm(f.titulo);
+            if (artistasUsados.has(a) || titulosUsados.has(t)) continue;
+            escolhidas.push(f.texto);
+            artistasUsados.add(a);
+            titulosUsados.add(t);
+        }
+        if (escolhidas.length >= NUM_FALSAS) break;
     }
 
-    // segurança: se ainda faltar, completa com músicas do banco
-    if (falsas.length < NUM_FALSAS) {
-        const extras = embaralhar(banco.filter(m => m.titulo !== correta.titulo))
-            .slice(0, NUM_FALSAS - falsas.length)
-            .map(m => `${m.titulo} — ${m.artista}`);
-        falsas.push(...extras);
+    // 2) segurança: se ainda faltar, libera repetir cantor
+    if (escolhidas.length < NUM_FALSAS) {
+        for (const fase of fases) {
+            for (const f of fase) {
+                if (escolhidas.length >= NUM_FALSAS) break;
+                if (!escolhidas.includes(f.texto)) escolhidas.push(f.texto);
+            }
+            if (escolhidas.length >= NUM_FALSAS) break;
+        }
     }
 
-    const textos = embaralhar([textoCorreto, ...falsas]);
+    // 3) último recurso: músicas do próprio banco (de outros cantores)
+    if (escolhidas.length < NUM_FALSAS) {
+        console.warn('[desafioMusical] faltaram alternativas no falsas.json, completando com músicas do banco.');
+        const extras = embaralhar(banco.filter(m => norm(m.artista) !== artistaCorreto))
+            .map(m => `${m.titulo} — ${m.artista}`)
+            .filter(t => !escolhidas.includes(t));
+        escolhidas.push(...extras.slice(0, NUM_FALSAS - escolhidas.length));
+    }
+
+    const textos = embaralhar([textoCorreto, ...escolhidas]);
 
     return {
         musica: correta,

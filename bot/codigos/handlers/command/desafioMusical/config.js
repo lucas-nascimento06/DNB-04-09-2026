@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const BANCO = path.join(__dirname, '../../../../data/musicasDesafio.json');
-export const BANCO_FALSAS = path.join(__dirname, '../../../../data/falsasMesmoArtista.json');
 export const ARQUIVO_FALSAS = path.join(__dirname, '../../../../data/falsas.json');
 export const PASTA_TRECHOS = path.join(__dirname, '../../../musicas-desafio');
 export const PASTA_LETRAS = path.join(__dirname, '../../../../data/letras');
@@ -43,6 +42,3 @@ export const CONFIG = {
 // Opções da rodada: A, B, C, D e E (1 certa + 4 pegadinhas)
 export const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 export const NUM_FALSAS = LETRAS.length - 1;
-
-// Quantas pegadinhas do MESMO cantor tentar colocar (NUM_FALSAS = todas).
-export const FALSAS_MESMO_CANTOR = NUM_FALSAS;
