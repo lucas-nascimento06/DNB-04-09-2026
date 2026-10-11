@@ -112,9 +112,12 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
             text:
                 `🏆 ${tag(jid)} acertou primeiro!\n\n` +
                 `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
-                `🎤 *${tag(jid)}, agora complete a música cantando!*\n` +
-                `🪙 Os *${CONFIG.premioDC} DCs* são liberados quando o ADM ouvir a música completa.\n\n` +
-                `_🔢 Música nº ${r.musica.id} — letra: #letra ${r.musica.id}_`,
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🎤 *${tag(jid)}, AGORA COMPLETE A MÚSICA CANTANDO!*\n\n` +
+                `🪙 *SE COMPLETAR:* *${CONFIG.premioDC} DCs liberados* e o *ponto da equipe ${time.toUpperCase()} é mantido* ✅\n\n` +
+                `⚠️ *SE NÃO COMPLETAR:* *sem DCs* e o *ponto é cancelado* ❌\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n\n` +
+                `_🔢 Música nº ${r.musica.id}_`,
             mentions: [jid],
         },
         { quoted: message }
@@ -177,7 +180,7 @@ export async function liberarPremio(sock, message, from, jogo) {
 
     await sock.sendMessage(
         from,
-        { text: `✅ *Música completada! DCs liberados pelo ADM.*\n\n${textoDC}`, mentions: [p.jid] },
+        { text: `✅ *Música completada! DCs liberados pelo ADM.*\n🏆 O ponto do time *${nomeTime}* foi mantido!\n\n${textoDC}`, mentions: [p.jid] },
         { quoted: message }
     );
 

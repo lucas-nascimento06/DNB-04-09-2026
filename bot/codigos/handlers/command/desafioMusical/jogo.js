@@ -44,6 +44,29 @@ export function soltarPlacar(sock, groupId, jogo) {
     return desafixarMensagem(sock, groupId, key);
 }
 
+// 📊 #placar: qualquer membro do grupo vê como está o desafio
+export async function mostrarPlacarAtual(sock, groupId, message) {
+    const jogo = jogos.get(groupId);
+    if (!jogo) {
+        return sock.sendMessage(groupId, { text: 'ℹ️ Não há desafio musical em andamento.' }, { quoted: message });
+    }
+
+    const { homens, mulheres } = jogo.placar;
+    const situacao = homens === mulheres
+        ? '🤝 Estão empatados!'
+        : homens > mulheres
+            ? '👨🏻 Os HOMENS estão na frente!'
+            : '👩🏻 As MULHERES estão na frente!';
+
+    await sock.sendMessage(groupId, {
+        text:
+            textoPlacar(jogo.placar) + '\n\n' +
+            `🎵 Rodada ${jogo.rodadaAtual}/${jogo.total}\n` +
+            `${situacao}` +
+            (jogo.premioPendente ? '\n\n⏳ Um ponto está aguardando a confirmação do ADM (#ok / #errou).' : ''),
+    }, { quoted: message });
+}
+
 export async function iniciarDesafio(sock, groupId, rodadas) {
     if (jogos.has(groupId)) {
         return sock.sendMessage(groupId, { text: '⚠️ Já existe um desafio musical rolando neste grupo!' });
@@ -114,18 +137,16 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
     await sock.sendMessage(groupId, {
         text:
             '🎤🎶 *DESAFIO MUSICAL — HOMENS 🆚 MULHERES*\n\n' +
-            'O bot toca um trecho de música e mostra as alternativas (A, B, C, D ou E).\n\n' +
-            '⚡ Quem responder certo primeiro faz o ponto para o seu time!\n' +
-            '🎤 Mas atenção: para ganhar os DCs, quem acertou precisa *completar a música cantando*. O ADM libera o prêmio com *#ok* quando ouvir a música completa.\n' +
-            `🪙 Prêmio de *${CONFIG.premioDC} DCs*: *${CONFIG.premioAcertadorDC}* para quem acertou e *${CONFIG.premioDC - CONFIG.premioAcertadorDC}* divididos entre o resto do time.\n` +
-            (CONFIG.tempoRodadaMs > 0 ? `⏱️ Cada rodada dura *${CONFIG.tempoRodadaMs / 1000}s*.\n` : '') +
-            `☝️ Cada pessoa tem *${CONFIG.tentativasPorRodada}* tentativa${CONFIG.tentativasPorRodada > 1 ? 's' : ''} por rodada.\n\n` +
+            '🚨 *O DESAFIO COMEÇOU!* Sejam *rápidos nas escolhas*! ⚡\n\n' +
+            '📊 Use *#placar* a qualquer momento para ver como está o jogo.\n\n' +
             (CONFIG.entrarDuranteJogo
                 ? '👇 *AINDA NÃO TEM TIME?* Digite *#h* (homens) ou *#m* (mulheres)\n\n'
                 : '🔒 Inscrições encerradas. Quem não entrou num time pode torcer! 📣\n\n') +
             avisoReinicio +
             `🚀 Começando agora! (${total} rodadas)\n\n` +
-            '👥 *TIMES FORMADOS*\n' +
+            '━━━━━━━━━━━━━━━━━━━━\n' +
+            '👥 *⭐ TIMES FORMADOS ⭐*\n' +
+            '━━━━━━━━━━━━━━━━━━━━\n' +
             textoTimes,
         mentions,
     });
