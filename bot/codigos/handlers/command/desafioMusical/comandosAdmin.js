@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/comandosAdmin.js
-// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #next, #add, #time, #pote, #limpartimes, #limparmusicas
+// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #ok, #errou, #next, #add, #time, #pote, #limpartimes, #limparmusicas
 //
 // Retorno: null  -> não era um comando de ADM (o handler segue adiante)
 //          true/false -> valor que o handler principal deve retornar
@@ -13,7 +13,7 @@ import {
 import {
     iniciarDesafio, proximaRodada, acabouTempo, pararDesafio, mostrarTimes, finalizar,
 } from './jogo.js';
-import { liberarPremio } from './respostas.js';
+import { liberarPremio, rejeitarPremio } from './respostas.js';
 
 export async function tratarComandoAdmin(sock, message, lower, from, ownerNumbers) {
     const negar = () =>
@@ -102,6 +102,19 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
             return true;
         }
         await liberarPremio(sock, message, from, j);
+        return true;
+    }
+
+    // 4.6) ADM: a pessoa cantou errado -> sem DCs, ponto apagado e placar refeito
+    if (lower === '#errou') {
+        const j = jogos.get(from);
+        if (!j) return false; // sem desafio rolando: deixa outros handlers tratarem
+        if (!(await admin())) { await negar(); return true; }
+        if (!j.premioPendente) {
+            await sock.sendMessage(from, { text: 'ℹ️ Não há nenhum acerto esperando liberação agora.' }, { quoted: message });
+            return true;
+        }
+        await rejeitarPremio(sock, message, from, j);
         return true;
     }
 

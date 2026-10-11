@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/respostas.js
-// Resposta A/B/C/D/E durante a rodada (atrasado, errou, acertou) e liberação do prêmio (#ok).
+// Resposta A/B/C/D/E durante a rodada (atrasado, errou, acertou) e liberação do prêmio (#ok / #errou).
 
 import { CONFIG } from './config.js';
 import { jogos } from './state.js';
@@ -89,6 +89,7 @@ async function avisarAtrasado(sock, message, from, jid, userId, r) {
 }
 
 // 🏆 acertou primeiro: faz o ponto na hora, mas os DCs só saem quando o ADM digitar #ok
+// (se a pessoa cantar errado, o ADM digita #errou: sem DCs e o ponto é apagado)
 async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) {
     if (r.encerrada) return; // outro já ganhou enquanto consultávamos o banco
     r.encerrada = true;
@@ -102,7 +103,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     reg.n += 1;
     jogo.acertos.set(userId, reg);
 
-    // prêmio fica guardado até o ADM liberar com #ok
+    // prêmio fica guardado até o ADM liberar com #ok (ou cancelar com #errou)
     jogo.premioPendente = { jid, userId, time };
 
     await sock.sendMessage(
@@ -112,7 +113,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
                 `🏆 ${tag(jid)} acertou primeiro!\n\n` +
                 `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
                 `🎤 *${tag(jid)}, agora complete a música cantando!*\n` +
-                `🪙 Os *${CONFIG.premioDC} DCs* só são liberados quando o ADM ouvir a música completa e digitar *#ok*.\n\n` +
+                `🪙 Os *${CONFIG.premioDC} DCs* são liberados quando o ADM ouvir a música completa.\n\n` +
                 `_🔢 Música nº ${r.musica.id} — letra: #letra ${r.musica.id}_`,
             mentions: [jid],
         },
@@ -125,19 +126,12 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     const ultima = jogo.rodadaAtual >= jogo.total;
 
     if (ultima) {
-        // última rodada: o #ok do ADM libera os DCs e já encerra o desafio
+        // última rodada: o #ok (ou #errou) do ADM resolve o prêmio e já encerra o desafio
         jogo.finalizando = true;
-        await sock.sendMessage(from, {
-            text: '🏁 *Foi a última rodada!* ADM: quando ouvir a música completa, digite *#ok* para liberar os DCs e mostrar o resultado final. 🥁',
-        });
         jogo.timer = setTimeout(() => finalizar(sock, from), CONFIG.esperaMaxMs);
     } else {
+        // o ADM resolve com #ok / #errou e depois usa #next (sem aviso no grupo: só o ADM precisa saber)
         jogo.aguardando = true;
-        await sock.sendMessage(from, {
-            text:
-                '⏸️ *ADM:* quando ouvir a música completa, digite *#ok* para liberar os DCs.\n' +
-                'Depois, *#next* (ou *#n*) para tocar a próxima música.',
-        });
         jogo.timer = setTimeout(() => {
             jogo.aguardando = false;
             proximaRodada(sock, from);
@@ -188,6 +182,45 @@ export async function liberarPremio(sock, message, from, jogo) {
     );
 
     // última rodada: depois de liberar, mostra o resultado final
+    if (jogo.finalizando) {
+        clearTimeout(jogo.timer);
+        jogo.timer = setTimeout(() => finalizar(sock, from), 4000);
+    }
+    return true;
+}
+
+// ❌ #errou do ADM: a pessoa não completou a música direito.
+// Sem DCs, o ponto que ela tinha feito é apagado e o placar é refeito (novo placar fixado).
+export async function rejeitarPremio(sock, message, from, jogo) {
+    const p = jogo.premioPendente;
+    if (!p) return false;
+    jogo.premioPendente = null; // evita pagar depois
+
+    // tira o ponto que o time tinha ganhado nesta rodada
+    jogo.placar[p.time] = Math.max(0, (jogo.placar[p.time] || 0) - 1);
+
+    // tira o acerto da contagem do MVP
+    const reg = jogo.acertos.get(p.userId);
+    if (reg) {
+        reg.n -= 1;
+        if (reg.n <= 0) jogo.acertos.delete(p.userId);
+    }
+
+    await sock.sendMessage(
+        from,
+        {
+            text:
+                `❌ ${tag(p.jid)} não completou a música direito.\n` +
+                '🚫 Sem DCs e o ponto desta rodada foi cancelado.',
+            mentions: [p.jid],
+        },
+        { quoted: message }
+    );
+
+    // placar novo (já sem o ponto), tira o antigo e fixa este
+    await atualizarPlacarFixado(sock, from, jogo);
+
+    // última rodada: depois de resolver, mostra o resultado final
     if (jogo.finalizando) {
         clearTimeout(jogo.timer);
         jogo.timer = setTimeout(() => finalizar(sock, from), 4000);

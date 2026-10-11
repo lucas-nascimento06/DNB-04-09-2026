@@ -9,6 +9,7 @@
 //   #add @pessoa [h|m]         -> ADM coloca alguém num time
 //   #dp | #dmparar             -> encerra o desafio (ADM)
 //   #ok                        -> ADM libera os DCs de quem acertou e completou a música (ADM)
+//   #errou                     -> ADM: a pessoa cantou errado -> sem DCs, ponto apagado e placar refeito (ADM)
 //   #next | #n | #proxima      -> próxima música (ADM)
 //   #time | #times             -> mostra os times (ADM)
 //   #pote [valor]              -> mostra / define o pote de DCs (ADM)
@@ -21,13 +22,12 @@
 //   state.js         -> jogos, inscricoes, pendentes (memória)
 //   utils.js         -> helpers (tag, embaralhar, ehAdmin, resolverAlvo, lista de times, fixar...)
 //   dados.js         -> banco de dados (times, pote, carteira, prêmio, músicas usadas)
-//   musicas.js       -> banco de músicas e alternativas
-//   estilos.js       -> estilo de cada cantor (alternativas parecidas)
+//   musicas.js       -> banco de músicas e alternativas (por estilo, usando falsas.json)
 //   zoeira.js        -> mensagens de zoeira
 //   jogo.js          -> fluxo do jogo (rodadas, fim, parar, fixar pergunta/placar)
 //   comandosAdmin.js -> comandos de ADM
 //   comandosTime.js  -> #h / #m
-//   respostas.js     -> respostas A-E, ponto e liberação do prêmio (#ok)
+//   respostas.js     -> respostas A-E, ponto, liberação do prêmio (#ok) e cancelamento (#errou)
 
 import { GRUPOS_PERMITIDOS } from './desafioMusical/config.js';
 import { jogos } from './desafioMusical/state.js';
@@ -37,7 +37,7 @@ import { tratarComandoAdmin } from './desafioMusical/comandosAdmin.js';
 import { tratarEntradaTime } from './desafioMusical/comandosTime.js';
 import { tratarResposta } from './desafioMusical/respostas.js';
 
-console.log('[desafioMusical] v9 carregado (modular)');
+console.log('[desafioMusical] v10 carregado (modular)');
 
 // Retorna true se a mensagem foi consumida pelo desafio.
 export async function handleDesafioMusical(sock, message, content, from, ownerNumbers = []) {
@@ -47,7 +47,7 @@ export async function handleDesafioMusical(sock, message, content, from, ownerNu
     const lower = texto.toLowerCase();
 
     // filtro rápido: só continua se for comando do desafio ou resposta A/B/C/D/E
-    const ehComando = /^#add(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres)(\s+\d+)?$/.test(lower);
+    const ehComando = /^#add(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres)(\s+\d+)?$/.test(lower);
     const ehLetra = /^[a-e]$/i.test(texto) && jogos.has(from);
     if (!ehComando && !ehLetra) return false;
 
