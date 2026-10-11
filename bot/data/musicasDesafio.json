@@ -1,0 +1,925 @@
+[
+  {
+    "id": 1,
+    "titulo": "Fico Assim Sem Você",
+    "artista": "Adriana Calcanhotto",
+    "arquivo": "fico-assim-sem-voce.mp3",
+    "falsas": [
+      "Conto as Horas Pra Poder Te Ver",
+      "Sou Eu Assim Sem Você",
+      "Fiquei Assim Sem Você",
+      "Eu Não Existo Longe de Você",
+      "Buchecha, Sem Claudinho."
+    ]
+  },
+  {
+    "id": 2,
+    "titulo": "La Belle de Jour",
+    "artista": "Alceu Valença",
+    "arquivo": "la-belle-de-jour.mp3",
+    "falsas": [
+      "Eu Lembro da Moça Bonita",
+      "La Belle du Jour",
+      "Domingo Azul",
+      "La Bella de Jour",
+      "La Belle da Tarde"
+    ]
+  },
+  {
+    "id": 3,
+    "titulo": "Você Não Me Ensinou a Te Esquecer",
+    "artista": "Caetano Veloso",
+    "arquivo": "voce-nao-me-ensinou-a-te-esquecer.mp3",
+    "falsas": [
+      "Que Faço Eu da Vida Sem Você",
+      "Você Me Ensinou a Te Esquecer",
+      "Ninguém Me Ensinou a Te Esquecer",
+      "Você Só Me Ensinou a Te Querer",
+      "Você Não Me Mostrou Como Esquecer"
+    ]
+  },
+  {
+    "id": 4,
+    "titulo": "Preciso Me Encontrar",
+    "artista": "Cartola",
+    "arquivo": "preciso-me-encontrar.mp3",
+    "falsas": [
+      "Preciso Me Reencontrar",
+      "Preciso Te Encontrar",
+      "Preciso Me Perder",
+      "Preciso Me Achar",
+      "Eu Preciso Me Encontrar"
+    ]
+  },
+  {
+    "id": 5,
+    "titulo": "Malandragem",
+    "artista": "Cássia Eller",
+    "arquivo": "malandragem.mp3",
+    "falsas": [
+      "Quem Sabe Eu Ainda Sou uma Garotinha",
+      "Um Pouco de Malandragem",
+      "Eu Sou Poeta e Não Aprendi a Amar",
+      "Velha Malandragem",
+      "Eu Só Peço a Deus"
+    ]
+  },
+  {
+    "id": 6,
+    "titulo": "Quando um Grande Amor Se Faz",
+    "artista": "Cleiton e Camargo",
+    "arquivo": "quando-um-grande-amor-se-faz.mp3",
+    "falsas": [
+      "Quando um Grande Amor Se Vai",
+      "De Tudo a Gente Pensa Ser Capaz",
+      "Quando um Grande Amor Acaba",
+      "Quando um Amor Se Faz",
+      "Quando um Grande Amor"
+    ]
+  },
+  {
+    "id": 7,
+    "titulo": "Evidências",
+    "artista": "Chitãozinho & Xororó",
+    "arquivo": "evidencias.mp3",
+    "falsas": [
+      "Evidência",
+      "Evidências do Amor",
+      "Provas de Amor",
+      "E Nessa Loucura de Dizer Que Não Te Quero",
+      "Quando Eu Digo Que Deixei de Te Amar"
+    ]
+  },
+  {
+    "id": 8,
+    "titulo": "Borbulhas de Amor",
+    "artista": "Fagner",
+    "arquivo": "borbulhas-de-amor.mp3",
+    "falsas": [
+      "Bolhas de Amor",
+      "Tenho um Coração",
+      "Um Peixe",
+      "Quem Dera Ser um Peixe",
+      "Borbulhas de Saudade"
+    ]
+  },
+  {
+    "id": 9,
+    "titulo": "Musa do Verão",
+    "artista": "Felipe Dylon",
+    "arquivo": "musa-do-verao.mp3",
+    "falsas": [
+      "Você e a Musa do Verão",
+      "Musa da Praia",
+      "Rainha do Verão",
+      "Musa de Verão",
+      "Sereia Tropical"
+    ]
+  },
+  {
+    "id": 10,
+    "titulo": "Garçom",
+    "artista": "Reginaldo Rossi",
+    "arquivo": "garcon.mp3",
+    "falsas": [
+      "Aqui, Nessa Mesa de Bar",
+      "O Garçom",
+      "Garçom, Mais Uma",
+      "Garçom Amigo",
+      "Ô Garçom"
+    ]
+  },
+  {
+    "id": 11,
+    "titulo": "Gostava Tanto de Você",
+    "artista": "Tim Maia",
+    "arquivo": "gostava-tanto-de-voce.mp3",
+    "falsas": [
+      "Gostava Muito de Você",
+      "Gostei Tanto de Você",
+      "Gostaria Tanto de Você",
+      "Amava Tanto Você",
+      "Gosto Tanto de Você"
+    ]
+  },
+  {
+    "id": 12,
+    "titulo": "Amor e Fé",
+    "artista": "Hungria",
+    "arquivo": "amor-e-fe.mp3",
+    "falsas": [
+      "Amor e Paz",
+      "Fé e Amor",
+      "Nada É Impossível",
+      "Amor e Força",
+      "Amor e Luz"
+    ]
+  },
+  {
+    "id": 13,
+    "titulo": "Só Hoje",
+    "artista": "Jota Quest",
+    "arquivo": "so-hoje.mp3",
+    "falsas": [
+      "Hoje Eu Preciso Te Abraçar",
+      "Só Hoje à Noite",
+      "Só por Hoje",
+      "Depois de um Dia Normal",
+      "Hoje Eu Preciso Te Encontrar"
+    ]
+  },
+  {
+    "id": 14,
+    "titulo": "Medo da Chuva",
+    "artista": "Raul Seixas",
+    "arquivo": "medo-da-chuva.mp3",
+    "falsas": [
+      "Eu Perdi o Meu Medo",
+      "É Pena Que Você Pense",
+      "Medo da Tempestade",
+      "Medo do Amor",
+      "O Segredo da Vida"
+    ]
+  },
+  {
+    "id": 15,
+    "titulo": "Meu Erro",
+    "artista": "Os Paralamas do Sucesso",
+    "arquivo": "meu-erro.mp3",
+    "falsas": [
+      "Ainda Somos Iguais",
+      "Eu Conheço os Seus Passos",
+      "Você Diz Não Saber",
+      "Eu Quis Dizer, Você Não Quis Escutar",
+      "O Meu Erro"
+    ]
+  },
+  {
+    "id": 16,
+    "titulo": "Mina de Fé",
+    "artista": "Os Morenos",
+    "arquivo": "mina-de-fe.mp3",
+    "falsas": [
+      "Eu Era Feliz Sem Saber",
+      "Mina de Amor",
+      "Tudo Que Eu Fiz",
+      "Pra Aprender a Valorizar",
+      "Mina Sem Fé"
+    ]
+  },
+  {
+    "id": 17,
+    "titulo": "O Astronauta de Mármore",
+    "artista": "Nenhum de Nós",
+    "arquivo": "o-astronauta-de-marmore.mp3",
+    "falsas": [
+      "O Astronauta",
+      "Vou Chorar Sem Medo",
+      "Sempre Estar Lá",
+      "O Astronauta de Madeira",
+      "Como a Noite Vai Temer o Fogo"
+    ]
+  },
+  {
+    "id": 18,
+    "titulo": "Bilu Bilu",
+    "artista": "Pablo",
+    "arquivo": "bilu-bilu.mp3",
+    "falsas": [
+      "Me de Mais uma Chance",
+      "Bilu Bilu Meu Amor",
+      "Em Seus Braços",
+      "Meu Bilu Bilu",
+      "Olhar de Perdão"
+    ]
+  },
+  {
+    "id": 19,
+    "titulo": "Pensando em Você",
+    "artista": "Paulinho Moska",
+    "arquivo": "pensando-em-voce.mp3",
+    "falsas": [
+      "Pensando em Ti",
+      "Penso em Você",
+      "Pensando Nela",
+      "Só Penso em Você",
+      "Pensei em Você"
+    ]
+  },
+  {
+    "id": 20,
+    "titulo": "Dois",
+    "artista": "Paulo Ricardo",
+    "arquivo": "dois.mp3",
+    "falsas": [
+      "Se Nós Tivéssemos Fugido",
+      "O Amor",
+      "Essa Voz Que Chega Devagar",
+      "Eu Queria Estar Contigo",
+      "Só Nós Dois"
+    ]
+  },
+  {
+    "id": 21,
+    "titulo": "Por Você",
+    "artista": "Frejat",
+    "arquivo": "por-voce.mp3",
+    "falsas": [
+      "Por Você Eu Dançaria Tango no Teto",
+      "Só por Você",
+      "Eu Aceitaria a Vida Como Ela",
+      "Por Você Amor",
+      "Eu Iria a Pé do Rio a Salvador"
+    ]
+  },
+  {
+    "id": 22,
+    "titulo": "Cheia de Manias",
+    "artista": "Raça Negra",
+    "arquivo": "cheia-de-manias.mp3",
+    "falsas": [
+      "Cheia de Charme",
+      "Essa Barra Que É Gostar de Você",
+      "Cheia de Caricias",
+      "Cheinha de Manias",
+      "Domina o Meu Coração"
+    ]
+  },
+  {
+    "id": 23,
+    "titulo": "A Viagem",
+    "artista": "Roupa Nova",
+    "arquivo": "a-viagem.mp3",
+    "falsas": [
+      "Fui Chorando de Saudade",
+      "Todo Amor É Infinito",
+      "Minha Estrela-Guia",
+      "Eu Deixei Você",
+      "Viajei Contra a Vontade."
+    ]
+  },
+  {
+    "id": 24,
+    "titulo": "Resposta",
+    "artista": "Skank",
+    "arquivo": "resposta.mp3",
+    "falsas": [
+      "Respostas",
+      "Os Versos Seus",
+      "Sem Resposta",
+      "Bem Mais Que o Tempo",
+      "Em Paz, Eu Digo Que Eu Sou"
+    ]
+  },
+  {
+    "id": 25,
+    "titulo": "Trem das Onze",
+    "artista": "Demônios da Garoa",
+    "arquivo": "trem-das-onze.mp3",
+    "falsas": [
+      "Trem das Dez",
+      "Trem da Meia-Noite",
+      "O Último Trem",
+      "Trem das Doze",
+      "Trem das Nove"
+    ]
+  },
+  {
+    "id": 26,
+    "titulo": "Tudo por Nada",
+    "artista": "Paulo Ricardo",
+    "arquivo": "tudo-por-nada.mp3",
+    "falsas": [
+      "Se Eu Soubesse Que Ia Ser Assim",
+      "Tudo por Ninguém",
+      "Que Você Nunca Vai Saber",
+      "Nada por Nada",
+      "E Confesso Que Eu Acreditei"
+    ]
+  },
+  {
+    "id": 27,
+    "titulo": "Velha Infância",
+    "artista": "Tribalistas",
+    "arquivo": "velha-infancia.mp3",
+    "falsas": [
+      "Você É Assim",
+      "Na Nossa Velha Infância",
+      "Eu Gosto de Você",
+      "Minha Infância",
+      "Meu Riso É Tão Feliz Contigo"
+    ]
+  },
+  {
+    "id": 28,
+    "titulo": "Você Vai Ver",
+    "artista": "Zezé Di Camargo & Luciano",
+    "arquivo": "voce-vai-ver.mp3",
+    "falsas": [
+      "Sonho de Verão",
+      "Você Vai Sentir",
+      "Você Vai Lembrar de Mim",
+      "Em Cada Sonho de Verão",
+      "Você Pode Encontrar Muitos Amores"
+    ]
+  },
+  {
+    "id": 29,
+    "titulo": "Mistérios da Meia-Noite",
+    "artista": "Zé Ramalho",
+    "arquivo": "misterios-da-meia-noite.mp3",
+    "falsas": [
+      "Impérios de um Lobisomem",
+      "Segredos da Meia-Noite",
+      "Mistérios da Noite",
+      "Naquele Mesmo Tempo",
+      "Mistérios de um Lobisomem"
+    ]
+  },
+  {
+    "id": 30,
+    "titulo": "É o Amor",
+    "artista": "Zezé Di Camargo & Luciano",
+    "arquivo": "e-o-amor.mp3",
+    "falsas": [
+      "Eu Não Vou Negar Que Sou Louco por Você",
+      "Eu Não Vou Negar",
+      "É Amor",
+      "Tô Maluco Pra Te Ver",
+      "Você É Meu Doce Mel"
+    ]
+  },
+  {
+    "id": 31,
+    "titulo": "A Maior Saudade",
+    "artista": "Henrique e Juliano",
+    "arquivo": "a-maior-saudade.mp3",
+    "falsas": [
+      "A Maior Saudade De Todos Os tempos",
+      "Maior Saudade",
+      "Amores Da Vida",
+      "Um Belo Dia",
+      "Cuida Bem Dela"
+    ]
+  },
+  {
+    "id": 32,
+    "titulo": "Solteiro Forçado",
+    "artista": "Ana Castela",
+    "arquivo": "solteiro-forcado.mp3",
+    "falsas": [
+      "Solteira Forçada",
+      "Pipoco",
+      "Boiadeira",
+      "Solteiro Convicto",
+      "Casado Forçado"
+    ]
+  },
+  {
+    "id": 33,
+    "titulo": "Sozinho",
+    "artista": "Caetano Veloso",
+    "arquivo": "sozinho.mp3",
+    "falsas": [
+      "Sozinha",
+      "Cajuína",
+      "Sampa",
+      "Sozinho no Mundo",
+      "Alegria, Alegria"
+    ]
+  },
+  {
+    "id": 34,
+    "titulo": "O Tempo Não Para",
+    "artista": "Cazuza",
+    "arquivo": "o-tempo-nao-para.mp3",
+    "falsas": [
+      "Exagerado",
+      "Codinome Beija-Flor",
+      "Faz Parte do Meu Show",
+      "O Tempo Passa",
+      "Ideologia"
+    ]
+  },
+  {
+    "id": 35,
+    "titulo": "Cheiro de Shampoo",
+    "artista": "Chrystian & Ralf",
+    "arquivo": "cheiro-de-shampoo.mp3",
+    "falsas": [
+      "Cheiro de Perfume",
+      "Cheiro de Saudade",
+      "Cheiro de Amor",
+      "Cheiro de Sabonete",
+      "Cheiro de Mulher"
+    ]
+  },
+  {
+    "id": 36,
+    "titulo": "Sinônimos",
+    "artista": "Chitãozinho & Xororó",
+    "arquivo": "sinonimos.mp3",
+    "falsas": [
+      "Fio de Cabelo",
+      "Planeta Azul",
+      "Nuvem de Lágrimas",
+      "Sinônimo",
+      "Sinônimos do Amor"
+    ]
+  },
+  {
+    "id": 37,
+    "titulo": "Apaga Apaga Apaga",
+    "artista": "Danilo e Davi",
+    "arquivo": "apaga-apaga-apaga.mp3",
+    "falsas": [
+      "Apaga Apaga",
+      "Apaga o Meu Número",
+      "Acende Acende Acende",
+      "Apague Apague Apague",
+      "Esquece Esquece Esquece"
+    ]
+  },
+  {
+    "id": 38,
+    "titulo": "Eu Não Sou Terapia",
+    "artista": "Danilo e Davi",
+    "arquivo": "eu-nao-sou-terapia.mp3",
+    "falsas": [
+      "Eu Sou Terapia",
+      "Não Sou Seu Terapeuta",
+      "Eu Não Sou Remédio",
+      "Você Não É Terapia",
+      "Eu Não Sou Seu Psicólogo"
+    ]
+  },
+  {
+    "id": 39,
+    "titulo": "Oceano",
+    "artista": "Djavan",
+    "arquivo": "oceano.mp3",
+    "falsas": [
+      "Se",
+      "Flor de Lis",
+      "Sina",
+      "Açaí",
+      "Eu Te Devoro"
+    ]
+  },
+  {
+    "id": 40,
+    "titulo": "Dormi na Praça",
+    "artista": "Bruno e Marrone",
+    "arquivo": "dormi-na-praca.mp3",
+    "falsas": [
+      "Vida Vazia",
+      "Sonhando",
+      "Choram as Rosas",
+      "Dormi no Parque",
+      "Acordei na Praça"
+    ]
+  },
+  {
+    "id": 41,
+    "titulo": "Duas Metades",
+    "artista": "Jorge e Mateus",
+    "arquivo": "duas-metades.mp3",
+    "falsas": [
+      "Sosseguei",
+      "Amo Noite e Dia",
+      "Propaganda",
+      "Duas Metades de Um Amor",
+      "Metade de Mim"
+    ]
+  },
+  {
+    "id": 42,
+    "titulo": "E Daí",
+    "artista": "Jorge e Mateus",
+    "arquivo": "e-dai.mp3",
+    "falsas": [
+      "Nem Aí",
+      "E Daí Meu Bem",
+      "Pode Chorar",
+      "Sosseguei",
+      "Propaganda"
+    ]
+  },
+  {
+    "id": 43,
+    "titulo": "Foi Deus",
+    "artista": "Edson & Hudson",
+    "arquivo": "foi-deus.mp3",
+    "falsas": [
+      "Foi Deus Quem Fez",
+      "Foi o Destino",
+      "Eu Sei Que Foi Deus",
+      "Foi Você",
+      "Foi Amor"
+    ]
+  },
+  {
+    "id": 44,
+    "titulo": "Café e Amor",
+    "artista": "Gusttavo Lima",
+    "arquivo": "cafe-e-amor.mp3",
+    "falsas": [
+      "Balada",
+      "Inventor dos Amores",
+      "Apelido Carinhoso",
+      "Café com Amor",
+      "Amor e Café"
+    ]
+  },
+  {
+    "id": 45,
+    "titulo": "Fala Mal de Mim",
+    "artista": "Gusttavo Lima",
+    "arquivo": "fala-mal-de-mim.mp3",
+    "falsas": [
+      "Fala Bem de Mim",
+      "Fale Mal de Mim",
+      "Zé da Recaída",
+      "Balada",
+      "Inventor dos Amores"
+    ]
+  },
+  {
+    "id": 46,
+    "titulo": "Compensa Me Amar",
+    "artista": "Henrique e Juliano",
+    "arquivo": "compensa-me-amar.mp3",
+    "falsas": [
+      "Compensa Amar",
+      "Vale a Pena Me Amar",
+      "Compensa Me Querer",
+      "Largado às Traças",
+      "Liberdade Provisória"
+    ]
+  },
+  {
+    "id": 47,
+    "titulo": "Beijos, Blues e Poesia",
+    "artista": "K-Sis",
+    "arquivo": "beijos-blues-e-poesia.mp3",
+    "falsas": [
+      "Beijos e Poesia",
+      "Blues e Poesia",
+      "Beijos, Blues e Paixão",
+      "Poesia e Beijos",
+      "Beijos, Samba e Poesia"
+    ]
+  },
+  {
+    "id": 48,
+    "titulo": "Água com Açúcar",
+    "artista": "Luan Santana",
+    "arquivo": "agua-com-acucar.mp3",
+    "falsas": [
+      "Meteoro",
+      "Sinais",
+      "Chega de Saudade",
+      "Água com Sal",
+      "Adocica"
+    ]
+  },
+  {
+    "id": 49,
+    "titulo": "Ilha",
+    "artista": "Luan Santana",
+    "arquivo": "ilha.mp3",
+    "falsas": [
+      "Meteoro",
+      "Sinais",
+      "A Ilha",
+      "Ilha do Amor",
+      "Você de Volta"
+    ]
+  },
+  {
+    "id": 50,
+    "titulo": "Medo Bobo",
+    "artista": "Maiara & Maraisa",
+    "arquivo": "medo-bobo.mp3",
+    "falsas": [
+      "10%",
+      "Medo de Amar",
+      "Medo Bobo de Você",
+      "Medo de Te Perder",
+      "Sem Medo"
+    ]
+  },
+  {
+    "id": 51,
+    "titulo": "Diz Pra Mim",
+    "artista": "Malta",
+    "arquivo": "diz-pra-mim.mp3",
+    "falsas": [
+      "Diz Pra Mim Que Sim",
+      "Fala Pra Mim",
+      "Diz Pra Mim Agora",
+      "Conta Pra Mim",
+      "Diz Que Sim"
+    ]
+  },
+  {
+    "id": 52,
+    "titulo": "Daqui Pra Sempre",
+    "artista": "Manu Bahtidão",
+    "arquivo": "daqui-pra-sempre.mp3",
+    "falsas": [
+      "Daqui Pra Sempre Amor",
+      "Pra Sempre",
+      "Pra Sempre Aqui",
+      "De Agora Pra Sempre",
+      "Daqui Pra Lá"
+    ]
+  },
+  {
+    "id": 53,
+    "titulo": "Quarta Cadeira",
+    "artista": "Matheus & Kauan",
+    "arquivo": "quarta-cadeira.mp3",
+    "falsas": [
+      "Quinta Cadeira",
+      "Terceira Cadeira",
+      "Cadeira Vazia",
+      "Última Cadeira",
+      "Quarta Mesa"
+    ]
+  },
+  {
+    "id": 54,
+    "titulo": "Azul Piscina",
+    "artista": "MC Livinho",
+    "arquivo": "azul-piscina.mp3",
+    "falsas": [
+      "Fazer Falta",
+      "Verde Piscina",
+      "Azul Marinho",
+      "Azul do Mar",
+      "Piscina Azul"
+    ]
+  },
+  {
+    "id": 55,
+    "titulo": "Metamorfose Ambulante",
+    "artista": "Raul Seixas",
+    "arquivo": "metamorfose-ambulante.mp3",
+    "falsas": [
+      "Ouro de Tolo",
+      "Maluco Beleza",
+      "Gita",
+      "Sociedade Alternativa",
+      "Metamorfose Ambulante II"
+    ]
+  },
+  {
+    "id": 56,
+    "titulo": "Minha Estrela Perdida",
+    "artista": "João Paulo e Daniel",
+    "arquivo": "minha-estrela-perdida.mp3",
+    "falsas": [
+      "Minha Estrela Guia",
+      "Minha Vida Perdida",
+      "Estrela Perdida",
+      "Minha Luz Perdida",
+      "Um Grande Amor"
+    ]
+  },
+  {
+    "id": 57,
+    "titulo": "Não Aprendi a Dizer Adeus",
+    "artista": "Leandro & Leonardo",
+    "arquivo": "nao-aprendi-a-dizer-adeus.mp3",
+    "falsas": [
+      "São Aves de Verão",
+      "Sem Lágrimas No Olhar",
+      "Aprendi a Dizer Adeus",
+      "O Inverno Vai Passar",
+      "Não Sei Dizer Adeus"
+    ]
+  },
+  {
+    "id": 58,
+    "titulo": "Cedo ou Tarde",
+    "artista": "NX Zero",
+    "arquivo": "cedo-ou-tarde.mp3",
+    "falsas": [
+      "Pela Última Vez",
+      "Onde Estiver",
+      "Recupero A Fé",
+      "Algum Dia Ainda Vou Te Ver",
+      "Tarde Demais"
+    ]
+  },
+  {
+    "id": 59,
+    "titulo": "Razões e Emoções",
+    "artista": "NX Zero",
+    "arquivo": "razoes-e-emocoes.mp3",
+    "falsas": [
+      "Pela Última Vez",
+      "Onde Estiver",
+      "Entre Razões e Sentimentos",
+      "Razões e Sentimentos",
+      "Emoções e Razões"
+    ]
+  },
+  {
+    "id": 60,
+    "titulo": "Nosso Quadro",
+    "artista": "Ana Castela",
+    "arquivo": "nosso-quadro.mp3",
+    "falsas": [
+      "O Nosso Álbum",
+      "Quadro Incompleto",
+      "Nosso Retrato",
+      "Amor Pela Metade",
+      "Nosso Quadro de Amor"
+    ]
+  },
+  {
+    "id": 61,
+    "titulo": "Palpite",
+    "artista": "Vanessa Rangel",
+    "arquivo": "palpite.mp3",
+    "falsas": [
+      "Truque Do Desejo",
+      "De Novo Pra Você",
+      "Meu Palpite",
+      "Será Que Você Volta",
+      "O Gosto Do Beijo"
+    ]
+  },
+  {
+    "id": 62,
+    "titulo": "Eu Te Seguro",
+    "artista": "Panda",
+    "arquivo": "eu-te-seguro.mp3",
+    "falsas": [
+      "Eu Te Sigo",
+      "Além Dela",
+      "Eu Te Pego",
+      "De Todos os Ângulos",
+      "Eu Te Prendo"
+    ]
+  },
+  {
+    "id": 63,
+    "titulo": "Mil e Uma Noites de Amor",
+    "artista": "Pepeu Gomes",
+    "arquivo": "mil-e-uma-noites-de-amor.mp3",
+    "falsas": [
+      "Em Outra Vida Humana",
+      "Mil e Uma Noites",
+      "Mil Noites de Amor",
+      "Sonho ao teu lado",
+      "Somos Dois Poemas"
+    ]
+  },
+  {
+    "id": 64,
+    "titulo": "Pra Não Pensar em Você",
+    "artista": "Zezé Di Camargo & Luciano",
+    "arquivo": "pra-nao-pensar-em-voce.mp3",
+    "falsas": [
+      "Porque Te Amo, Porque Te Quero",
+      "Pra Não Lembrar de Você",
+      "Pra Não Pensar Mais em Você",
+      "Só Penso Em Você",
+      "Quando A Saudade Doer"
+    ]
+  },
+  {
+    "id": 65,
+    "titulo": "Quase Sem Querer",
+    "artista": "Legião Urbana",
+    "arquivo": "quase-sem-querer.mp3",
+    "falsas": [
+      "Eu Quero O Mesmo Que Você",
+      "Como Um Anjo Caído",
+      "Me Fiz Em Mil Pedaços",
+      "Quase Sem Perceber",
+      "Sem Querer"
+    ]
+  },
+  {
+    "id": 66,
+    "titulo": "A Lenda",
+    "artista": "Sandy e Junior",
+    "arquivo": "a-lenda.mp3",
+    "falsas": [
+      "Como Eu Amo Você",
+      "A Lenda Dessa Paixão",
+      "Luz Que Banha A Noite",
+      "Pra Dizer Que O Amor Não Se Acabe",
+      "A Lenda do Amor"
+    ]
+  },
+  {
+    "id": 67,
+    "titulo": "Erro Gostoso",
+    "artista": "Simone Mendes",
+    "arquivo": "erro-gostoso.mp3",
+    "falsas": [
+      "Dois Enganados",
+      "Vai Quebrar De Novo",
+      "Erro Bom",
+      "Engano Gostoso",
+      "Ah E Agora Como Eu Fico Nessa Casa"
+    ]
+  },
+  {
+    "id": 68,
+    "titulo": "Nosso Plano",
+    "artista": "Tribo da Periferia",
+    "arquivo": "nosso-plano.mp3",
+    "falsas": [
+      "Nosso Sonho",
+      "Meu Plano",
+      "Rolê Insano",
+      "Nosso Caminho",
+      "Nosso Plano de Amor"
+    ]
+  },
+  {
+    "id": 69,
+    "titulo": "Deixa a Vida Me Levar",
+    "artista": "Zeca Pagodinho",
+    "arquivo": "deixa-a-vida-me-levar.mp3",
+    "falsas": [
+      "Vida, Leva Eu",
+      "Meu Coração E Nobre",
+      "Deixa A Vida Sambar",
+      "Deixa Eu Levar a Vida",
+      "Deixa a Vida Passar"
+    ]
+  },
+  {
+    "id": 70,
+    "titulo": "Cadeira Cativa",
+    "artista": "Zé Neto e Cristiano",
+    "arquivo": "reserved-seat.mp3",
+    "falsas": [
+      "Cadeira Cativante",
+      "Amor Da Vida",
+      "Você Me Liga Qualquer Hora",
+      "Cê Tem Cadeira Cativa",
+      "Pelo Jeito Que Você Sorriu"
+    ]
+  },
+  {
+    "id": 71,
+    "titulo": "Plano C",
+    "artista": "Zé Neto e Cristiano",
+    "arquivo": "plano-c.mp3",
+    "falsas": [
+      "Você Sempre Foi O Meu Plano C",
+      "Conversa Séria",
+      "Plano A",
+      "Plano B",
+      "Passamos Por Tanta Coisa"
+    ]
+  }
+]

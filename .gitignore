@@ -18,9 +18,12 @@ yarn-error.log*
 .env.production.local
 
 # Arquivos de dados sensíveis ou temporários
-data/
-downloads/
 *.json
+!bot/data/*.json
+bot/data/groups.json
+bot/data/recadosAnonimosState.json
+bot/data/*.bak
+downloads/
 !package.json
 !package-lock.json
 
