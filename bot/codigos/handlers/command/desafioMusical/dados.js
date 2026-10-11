@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/dados.js
-// Tudo que fala com o banco de dados (times, pote, carteiras, prêmio, músicas usadas).
+
 
 import pool from '../../../../../db.js';
 import { CONFIG } from './config.js';
