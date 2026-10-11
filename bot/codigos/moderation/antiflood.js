@@ -26,28 +26,28 @@ export const CONFIG = {
     // Cada regra: se a pessoa mandar MAIS que "max" mensagens desses tipos dentro de "janelaMs", é removida.
     // Tipos: image, video, sticker, audio (música/arquivo de áudio), voice (nota de voz), document, text
     rules: [
-        // Fotos/vídeos e músicas NÃO têm regra de janela fixa aqui: usam "sequencias" logo abaixo (só pega envio em lote).
-        { nome: 'figurinhas',        tipos: ['sticker'],        max: 4, janelaMs: 12000 },
+        // Fotos/vídeos, músicas, figurinhas e textos NÃO têm regra de janela fixa aqui: usam "sequencias" logo abaixo (só pega envio em lote).
         // Nota de voz (gravada na hora): não passa pelas regras de "música" (audioLote/audioAviso/audioEspera),
         // só tem a proteção normal contra flood.
         { nome: 'notas de voz',      tipos: ['voice'],          max: 6, janelaMs: 20000 },
-        { nome: 'mídia geral',       tipos: ['sticker', 'voice', 'document'], max: 4, janelaMs: 12000 }, // foto/vídeo/música ficam de fora: usam "sequencias"
+        { nome: 'mídia geral',       tipos: ['voice', 'document'], max: 4, janelaMs: 12000 }, // foto/vídeo/música/figurinha ficam de fora: usam "sequencias"
         // Spam "lento": pouca coisa por vez, mas constante.
-        // Atenção: max 4 em 1 min pode pegar conversa animada com figurinhas. Se der falso positivo, aumente.
-        // (áudio fica de fora: ele tem a regra própria "audioLote" abaixo, que permite 3 músicas e depois um intervalo)
-        { nome: 'mídia (1 min)',     tipos: ['sticker', 'document'], max: 4, janelaMs: 60000 },
-        // Flood de texto. Comandos do bot (#...) não entram na conta.
-        // Conversa normal rápida não passa de ~5 mensagens em 10s; ajuste se necessário.
-        { nome: 'mensagens de texto', tipos: ['text'],          max: 8, janelaMs: 10000 },
+        // (áudio e figurinha ficam de fora: áudio usa "sequencias"/"audioLote"; figurinha usa "sequencias")
+        { nome: 'mídia (1 min)',     tipos: ['document'], max: 4, janelaMs: 60000 },
+        // Flood de texto: agora usa "sequencias" (textos em lote). Comandos do bot (#...) não entram na conta.
     ],
 
-    // Envio em LOTE (músicas e fotos/vídeos): conta quantas mensagens chegaram EM SEQUÊNCIA, cada uma até "gapMs"
+    // Envio em LOTE (músicas, fotos/vídeos, figurinhas e textos): conta quantas mensagens chegaram EM SEQUÊNCIA, cada uma até "gapMs"
     // depois da anterior. Se a sequência passar de "max", remove. Se houver uma pausa maior que "gapMs" entre duas,
     // a contagem recomeça do zero. Ex.: 4 em lote, pausa, mais 1 => NÃO pune. 5 em lote => pune.
     // Mensagens espaçadas passam sempre. Se o lote demora a chegar e escapa, aumente o gapMs (ex.: 5000).
     sequencias: [
         { nome: 'músicas em lote',       tipos: ['audio'],          max: 3, gapMs: 4000 },
         { nome: 'fotos/vídeos em lote',  tipos: ['image', 'video'], max: 3, gapMs: 4000 },
+        // Figurinhas: só pune quem manda MUITAS seguidas e RÁPIDO (cada uma até 3s depois da anterior).
+        // Quem manda figurinha para interagir na conversa (espaçadas) não é pego. Se ainda pegar gente normal, diminua o gapMs (ex.: 2000) ou aumente o max.
+        { nome: 'figurinhas em sequência', tipos: ['sticker'],      max: 6, gapMs: 3000 },
+        { nome: 'textos em lote',        tipos: ['text'],           max: 8, gapMs: 4000 },
     ],
 
     // Lote de músicas: pode mandar "tamanho" músicas seguidas (dentro de "janelaMs"). Ao completar o lote, o bot avisa
@@ -147,7 +147,10 @@ const MAX_JANELA = Math.max(
 );
 
 // Só guarda mensagens de texto no histórico se existir alguma regra que use o tipo 'text'
-const RECORDA_TEXTO = CONFIG.rules.some(r => r.tipos.includes('text')) || !!CONFIG.repeticao?.enabled;
+// (regras de janela, regras de lote/sequência ou a regra de mensagem repetida)
+const RECORDA_TEXTO = CONFIG.rules.some(r => r.tipos.includes('text')) ||
+    (CONFIG.sequencias || []).some(s => s.tipos.includes('text')) ||
+    !!CONFIG.repeticao?.enabled;
 
 // Comandos permitidos em minúsculo (o bot usa startsWith, então "#playxyz" também funciona nele)
 const PERMITIDOS = CONFIG.comandosPermitidos.map(c => c.toLowerCase());
