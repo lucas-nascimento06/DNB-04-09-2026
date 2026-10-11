@@ -44,7 +44,7 @@ const negrito = (texto) =>
         linha.trim() === '' ? '' : `*${linha.replace(/\*/g, '')}*`
     ).join('\n');
 
-// ── Estado dos dados ───────────────────────────────────────────────────────
+// ── Estado dos dados ──────────────────────────────────────────────────────
 
 let saudacoesData   = null;
 let dadosCarregados = false;
