@@ -16,7 +16,7 @@ export const PASTA_LETRAS = path.join(__dirname, '../../../../data/letras');
 // Quando terminar os testes, descomente os grupos originais e comente/remova o GRUPO_TESTE.
 // const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 // const GRUPO_ADMINS = '120363409228091157@g.us';
-const GRUPO_TESTE = '120363429638342257@g.us';
+const GRUPO_TESTE = '120363430608139985@g.us';
 
 // export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL, GRUPO_ADMINS];
 export const GRUPOS_PERMITIDOS = [GRUPO_TESTE];
