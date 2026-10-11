@@ -24,19 +24,30 @@ export const CONFIG = {
     ],
 
     // Cada regra: se a pessoa mandar MAIS que "max" mensagens desses tipos dentro de "janelaMs", é removida.
-    // Tipos: image, video, sticker, audio, document, text
+    // Tipos: image, video, sticker, audio (música/arquivo de áudio), voice (nota de voz), document, text
     rules: [
-        { nome: 'fotos/vídeos',      tipos: ['image', 'video'], max: 3, janelaMs: 12000 },
+        // Fotos/vídeos e músicas NÃO têm regra de janela fixa aqui: usam "sequencias" logo abaixo (só pega envio em lote).
         { nome: 'figurinhas',        tipos: ['sticker'],        max: 4, janelaMs: 12000 },
-        { nome: 'áudios/músicas',    tipos: ['audio'],          max: 3, janelaMs: 20000 },
-        { nome: 'mídia geral',       tipos: ['image', 'video', 'sticker', 'audio', 'document'], max: 4, janelaMs: 12000 },
+        // Nota de voz (gravada na hora): não passa pelas regras de "música" (audioLote/audioAviso/audioEspera),
+        // só tem a proteção normal contra flood.
+        { nome: 'notas de voz',      tipos: ['voice'],          max: 6, janelaMs: 20000 },
+        { nome: 'mídia geral',       tipos: ['sticker', 'voice', 'document'], max: 4, janelaMs: 12000 }, // foto/vídeo/música ficam de fora: usam "sequencias"
         // Spam "lento": pouca coisa por vez, mas constante.
         // Atenção: max 4 em 1 min pode pegar conversa animada com figurinhas. Se der falso positivo, aumente.
         // (áudio fica de fora: ele tem a regra própria "audioLote" abaixo, que permite 3 músicas e depois um intervalo)
-        { nome: 'mídia (1 min)',     tipos: ['image', 'video', 'sticker', 'document'], max: 4, janelaMs: 60000 },
+        { nome: 'mídia (1 min)',     tipos: ['sticker', 'document'], max: 4, janelaMs: 60000 },
         // Flood de texto. Comandos do bot (#...) não entram na conta.
         // Conversa normal rápida não passa de ~5 mensagens em 10s; ajuste se necessário.
         { nome: 'mensagens de texto', tipos: ['text'],          max: 8, janelaMs: 10000 },
+    ],
+
+    // Envio em LOTE (músicas e fotos/vídeos): conta quantas mensagens chegaram EM SEQUÊNCIA, cada uma até "gapMs"
+    // depois da anterior. Se a sequência passar de "max", remove. Se houver uma pausa maior que "gapMs" entre duas,
+    // a contagem recomeça do zero. Ex.: 4 em lote, pausa, mais 1 => NÃO pune. 5 em lote => pune.
+    // Mensagens espaçadas passam sempre. Se o lote demora a chegar e escapa, aumente o gapMs (ex.: 5000).
+    sequencias: [
+        { nome: 'músicas em lote',       tipos: ['audio'],          max: 3, gapMs: 4000 },
+        { nome: 'fotos/vídeos em lote',  tipos: ['image', 'video'], max: 3, gapMs: 4000 },
     ],
 
     // Lote de músicas: pode mandar "tamanho" músicas seguidas (dentro de "janelaMs"). Ao completar o lote, o bot avisa
@@ -46,18 +57,20 @@ export const CONFIG = {
     // (DESATIVADO: substituído pelo "audioAviso" logo abaixo. Para voltar ao modelo lote + intervalo de 3 min, troque para true.)
     audioLote: { enabled: false, tamanho: 3, janelaMs: 20000, intervaloMs: 180000, avisar: true },
 
+    // (DESATIVADO: agora só a regra 'áudios/músicas' atua: até 3 músicas em 20s passam, a 4ª seguida remove, sem avisos nem apagar músicas.)
     // Aviso de espera entre músicas: até 3 músicas seguidas dentro de "janelaMs" passam (a 4ª remove, regra 'áudios/músicas').
     // Quando a pessoa manda a "avisarNaQtd"-ésima música dentro da janela, o bot avisa 1x para aguardar antes de mandar outra.
     // O aviso espera "atrasoMs" e NÃO sai se a pessoa for removida nesse meio tempo (ex.: mandou a 4ª logo em seguida).
     // "janelaMs" deve ser igual ao da regra 'áudios/músicas'.
-    audioAviso: { enabled: true, avisarNaQtd: 1, janelaMs: 20000, atrasoMs: 2000, avisar: true },
+    audioAviso: { enabled: false, avisarNaQtd: 1, janelaMs: 20000, atrasoMs: 2000, avisar: true },
 
+    // (DESATIVADO, ver nota acima.)
     // Espera entre músicas: depois de uma música aceita, TODA música enviada antes de fechar "janelaMs" é APAGADA,
     // e o bot avisa sempre (com os segundos que faltam). Só é REMOVIDO(A) quem manda 2 músicas seguidas ignorando o aviso:
     // a 2ª música apagada chegando em até "seguidasMs" depois da anterior apagada.
     // Ex.: 1ª passa e avisa; 2ª é apagada e avisa; 3ª logo em seguida (até seguidasMs) remove.
     // "janelaMs" deve ser igual ao do audioAviso.
-    audioEspera: { enabled: true, janelaMs: 20000, seguidasMs: 5000, avisar: true },
+    audioEspera: { enabled: false, janelaMs: 20000, seguidasMs: 5000, avisar: true },
 
     // A MESMA mensagem repetida várias vezes (ex.: "oi" x30, propaganda colada de novo e de novo)
     repeticao: { enabled: true, max: 5, janelaMs: 30000 },
@@ -109,7 +122,8 @@ export const CONFIG = {
         'remlista resetardc resetarleil resetarleilao resetartudo rl rlink rmsn s salva signos ' +
         'status stk sv time times totag varredura veriflista verilista vip ' +
         'add amizade avisarconfissoes aviso confissao confissoes dm dmusical paquera ' +
-        'postarconfissoes pote pronto recusar romancenoar leil dadis dadoss dadus dasos')
+        'postarconfissoes pote pronto recusar romancenoar leil dadis dadoss dadus dasos ' +
+        'errou placar')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],
@@ -208,12 +222,14 @@ function chavesParaApagar(msg, groupJid, user) {
 }
 
 // Descobre o tipo de mídia da mensagem
+// Áudio: nota de voz (ptt === true, gravada na hora) vira 'voice'; música/arquivo de áudio vira 'audio'.
+// Só 'audio' passa pelas regras de música (audioLote / audioAviso / audioEspera).
 function getTipo(m) {
     if (!m) return null;
     if (m.imageMessage) return 'image';
     if (m.videoMessage || m.ptvMessage) return 'video';
     if (m.stickerMessage) return 'sticker';
-    if (m.audioMessage) return 'audio';
+    if (m.audioMessage) return m.audioMessage.ptt ? 'voice' : 'audio';
     if (m.documentMessage) return 'document';
     return null; // texto etc. não conta como mídia
 }
@@ -641,6 +657,24 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
                 const rp = CONFIG.repeticao;
                 const qtd = lista.filter(e => e.texto === norm && agora - e.t <= rp.janelaMs).length;
                 if (qtd > rp.max) { violada = { nome: 'mensagens repetidas', janelaMs: rp.janelaMs }; qtdViolada = qtd; }
+            }
+            // Envio em lote: sequência de mensagens chegando cada uma logo após a anterior
+            if (!violada) {
+                for (const sq of CONFIG.sequencias || []) {
+                    if (!sq.tipos.includes(tipoHist)) continue;
+                    const itens = lista.filter(e => sq.tipos.includes(e.tipo));
+                    let seq = 1;
+                    for (let k = itens.length - 1; k > 0; k--) {
+                        if (itens[k].t - itens[k - 1].t <= sq.gapMs) seq++;
+                        else break;
+                    }
+                    if (seq > sq.max) {
+                        const span = itens[itens.length - 1].t - itens[itens.length - seq].t;
+                        violada = { nome: sq.nome, janelaMs: Math.max(1000, span) };
+                        qtdViolada = seq;
+                        break;
+                    }
+                }
             }
             // Lote de músicas: completou a sequência permitida?
             if (!violada && tipoHist === 'audio' && CONFIG.audioLote?.enabled) {
