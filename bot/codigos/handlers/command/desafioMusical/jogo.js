@@ -115,7 +115,8 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         text:
             '🎤🎶 *DESAFIO MUSICAL — HOMENS 🆚 MULHERES*\n\n' +
             'O bot toca um trecho de música e mostra as alternativas (A, B, C, D ou E).\n\n' +
-            '⚡ Quem acertar primeiro faz o ponto para o seu time!\n' +
+            '⚡ Quem responder certo primeiro faz o ponto para o seu time!\n' +
+            '🎤 Mas atenção: para ganhar os DCs, quem acertou precisa *completar a música cantando*. O ADM libera o prêmio com *#ok* quando ouvir a música completa.\n' +
             `🪙 Prêmio de *${CONFIG.premioDC} DCs*: *${CONFIG.premioAcertadorDC}* para quem acertou e *${CONFIG.premioDC - CONFIG.premioAcertadorDC}* divididos entre o resto do time.\n` +
             (CONFIG.tempoRodadaMs > 0 ? `⏱️ Cada rodada dura *${CONFIG.tempoRodadaMs / 1000}s*.\n` : '') +
             `☝️ Cada pessoa tem *${CONFIG.tentativasPorRodada}* tentativa${CONFIG.tentativasPorRodada > 1 ? 's' : ''} por rodada.\n\n` +
@@ -135,6 +136,16 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
 export async function proximaRodada(sock, groupId) {
     const jogo = jogos.get(groupId);
     if (!jogo) return;
+
+    // se o ADM seguiu sem usar #ok, o prêmio da rodada anterior não é pago
+    if (jogo.premioPendente) {
+        const p = jogo.premioPendente;
+        jogo.premioPendente = null;
+        await sock.sendMessage(groupId, {
+            text: `⚠️ Os DCs de ${tag(p.jid)} não foram liberados (o ADM não usou *#ok*).`,
+            mentions: [p.jid],
+        }).catch(() => {});
+    }
 
     // garante que a pergunta da rodada anterior saiu da fixação antes de fixar a nova
     // (evita acumular fixados; o WhatsApp só aceita 3 ao mesmo tempo)
@@ -208,6 +219,15 @@ export async function finalizar(sock, groupId) {
     clearTimeout(jogo.timer);
     jogos.delete(groupId); // evita finalizar duas vezes
     soltarPlacar(sock, groupId, jogo); // tira o placar da fixação
+
+    if (jogo.premioPendente) {
+        const p = jogo.premioPendente;
+        jogo.premioPendente = null;
+        await sock.sendMessage(groupId, {
+            text: `⚠️ Os DCs de ${tag(p.jid)} não foram liberados (o ADM não usou *#ok*).`,
+            mentions: [p.jid],
+        }).catch(() => {});
+    }
 
     const { homens, mulheres } = jogo.placar;
     const mentions = [];

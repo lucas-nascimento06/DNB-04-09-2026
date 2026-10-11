@@ -11,8 +11,9 @@ import {
     getPote, definirPote, getTimeDoUsuario, salvarTime, membrosDoTime, limparTimes, limparUsadas,
 } from './dados.js';
 import {
-    iniciarDesafio, proximaRodada, acabouTempo, pararDesafio, mostrarTimes,
+    iniciarDesafio, proximaRodada, acabouTempo, pararDesafio, mostrarTimes, finalizar,
 } from './jogo.js';
+import { liberarPremio } from './respostas.js';
 
 export async function tratarComandoAdmin(sock, message, lower, from, ownerNumbers) {
     const negar = () =>
@@ -91,12 +92,29 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         return true;
     }
 
+    // 4.5) ADM ouviu a música completa: libera os DCs de quem acertou
+    if (lower === '#ok') {
+        const j = jogos.get(from);
+        if (!j) return false; // sem desafio rolando: deixa outros handlers tratarem o #ok
+        if (!(await admin())) { await negar(); return true; }
+        if (!j.premioPendente) {
+            await sock.sendMessage(from, { text: 'ℹ️ Não há nenhum prêmio esperando liberação agora.' }, { quoted: message });
+            return true;
+        }
+        await liberarPremio(sock, message, from, j);
+        return true;
+    }
+
     // 5) próxima música / pular
     if (lower === '#next' || lower === '#n' || lower === '#proxima') {
         const j = jogos.get(from);
         if (!j) return false;
         if (!(await admin())) { await negar(); return true; }
-        if (j.aguardando) {
+        if (j.finalizando) {
+            // última rodada já resolvida: #next encerra o desafio (sem liberar DCs pendentes)
+            clearTimeout(j.timer);
+            await finalizar(sock, from);
+        } else if (j.aguardando) {
             clearTimeout(j.timer);
             j.aguardando = false;
             await proximaRodada(sock, from);

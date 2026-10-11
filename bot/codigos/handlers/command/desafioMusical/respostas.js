@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/respostas.js
-// Resposta A/B/C/D/E durante a rodada (atrasado, errou, acertou e prêmio).
+// Resposta A/B/C/D/E durante a rodada (atrasado, errou, acertou) e liberação do prêmio (#ok).
 
 import { CONFIG } from './config.js';
 import { jogos } from './state.js';
@@ -88,7 +88,7 @@ async function avisarAtrasado(sock, message, from, jid, userId, r) {
     return true;
 }
 
-// 🏆 acertou primeiro
+// 🏆 acertou primeiro: faz o ponto na hora, mas os DCs só saem quando o ADM digitar #ok
 async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) {
     if (r.encerrada) return; // outro já ganhou enquanto consultávamos o banco
     r.encerrada = true;
@@ -102,32 +102,79 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     reg.n += 1;
     jogo.acertos.set(userId, reg);
 
-    const emoji = time === 'homens' ? '👨🏻' : '👩🏻';
-    const nomeTime = time.toUpperCase();
+    // prêmio fica guardado até o ADM liberar com #ok
+    jogo.premioPendente = { jid, userId, time };
+
+    await sock.sendMessage(
+        from,
+        {
+            text:
+                `🏆 ${tag(jid)} acertou primeiro!\n\n` +
+                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
+                `🎤 *${tag(jid)}, agora complete a música cantando!*\n` +
+                `🪙 Os *${CONFIG.premioDC} DCs* só são liberados quando o ADM ouvir a música completa e digitar *#ok*.\n\n` +
+                `_🔢 Música nº ${r.musica.id} — letra: #letra ${r.musica.id}_`,
+            mentions: [jid],
+        },
+        { quoted: message }
+    );
+
+    // 📊 placar atualizado, sozinho numa mensagem fixada (a pergunta e o placar antigo saem da fixação)
+    await atualizarPlacarFixado(sock, from, jogo);
+
+    const ultima = jogo.rodadaAtual >= jogo.total;
+
+    if (ultima) {
+        // última rodada: o #ok do ADM libera os DCs e já encerra o desafio
+        jogo.finalizando = true;
+        await sock.sendMessage(from, {
+            text: '🏁 *Foi a última rodada!* ADM: quando ouvir a música completa, digite *#ok* para liberar os DCs e mostrar o resultado final. 🥁',
+        });
+        jogo.timer = setTimeout(() => finalizar(sock, from), CONFIG.esperaMaxMs);
+    } else {
+        jogo.aguardando = true;
+        await sock.sendMessage(from, {
+            text:
+                '⏸️ *ADM:* quando ouvir a música completa, digite *#ok* para liberar os DCs.\n' +
+                'Depois, *#next* (ou *#n*) para tocar a próxima música.',
+        });
+        jogo.timer = setTimeout(() => {
+            jogo.aguardando = false;
+            proximaRodada(sock, from);
+        }, CONFIG.esperaMaxMs);
+    }
+}
+
+// ✅ #ok do ADM: paga o prêmio pendente (60 para quem acertou, resto dividido com o time)
+export async function liberarPremio(sock, message, from, jogo) {
+    const p = jogo.premioPendente;
+    if (!p) return false;
+    jogo.premioPendente = null; // evita pagar duas vezes
+
+    const nomeTime = p.time.toUpperCase();
 
     let pagamento;
     try {
-        pagamento = await pagarPremio(from, time, userId, jid);
+        pagamento = await pagarPremio(from, p.time, p.userId, p.jid);
     } catch (e) {
         console.error('[desafioMusical] erro ao pagar prêmio:', e.message);
         pagamento = { ok: false, motivo: 'erro' };
     }
 
-    const mentions = [jid];
     let textoDC;
     if (pagamento.ok) {
-        const p = pagamento;
-        textoDC = `🪙 ${tag(jid)} você ganhou *${p.premio} DCs* pelo acerto!`;
-        if (p.beneficiados.length === 0) {
-            textoDC += `\n💰 Como você é o único do time, ficou com *${p.parteAcertador} DCs*.`;
+        const g = pagamento;
+        textoDC = `🪙 ${tag(p.jid)} você ganhou *${g.premio} DCs*!`;
+        if (g.beneficiados.length === 0) {
+            textoDC += `\n💰 Como você é o único do time, ficou com *${g.parteAcertador} DCs*.`;
         } else {
             // sem listar nomes (time grande deixaria a mensagem enorme)
-            textoDC += `\n💰 Você fica com *${p.parteAcertador} DCs* e os *${p.resto} DCs* restantes são divididos com a equipe *${nomeTime}*.`;
-            if (p.sorteio) {
-                textoDC += `\n🎲 Como o time é grande, *${p.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
+            textoDC += `\n💰 Você fica com *${g.parteAcertador} DCs* e os *${g.resto} DCs* restantes são divididos com a equipe *${nomeTime}*.`;
+            if (g.sorteio) {
+                textoDC += `\n🎲 Como o time é grande, *${g.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
             }
         }
-        if (p.sobra > 0) textoDC += `\n_(sobraram ${p.sobra} DC que ficam no pote)_`;
+        if (g.sobra > 0) textoDC += `\n_(sobraram ${g.sobra} DC que ficam no pote)_`;
     } else if (pagamento.motivo === 'pote-vazio') {
         textoDC = '⚠️ O *pote de DCs acabou*! Esta rodada vale só o ponto. ADM, use *#pote 6000* para recarregar.';
     } else {
@@ -136,42 +183,14 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
 
     await sock.sendMessage(
         from,
-        {
-            text:
-                `🏆 ${tag(jid)} acertou primeiro!\n\n` +
-                `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
-                `${textoDC}\n\n` +
-                `🎤 *Desafio de ${tag(jid)}:* agora cante um trecho da música!\n` +
-                '_(Só de brincadeira — a galera e os ADMs decidem se cumpriu 😄)_\n\n' +
-                `_🔢 Música nº ${r.musica.id} — letra: #letra ${r.musica.id}_`,
-            mentions,
-        },
+        { text: `✅ *Música completada! DCs liberados pelo ADM.*\n\n${textoDC}`, mentions: [p.jid] },
         { quoted: message }
     );
 
-    // 📊 placar atualizado, sozinho numa mensagem fixada (o placar antigo sai da fixação)
-    await atualizarPlacarFixado(sock, from, jogo);
-
-    const ultima = jogo.rodadaAtual >= jogo.total;
-
-    if (ultima) {
-        // última rodada: o resultado sai sozinho, sem precisar do ADM
-        jogo.finalizando = true;
-        const delay = CONFIG.delayFinalMs ?? 15000;
-        await sock.sendMessage(from, {
-            text: `🏁 *Foi a última rodada!* Cante à vontade, o resultado final sai em ${Math.round(delay / 1000)}s... 🥁`,
-        });
-        jogo.timer = setTimeout(() => finalizar(sock, from), delay);
-    } else if (CONFIG.proximaManual) {
-        jogo.aguardando = true;
-        await sock.sendMessage(from, {
-            text: '⏸️ *ADM:* quando o desafio de cantar terminar, digite *#next* (ou *#n*) para tocar a próxima música.',
-        });
-        jogo.timer = setTimeout(() => {
-            jogo.aguardando = false;
-            proximaRodada(sock, from);
-        }, CONFIG.esperaMaxMs);
-    } else {
-        jogo.timer = setTimeout(() => proximaRodada(sock, from), CONFIG.pausaMs + 4000);
+    // última rodada: depois de liberar, mostra o resultado final
+    if (jogo.finalizando) {
+        clearTimeout(jogo.timer);
+        jogo.timer = setTimeout(() => finalizar(sock, from), 4000);
     }
+    return true;
 }
