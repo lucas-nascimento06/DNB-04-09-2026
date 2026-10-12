@@ -123,17 +123,26 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         const j = jogos.get(from);
         if (!j) return false;
         if (!(await admin())) { await negar(); return true; }
+
+        // NOVO: com prêmio pendente, o ADM precisa decidir antes (nada de aviso automático depois)
+        if (j.premioPendente) {
+            await sock.sendMessage(from, {
+                text: '⏳ Resolva o prêmio pendente com *#ok* (liberar) ou *#errou* (cancelar) antes de usar *#next*.',
+            }, { quoted: message });
+            return true;
+        }
+
         if (j.finalizando) {
-            // última rodada já resolvida: #next encerra o desafio (sem liberar DCs pendentes)
+            // última rodada já resolvida: #next encerra o desafio
             clearTimeout(j.timer);
-            await finalizar(sock, from);
+            await finalizar(sock, from, j);
         } else if (j.aguardando) {
             clearTimeout(j.timer);
             j.aguardando = false;
-            await proximaRodada(sock, from);
+            await proximaRodada(sock, from, j);
         } else if (j.rodada && !j.rodada.encerrada) {
             clearTimeout(j.timer);
-            await acabouTempo(sock, from, true);
+            await acabouTempo(sock, from, true, j);
         } else {
             await sock.sendMessage(from, { text: '⏳ Aguarde, o desafio ainda não começou a próxima rodada.' }, { quoted: message });
         }

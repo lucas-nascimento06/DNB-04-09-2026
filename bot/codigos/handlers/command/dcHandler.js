@@ -39,11 +39,13 @@ export async function dcHandler(sock, message) {
 ━━━━━━━━━━━━━━━━━━
 🏦 Moeda oficial do *Grupo DﾑMﾑS*
 
-🎴 Com seus DCs você pode:
+🎴 *Com seus DCs você pode:*
 🔨 Participar dos leilões
 🎼 Pedir músicas — *30 DCs por música*
 💸 Transferir para amigos
 🎁 Enviar DCs durante os leilões
+🎤 Participar do Desafio Musical
+💘 Participar da brincadeira do Namoro
 
 🤑 Junte seus DCs e torne-se o Tio Patinhas do DﾑMﾑS!`;
 

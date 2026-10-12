@@ -154,28 +154,25 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
     await proximaRodada(sock, groupId);
 }
 
-export async function proximaRodada(sock, groupId) {
+// jogoRef (opcional): quando vem de um timer, só age se o jogo ainda for o mesmo que criou o timer
+export async function proximaRodada(sock, groupId, jogoRef) {
     const jogo = jogos.get(groupId);
     if (!jogo) return;
+    if (jogoRef && jogo !== jogoRef) return;
 
-    // se o ADM seguiu sem usar #ok, o prêmio da rodada anterior não é pago
-    if (jogo.premioPendente) {
-        const p = jogo.premioPendente;
-        jogo.premioPendente = null;
-        await sock.sendMessage(groupId, {
-            text: `⚠️ Os DCs de ${tag(p.jid)} não foram liberados (o ADM não usou *#ok*).`,
-            mentions: [p.jid],
-        }).catch(() => {});
-    }
+    // prêmio que ficou sem resolução: descartado em silêncio (o #next já exige #ok/#errou antes)
+    jogo.premioPendente = null;
 
     // garante que a pergunta da rodada anterior saiu da fixação antes de fixar a nova
     // (evita acumular fixados; o WhatsApp só aceita 3 ao mesmo tempo)
     await soltarPergunta(sock, groupId, jogo.rodada);
 
-    if (jogo.rodadaAtual >= jogo.total) return finalizar(sock, groupId);
+    if (jogos.get(groupId) !== jogo) return; // o jogo acabou enquanto soltava a pergunta
+
+    if (jogo.rodadaAtual >= jogo.total) return finalizar(sock, groupId, jogo);
 
     const dados = montarRodada(jogo.banco, jogo.usadas);
-    if (!dados) return finalizar(sock, groupId);
+    if (!dados) return finalizar(sock, groupId, jogo);
 
     jogo.rodadaAtual++;
     jogo.usadas.add(dados.musica.id);
@@ -211,16 +208,17 @@ export async function proximaRodada(sock, groupId) {
         return sock.sendMessage(groupId, { text: '❌ Erro ao enviar o áudio. Desafio cancelado.' }).catch(() => {});
     }
 
-    // limite de tempo: se ninguém acertar, revela a resposta e segue (sem pagar nada)
+    // limite de tempo (só se configurado): revela a resposta e ESPERA o ADM usar #next
     if (CONFIG.tempoRodadaMs > 0) {
-        jogo.timer = setTimeout(() => acabouTempo(sock, groupId), CONFIG.tempoRodadaMs);
+        jogo.timer = setTimeout(() => acabouTempo(sock, groupId, false, jogo), CONFIG.tempoRodadaMs);
     }
 }
 
 // manual = true quando o ADM pulou a rodada com #next
-export async function acabouTempo(sock, groupId, manual = false) {
+export async function acabouTempo(sock, groupId, manual = false, jogoRef) {
     const jogo = jogos.get(groupId);
     if (!jogo?.rodada || jogo.rodada.encerrada) return;
+    if (jogoRef && jogo !== jogoRef) return;
     jogo.rodada.encerrada = true;
     soltarPergunta(sock, groupId, jogo.rodada);
 
@@ -231,24 +229,26 @@ export async function acabouTempo(sock, groupId, manual = false) {
             `✅ Era: *${letraCorreta}) ${musica.titulo}* — ${musica.artista}`,
     }).catch(() => {});
 
-    jogo.timer = setTimeout(() => proximaRodada(sock, groupId), CONFIG.pausaMs);
+    if (jogos.get(groupId) !== jogo) return; // o jogo acabou (#dp) enquanto enviava
+
+    if (manual) {
+        // o próprio ADM pediu o #next: segue para a próxima depois de uma pausa curta
+        jogo.timer = setTimeout(() => proximaRodada(sock, groupId, jogo), CONFIG.pausaMs);
+    } else {
+        // tempo esgotado sozinho: NÃO segue sozinho, espera o ADM usar #next
+        jogo.aguardando = true;
+    }
 }
 
-export async function finalizar(sock, groupId) {
+export async function finalizar(sock, groupId, jogoRef) {
     const jogo = jogos.get(groupId);
     if (!jogo) return;
+    if (jogoRef && jogo !== jogoRef) return; // timer antigo não encerra um jogo novo
     clearTimeout(jogo.timer);
     jogos.delete(groupId); // evita finalizar duas vezes
     soltarPlacar(sock, groupId, jogo); // tira o placar da fixação
 
-    if (jogo.premioPendente) {
-        const p = jogo.premioPendente;
-        jogo.premioPendente = null;
-        await sock.sendMessage(groupId, {
-            text: `⚠️ Os DCs de ${tag(p.jid)} não foram liberados (o ADM não usou *#ok*).`,
-            mentions: [p.jid],
-        }).catch(() => {});
-    }
+    jogo.premioPendente = null; // sem aviso automático
 
     const { homens, mulheres } = jogo.placar;
     const mentions = [];
@@ -309,6 +309,7 @@ export async function pararDesafio(sock, groupId) {
     }
     clearTimeout(jogo.timer);
     if (jogo.rodada) jogo.rodada.encerrada = true;
+    jogo.premioPendente = null;
     soltarPergunta(sock, groupId, jogo.rodada);
     soltarPlacar(sock, groupId, jogo);
     jogos.delete(groupId);

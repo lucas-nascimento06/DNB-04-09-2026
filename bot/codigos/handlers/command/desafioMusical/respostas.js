@@ -6,7 +6,7 @@ import { jogos } from './state.js';
 import { jidDe, tag } from './utils.js';
 import { getTimeDoUsuario, pagarPremio } from './dados.js';
 import { zoeiraAtraso } from './zoeira.js';
-import { proximaRodada, finalizar, soltarPergunta, atualizarPlacarFixado } from './jogo.js';
+import { finalizar, soltarPergunta, atualizarPlacarFixado } from './jogo.js';
 
 export async function tratarResposta(sock, message, texto, from, jid, userId) {
     const jogo = jogos.get(from);
@@ -90,11 +90,14 @@ async function avisarAtrasado(sock, message, from, jid, userId, r) {
 
 // 🏆 acertou primeiro: faz o ponto na hora, mas os DCs só saem quando o ADM digitar #ok
 // (se a pessoa cantar errado, o ADM digita #errou: sem DCs e o ponto é apagado)
+// Depois do acerto o bot NÃO manda mais nada sozinho: tudo segue pelos comandos do ADM.
 async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) {
     if (r.encerrada) return; // outro já ganhou enquanto consultávamos o banco
+    if (jogos.get(from) !== jogo) return; // o desafio foi encerrado enquanto isso
     r.encerrada = true;
     r.vencedor = { jid, userId, time };
     clearTimeout(jogo.timer);
+    jogo.timer = null;
     soltarPergunta(sock, from, r); // tira a pergunta da fixação
     jogo.placar[time] += 1;
 
@@ -105,6 +108,13 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
 
     // prêmio fica guardado até o ADM liberar com #ok (ou cancelar com #errou)
     jogo.premioPendente = { jid, userId, time };
+
+    // sem timers: o ADM resolve com #ok / #errou e depois usa #next
+    if (jogo.rodadaAtual >= jogo.total) {
+        jogo.finalizando = true; // última rodada: #ok/#errou resolve e mostra o resultado; #next também encerra
+    } else {
+        jogo.aguardando = true;
+    }
 
     await sock.sendMessage(
         from,
@@ -124,22 +134,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     );
 
     // 📊 placar atualizado, sozinho numa mensagem fixada (a pergunta e o placar antigo saem da fixação)
-    await atualizarPlacarFixado(sock, from, jogo);
-
-    const ultima = jogo.rodadaAtual >= jogo.total;
-
-    if (ultima) {
-        // última rodada: o #ok (ou #errou) do ADM resolve o prêmio e já encerra o desafio
-        jogo.finalizando = true;
-        jogo.timer = setTimeout(() => finalizar(sock, from), CONFIG.esperaMaxMs);
-    } else {
-        // o ADM resolve com #ok / #errou e depois usa #next (sem aviso no grupo: só o ADM precisa saber)
-        jogo.aguardando = true;
-        jogo.timer = setTimeout(() => {
-            jogo.aguardando = false;
-            proximaRodada(sock, from);
-        }, CONFIG.esperaMaxMs);
-    }
+    if (jogos.get(from) === jogo) await atualizarPlacarFixado(sock, from, jogo);
 }
 
 // ✅ #ok do ADM: paga o prêmio pendente (60 para quem acertou, resto dividido com o time)
@@ -184,10 +179,10 @@ export async function liberarPremio(sock, message, from, jogo) {
         { quoted: message }
     );
 
-    // última rodada: depois de liberar, mostra o resultado final
-    if (jogo.finalizando) {
+    // última rodada: depois de liberar, mostra o resultado final (consequência do #ok do ADM)
+    if (jogo.finalizando && jogos.get(from) === jogo) {
         clearTimeout(jogo.timer);
-        jogo.timer = setTimeout(() => finalizar(sock, from), 4000);
+        jogo.timer = setTimeout(() => finalizar(sock, from, jogo), 4000);
     }
     return true;
 }
@@ -221,12 +216,12 @@ export async function rejeitarPremio(sock, message, from, jogo) {
     );
 
     // placar novo (já sem o ponto), tira o antigo e fixa este
-    await atualizarPlacarFixado(sock, from, jogo);
+    if (jogos.get(from) === jogo) await atualizarPlacarFixado(sock, from, jogo);
 
-    // última rodada: depois de resolver, mostra o resultado final
-    if (jogo.finalizando) {
+    // última rodada: depois de resolver, mostra o resultado final (consequência do #errou do ADM)
+    if (jogo.finalizando && jogos.get(from) === jogo) {
         clearTimeout(jogo.timer);
-        jogo.timer = setTimeout(() => finalizar(sock, from), 4000);
+        jogo.timer = setTimeout(() => finalizar(sock, from, jogo), 4000);
     }
     return true;
 }
