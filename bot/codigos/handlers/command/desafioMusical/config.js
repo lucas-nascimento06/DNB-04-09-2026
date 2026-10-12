@@ -14,7 +14,7 @@ export const PASTA_LETRAS = path.join(__dirname, '../../../../data/letras');
 // Grupos onde o Desafio Musical está ativo.
 const GRUPO_PRINCIPAL = '120363412511975026@g.us';
 const GRUPO_ADMINS = '120363409228091157@g.us';
-const GRUPO_DESAFIO_MUSICAL_DAMAS = '120363410659067345@g.us'; // "Desafio Musical Damas"
+const GRUPO_DESAFIO_MUSICAL_DAMAS = '120363412552745789@g.us'; // "Desafio Musical Damas"
 
 export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL, GRUPO_ADMINS, GRUPO_DESAFIO_MUSICAL_DAMAS];
 
