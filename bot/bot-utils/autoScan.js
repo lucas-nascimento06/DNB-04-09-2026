@@ -2,7 +2,7 @@
 import { scanAndRemoveBlacklisted } from '../codigos/moderation/blacklist/blacklistFunctions.js';
 
 export async function autoScanGroups(sock) {
-    console.log('🔍 ========= INICIANDO VARREDURA AUTOMÁTICA =========\n');
+    console.log('🔍 ========= INICIANDO VARREDURA AUTOMÁTICA ========\n');
     
     try {
         // Busca todos os grupos

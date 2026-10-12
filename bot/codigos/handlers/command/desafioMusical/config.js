@@ -11,14 +11,12 @@ export const ARQUIVO_FALSAS = path.join(__dirname, '../../../../data/falsas.json
 export const PASTA_TRECHOS = path.join(__dirname, '../../../musicas-desafio');
 export const PASTA_LETRAS = path.join(__dirname, '../../../../data/letras');
 
-// ⚠️ MODO TESTE: só o grupo de teste está ativo.
-// Quando terminar os testes, descomente os grupos originais e comente/remova o GRUPO_TESTE.
-// const GRUPO_PRINCIPAL = '120363412511975026@g.us';
-// const GRUPO_ADMINS = '120363409228091157@g.us';
-const GRUPO_TESTE = '120363410659067345@g.us';
+// Grupos onde o Desafio Musical está ativo.
+const GRUPO_PRINCIPAL = '120363412511975026@g.us';
+const GRUPO_ADMINS = '120363409228091157@g.us';
+const GRUPO_DESAFIO_MUSICAL_DAMAS = '120363410659067345@g.us'; // "Desafio Musical Damas"
 
-// export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL, GRUPO_ADMINS];
-export const GRUPOS_PERMITIDOS = [GRUPO_TESTE];
+export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL, GRUPO_ADMINS, GRUPO_DESAFIO_MUSICAL_DAMAS];
 
 export const CONFIG = {
     premioDC: 100,          // DC por rodada
