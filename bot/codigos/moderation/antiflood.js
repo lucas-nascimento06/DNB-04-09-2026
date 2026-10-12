@@ -17,6 +17,11 @@ export const CONFIG = {
     // Use por alguns dias antes de ligar para valer (troque para false).
     modoTeste: false,
 
+    // DEBUG: true = mostra no console o que o antiflood está pensando (contagem de figurinhas,
+    // infrações ignoradas porque a pessoa é admin/dono, mensagens suas "fromMe", etc.).
+    // Depois de testar, troque para false.
+    debug: true,
+
     // Números que nunca são punidos (só dígitos, com DDI).
     // Admins do grupo e os OWNER_NUMBERS (passados pelo messageHandler) já são ignorados.
     whitelist: [
@@ -26,27 +31,30 @@ export const CONFIG = {
     // Cada regra: se a pessoa mandar MAIS que "max" mensagens desses tipos dentro de "janelaMs", é removida.
     // Tipos: image, video, sticker, audio (música/arquivo de áudio), voice (nota de voz), document, text
     rules: [
-        // Fotos/vídeos, músicas, figurinhas e textos NÃO têm regra de janela fixa aqui: usam "sequencias" logo abaixo (só pega envio em lote).
+        // Fotos/vídeos, músicas e textos NÃO têm regra de janela fixa aqui: usam "sequencias" logo abaixo (só pega envio em lote).
         // Nota de voz (gravada na hora): não passa pelas regras de "música" (audioLote/audioAviso/audioEspera),
         // só tem a proteção normal contra flood.
         { nome: 'notas de voz',      tipos: ['voice'],          max: 6, janelaMs: 20000 },
-        { nome: 'mídia geral',       tipos: ['voice', 'document'], max: 4, janelaMs: 12000 }, // foto/vídeo/música/figurinha ficam de fora: usam "sequencias"
+        { nome: 'mídia geral',       tipos: ['voice', 'document'], max: 4, janelaMs: 12000 },
         // Spam "lento": pouca coisa por vez, mas constante.
-        // (áudio e figurinha ficam de fora: áudio usa "sequencias"/"audioLote"; figurinha usa "sequencias")
         { nome: 'mídia (1 min)',     tipos: ['document'], max: 4, janelaMs: 60000 },
-        // Flood de texto: agora usa "sequencias" (textos em lote). Comandos do bot (#...) não entram na conta.
+        // FIGURINHAS: no WhatsApp figurinha é enviada uma por uma e o pessoal usa muito na conversa normal.
+        // Por isso a regra é FOLGADA: só pega rajada absurda (colagem em massa / script).
+        // Mais de 10 figurinhas em 20s (a 11ª remove) = flood. Conversa normal nunca chega nisso.
+        // Se pegar gente normal, suba o max (ex.: 12). Para desligar, apague esta linha.
+        { nome: 'figurinhas (20s)', tipos: ['sticker'], max: 10, janelaMs: 20000 },
+        // Flood de texto: usa "sequencias" (textos em lote). Comandos do bot (#...) não entram na conta.
     ],
 
-    // Envio em LOTE (músicas, fotos/vídeos, figurinhas e textos): conta quantas mensagens chegaram EM SEQUÊNCIA, cada uma até "gapMs"
+    // Envio em LOTE (músicas, fotos/vídeos e textos): conta quantas mensagens chegaram EM SEQUÊNCIA, cada uma até "gapMs"
     // depois da anterior. Se a sequência passar de "max", remove. Se houver uma pausa maior que "gapMs" entre duas,
     // a contagem recomeça do zero. Ex.: 4 em lote, pausa, mais 1 => NÃO pune. 5 em lote => pune.
     // Mensagens espaçadas passam sempre. Se o lote demora a chegar e escapa, aumente o gapMs (ex.: 5000).
+    // (Figurinhas NÃO ficam aqui: são enviadas uma por uma e já são cobertas pelas regras de janela em "rules".)
     sequencias: [
         { nome: 'músicas em lote',       tipos: ['audio'],          max: 3, gapMs: 4000 },
-        { nome: 'fotos/vídeos em lote',  tipos: ['image', 'video'], max: 3, gapMs: 4000 },
-        // Figurinhas: só pune quem manda MUITAS seguidas e RÁPIDO (cada uma até 3s depois da anterior).
-        // Quem manda figurinha para interagir na conversa (espaçadas) não é pego. Se ainda pegar gente normal, diminua o gapMs (ex.: 2000) ou aumente o max.
-        { nome: 'figurinhas em sequência', tipos: ['sticker'],      max: 6, gapMs: 3000 },
+        { nome: 'fotos em lote',         tipos: ['image'],          max: 3, gapMs: 4000 },
+        { nome: 'vídeos em lote',        tipos: ['video'],          max: 2, gapMs: 4000 },
         { nome: 'textos em lote',        tipos: ['text'],           max: 8, gapMs: 4000 },
     ],
 
@@ -189,6 +197,7 @@ const audioEstado = new Map();   // "grupo:user" -> { ok: hora da última músic
 
 const soNumero = (jid = '') => String(jid).split('@')[0].split(':')[0];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const dbg = (...args) => { if (CONFIG.debug) console.log('[antiflood][DEBUG]', ...args); };
 
 // Desembrulha viewOnce / efêmera / documento com legenda / MENSAGEM EDITADA
 // e devolve o conteúdo real. "edicao" = true se a mensagem é uma edição de outra.
@@ -562,7 +571,13 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
         if (!CONFIG.enabled) return false;
         const groupJid = msg.key?.remoteJid;
         if (!groupJid || !groupJid.endsWith('@g.us')) return false;
-        if (msg.key.fromMe) return false;
+        if (msg.key.fromMe) {
+            // Se você testa mandando figurinha pelo MESMO celular/número do bot, a mensagem vem como fromMe e é ignorada.
+            if (CONFIG.debug && msg.message?.stickerMessage) {
+                dbg('figurinha IGNORADA: foi enviada pelo próprio número do bot (fromMe). Teste com outro número.');
+            }
+            return false;
+        }
 
         const user = msg.key.participant || msg.participant;
         if (!user) return false;
@@ -629,6 +644,8 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
         }
         if (!tipoHist && !gatilho) return saiSemPunir();
 
+        if (tipoHist && tipoHist !== 'text') dbg(`recebido tipo=${tipoHist} de ${user}`);
+
         const agora = Date.now();
         let lista = [];
         let violada = null;
@@ -653,6 +670,7 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
             // Regras por tipo
             for (const r of CONFIG.rules) {
                 const qtd = lista.filter(e => r.tipos.includes(e.tipo) && agora - e.t <= r.janelaMs).length;
+                if (r.tipos.includes(tipoHist)) dbg(`${r.nome}: ${qtd}/${r.max} em ${Math.round(r.janelaMs / 1000)}s`);
                 if (qtd > r.max) { violada = r; qtdViolada = qtd; break; }
             }
             // Mesma mensagem repetida
@@ -671,6 +689,7 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
                         if (itens[k].t - itens[k - 1].t <= sq.gapMs) seq++;
                         else break;
                     }
+                    if (tipoHist !== 'text') dbg(`${sq.nome}: seq=${seq}/${sq.max} (gap máx ${sq.gapMs}ms)`);
                     if (seq > sq.max) {
                         const span = itens[itens.length - 1].t - itens[itens.length - seq].t;
                         violada = { nome: sq.nome, janelaMs: Math.max(1000, span) };
@@ -740,16 +759,20 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
         }
 
         // ---- Daqui para baixo só chega quem cometeu infração ----
+        const motivoDbg = gatilho || (violada ? `${qtdViolada} ${violada.nome}` : '?');
+        dbg(`INFRAÇÃO detectada de ${user}: ${motivoDbg}`);
 
         // Whitelist / donos (confere número normal e o alternativo, caso o ID venha como @lid)
         const livres = new Set([...CONFIG.whitelist, ...ownerNumbers].map(soNumero));
         if (livres.has(soNumero(user)) || (msg.key.participantAlt && livres.has(soNumero(msg.key.participantAlt)))) {
+            dbg(`infração IGNORADA: ${user} está na whitelist / é dono (OWNER_NUMBERS).`);
             return false;
         }
 
         // Admins nunca são punidos (metadados ficam em cache por 60s)
         const meta = await getMeta(sock, groupJid);
         if (ehAdmin(meta, user) || (msg.key.participantAlt && ehAdmin(meta, msg.key.participantAlt))) {
+            dbg(`infração IGNORADA: ${user} é ADMIN do grupo. Teste com um número que não seja admin.`);
             return false;
         }
 
