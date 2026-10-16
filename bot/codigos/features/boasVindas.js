@@ -17,49 +17,17 @@ let listaAudiosCache = null;
 let ultimaAtualizacaoCache = 0;
 const TEMPO_CACHE = 5 * 60 * 1000; // 5 minutos
 
-// ✨ Controle de sequência de fotos padrão (quando o membro não tem foto de perfil)
-let indiceFotoAtual = 0;
+// ✨ Foto padrão única (quando o membro não tem foto de perfil)
 const PASTA_FOTOS_PADRAO = path.join(__dirname, "../fotos-boas-vindas");
-const FOTOS_PADRAO = [
-  "foto-1.jpg",
-  "foto-2.png",
-  "foto-3.jpg",
-  "foto-4.jpg",
-  "foto-5.png",
-  "foto-6.png",
-  "foto-7.png",
-  "foto-8.png",
-  "foto-9.png",
-  "foto-10.png",
-  "foto-11.png",
-  "foto-12.png",
-  "foto-13.png",
-  "foto-14.png",
-  "foto-15.png",
-  "foto-16.png",
-  "foto-17.jpg",
-  "foto-18.png",
-  "foto-19.png",
-  "foto-20.png",
-  "foto-21.png",
-  "foto-22.png",
-  "foto-23.png",
-  "foto-24.png"
-];
+const FOTO_PADRAO = "img-nao-disponivel.png";
 
 /**
- * Busca a próxima foto padrão local, em sequência (não aleatório)
+ * Busca a foto padrão local (imagem única)
  */
-function buscarFotoPadraoSequencial() {
-  const nomeArquivo = FOTOS_PADRAO[indiceFotoAtual];
-  const caminhoCompleto = path.join(PASTA_FOTOS_PADRAO, nomeArquivo);
+function buscarFotoPadrao() {
+  const caminhoCompleto = path.join(PASTA_FOTOS_PADRAO, FOTO_PADRAO);
 
-  console.log(`🖼️ Foto padrão selecionada [${indiceFotoAtual + 1}/${FOTOS_PADRAO.length}]: ${nomeArquivo}`);
-
-  indiceFotoAtual = (indiceFotoAtual + 1) % FOTOS_PADRAO.length;
-  if (indiceFotoAtual === 0) {
-    console.log("🔄 Sequência de fotos padrão reiniciada! Voltando à primeira.");
-  }
+  console.log(`🖼️ Usando foto padrão: ${FOTO_PADRAO}`);
 
   try {
     return fs.readFileSync(caminhoCompleto);
@@ -519,7 +487,7 @@ export const configurarBoasVindas = async (socket, groupId, participant) => {
     }
 
  const welcomeMessages = [
-     `🎉💃 *BEM-VINDO(A) AO GRUPO* 👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\n@${participantName} ✨🎉\n\n Aqui é um espaço de interação e diversão 24 horas! 🕛🔥 Prepare seu meme, seu GIF e sua risada! 😎💥\n\nParticipe das conversas e aproveite bons momentos com a gente! 💃🎶🍾🍸\n\n⏰ *Aguarde 20 segundos que enviarei as regras do grupo!*`,
+    `🎉💃 *BEM-VINDO(A) AO GRUPO* 👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\n@${participantName} ✨🎉\n\n Aqui é um espaço de interação e diversão 24 horas! 🕛🔥 Prepare seu meme, seu GIF e sua risada! 😎💥\n\nParticipe das conversas e aproveite bons momentos com a gente! 💃🎶🍾🍸\n\n⏰ *Aguarde 20 segundos que enviarei as regras do grupo!*`,
        `🎊🔥 *CHEGOU O(A) DONO(A) DA FESTA!* 💃🍾 SEJA BEM-VINDO(A) @${participantName} AO GRUPO 👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\nPrepare-se para zoeira, desafios e histórias que ninguém acredita! 😎🔥\n\n⏰ *Aguarde 20 segundos que enviarei as regras do grupo!*`,
       `💃✨ *A RAINHA OU O REI CHEGOU!* 👑🔥 SEJA BEM-VINDO(A) @${participantName} AO GRUPO 👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\nAqui só entra quem gosta de diversão, memes e risadas sem limites! 😆🍹\n\n⏰ *Aguarde 20 segundos que enviarei as regras do grupo!*`,
       `🎶💥 *CHEGOU COM ESTILO!* 💃🌟 SEJA BEM-VINDO(A) @${participantName} AO GRUPO 👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ* 💃🎶🍾🍸\n\nSolte o GIF, prepare o emoji e venha causar impacto! 😎💫\n\n⏰ *Aguarde 20 segundos que enviarei as regras do grupo!*`,
@@ -609,7 +577,7 @@ export const configurarBoasVindas = async (socket, groupId, participant) => {
         let buffer;
 
         if (usandoFotoPadrao) {
-          buffer = buscarFotoPadraoSequencial();
+          buffer = buscarFotoPadrao();
           if (!buffer) throw new Error("Não foi possível ler a foto padrão local");
         } else {
           const res = await axios.get(profilePictureUrl, {
