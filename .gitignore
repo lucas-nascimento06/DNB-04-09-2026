@@ -1,4 +1,6 @@
+# =========================
 # Dependências
+# =========================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -10,36 +12,68 @@ yarn-error.log*
 # Se usar yarn, descomente a linha abaixo:
 # package-lock.json
 
-# Arquivos de ambiente
+# =========================
+# Segredos e autenticação (NUNCA subir)
+# =========================
 .env
-.env.locala
+.env.local
 .env.development.local
 .env.test.local
 .env.production.local
+cookies.txt
+**/cookies.txt
+*cookies*.txt
 
+# =========================
 # Arquivos de dados sensíveis ou temporários
+# =========================
+# Ignora todos os .json do projeto...
 *.json
-!bot/data/*.json
-bot/data/groups.json
-bot/data/recadosAnonimosState.json
-bot/data/*.bak
-downloads/
+# ...mas mantém os do package e os da pasta de dados do bot
 !package.json
 !package-lock.json
+!bot/data/*.json
+# ...exceto estes, que contêm dados de grupos/usuários
+bot/data/groups.json
+bot/data/recadosAnonimosState.json
+warnings_data.json
+bot/data/*.bak
+*.bak
 
+# =========================
+# Downloads, mídia e temporários do bot
+# =========================
+downloads/
+media/
+cache/
+temp/
+bot/temp/
+todos_hash.txt
+*.opus
+yt-dlp.exe
+yt-dlp.exe.bak
+
+# =========================
 # Logs
+# =========================
 logs/
 *.log
 
+# =========================
 # Arquivos temporários
+# =========================
 *.tmp
 *.temp
 
+# =========================
 # Cache
+# =========================
 .cache/
 .parcel-cache/
 
+# =========================
 # Arquivos do sistema operacional
+# =========================
 .DS_Store
 .DS_Store?
 ._*
@@ -48,18 +82,23 @@ logs/
 ehthumbs.db
 Thumbs.db
 
+# =========================
 # Arquivos do editor
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# =========================
 # Build e distribuição
+# =========================
 dist/
 build/
 out/
 
+# =========================
 # Arquivos específicos do projeto
+# =========================
 testConnection.js
-warnings_data.json
