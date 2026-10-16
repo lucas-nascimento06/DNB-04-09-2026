@@ -1,7 +1,7 @@
-// 🛡️ YOUTUBE DOWNLOADER - COMPATÍVEL COM TERMUX
+// 🛡️ YOUTUBE DOWNLOADER - COMPATÍVEL COM WINDOWS E TERMUX
 import ytSearch from 'yt-search';
-import { promises as fs } from 'fs';
-import { tmpdir } from 'os';
+import { promises as fs, existsSync } from 'fs';
+import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { execFile } from 'child_process';
@@ -12,18 +12,41 @@ const urlCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000;
 
 // 🍪 AUTENTICAÇÃO DO YOUTUBE (resolve "Sign in to confirm you're not a bot")
-// Por padrão lê os cookies direto do Firefox a cada execução (sempre atualizados).
-// Configuração opcional por variável de ambiente:
-//   YTDLP_COOKIES_BROWSER=firefox            (padrão)
-//   YTDLP_COOKIES_BROWSER=firefox:meu_perfil (perfil específico)
-//   YTDLP_COOKIES_BROWSER=                   (vazio = desativa)
-//   YTDLP_COOKIES_FILE=C:\caminho\cookies.txt (usa arquivo cookies.txt em vez do navegador)
+//
+// Escolha automática conforme o sistema:
+//   - Se existir um cookies.txt  -> usa o arquivo (Termux/Android, ou qualquer sistema)
+//        procura em: YTDLP_COOKIES_FILE, <pasta do bot>/cookies.txt, ~/cookies.txt
+//   - Senão, no Windows          -> lê os cookies direto do Firefox
+//   - Senão (Termux sem arquivo) -> roda sem cookies
+//
+// Variáveis de ambiente opcionais:
+//   YTDLP_COOKIES_FILE=/caminho/cookies.txt   (força um arquivo específico)
+//   YTDLP_COOKIES_BROWSER=firefox             (navegador, ex.: firefox ou firefox:perfil)
+//   YTDLP_COOKIES_BROWSER=                    (vazio = não usa navegador)
+function detectarCookiesFile() {
+    const candidatos = [
+        join(process.cwd(), 'cookies.txt'),
+        join(homedir(), 'cookies.txt')
+    ];
+    return candidatos.find(p => existsSync(p)) || '';
+}
+
+const COOKIES_FILE = (process.env.YTDLP_COOKIES_FILE || '').trim() || detectarCookiesFile();
+
 const COOKIES_BROWSER = process.env.YTDLP_COOKIES_BROWSER !== undefined
     ? process.env.YTDLP_COOKIES_BROWSER.trim()
-    : 'firefox';
-const COOKIES_FILE = (process.env.YTDLP_COOKIES_FILE || '').trim();
+    : (process.platform === 'win32' ? 'firefox' : '');
 
-// Argumentos de autenticação + solver de desafios JS (deno) do YouTube
+// Mostra uma vez, na inicialização, qual modo de autenticação será usado
+if (COOKIES_FILE) {
+    console.log(`🍪 [AUTH] Usando cookies.txt: ${COOKIES_FILE}`);
+} else if (COOKIES_BROWSER) {
+    console.log(`🍪 [AUTH] Usando cookies do navegador: ${COOKIES_BROWSER}`);
+} else {
+    console.log('🍪 [AUTH] Sem cookies (o YouTube pode pedir login; use um cookies.txt se isso acontecer)');
+}
+
+// Argumentos de autenticação + solver de desafios JS do YouTube
 function argsAutenticacao() {
     const args = [];
 
@@ -212,7 +235,7 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
             // 🛡️ REFERER
             '--referer', 'https://www.youtube.com/',
             
-            // 🍪 AUTENTICAÇÃO (cookies do navegador + solver JS do YouTube)
+            // 🍪 AUTENTICAÇÃO (cookies + solver JS do YouTube)
             ...argsAutenticacao(),
             
             // 🎧 CONVERSÃO AUTOMÁTICA PARA OPUS
@@ -246,10 +269,17 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
     } catch (err) {
         console.error(`❌ [YT-DLP] Tentativa ${tentativa} falhou:`, err.message);
         
-        // 🍪 DICA DE DIAGNÓSTICO: bloqueio anti-bot / cookies
+        // 🍪 DICAS DE DIAGNÓSTICO
         if (err.message.includes('Sign in to confirm')) {
-            console.error('🍪 [DICA] O YouTube pediu login. Verifique se o Firefox está logado no YouTube ' +
-                '(mesmo usuário do Windows em que o bot roda) ou defina YTDLP_COOKIES_FILE / YTDLP_COOKIES_BROWSER.');
+            if (COOKIES_FILE) {
+                console.error(`🍪 [DICA] O YouTube pediu login mesmo com cookies. O arquivo ${COOKIES_FILE} provavelmente expirou: exporte um cookies.txt novo.`);
+            } else if (process.platform === 'win32') {
+                console.error('🍪 [DICA] O YouTube pediu login. Verifique se o Firefox está logado no YouTube (mesmo usuário do Windows em que o bot roda).');
+            } else {
+                console.error('🍪 [DICA] O YouTube pediu login. Coloque um cookies.txt em ~/cookies.txt e reinicie o bot.');
+            }
+        } else if (err.message.includes('could not find') && err.message.includes('cookies database')) {
+            console.error('🍪 [DICA] O navegador de cookies não existe neste sistema. Use YTDLP_COOKIES_BROWSER= (vazio) ou um cookies.txt.');
         }
         
         // 🎵 PROBLEMA DE FORMATO
