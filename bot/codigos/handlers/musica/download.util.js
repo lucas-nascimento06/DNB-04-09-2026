@@ -11,6 +11,34 @@ const execFileAsync = promisify(execFile);
 const urlCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000;
 
+// 🍪 AUTENTICAÇÃO DO YOUTUBE (resolve "Sign in to confirm you're not a bot")
+// Por padrão lê os cookies direto do Firefox a cada execução (sempre atualizados).
+// Configuração opcional por variável de ambiente:
+//   YTDLP_COOKIES_BROWSER=firefox            (padrão)
+//   YTDLP_COOKIES_BROWSER=firefox:meu_perfil (perfil específico)
+//   YTDLP_COOKIES_BROWSER=                   (vazio = desativa)
+//   YTDLP_COOKIES_FILE=C:\caminho\cookies.txt (usa arquivo cookies.txt em vez do navegador)
+const COOKIES_BROWSER = process.env.YTDLP_COOKIES_BROWSER !== undefined
+    ? process.env.YTDLP_COOKIES_BROWSER.trim()
+    : 'firefox';
+const COOKIES_FILE = (process.env.YTDLP_COOKIES_FILE || '').trim();
+
+// Argumentos de autenticação + solver de desafios JS (deno) do YouTube
+function argsAutenticacao() {
+    const args = [];
+
+    if (COOKIES_FILE) {
+        args.push('--cookies', COOKIES_FILE);
+    } else if (COOKIES_BROWSER) {
+        args.push('--cookies-from-browser', COOKIES_BROWSER);
+    }
+
+    // Baixa/usa o script solver dos desafios JS (fica em cache após a 1ª vez)
+    args.push('--remote-components', 'ejs:github');
+
+    return args;
+}
+
 // 🕐 DELAY HUMANO
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let lastDownloadTime = 0;
@@ -115,11 +143,15 @@ export async function obterDadosMusica(url) {
             '--no-warnings',
             '--no-playlist',
             '--skip-download',
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            '--referer', 'https://www.youtube.com/'
+            '--referer', 'https://www.youtube.com/',
+            
+            // 🍪 AUTENTICAÇÃO (cookies + solver JS)
+            ...argsAutenticacao()
         ];
         
-        const { stdout } = await execFileAsync('yt-dlp', args);
+        const { stdout } = await execFileAsync('yt-dlp', args, {
+            maxBuffer: 50 * 1024 * 1024
+        });
         const data = JSON.parse(stdout);
         
         console.log(`✅ [INFO-YTDLP] ${Date.now() - inicio}ms`);
@@ -177,13 +209,11 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
             '--retries', '10',
             '--fragment-retries', '10',
             
-            // 🛡️ ANTI-DETECÇÃO
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            // 🛡️ REFERER
             '--referer', 'https://www.youtube.com/',
             
-            // 🌐 BYPASS
-            '--geo-bypass',
-            '--geo-bypass-country', 'US',
+            // 🍪 AUTENTICAÇÃO (cookies do navegador + solver JS do YouTube)
+            ...argsAutenticacao(),
             
             // 🎧 CONVERSÃO AUTOMÁTICA PARA OPUS
             '--audio-format', 'opus',
@@ -195,8 +225,6 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
             '--buffer-size', '512K',
             '--http-chunk-size', '512K',
             '--socket-timeout', '30',
-            '--no-check-certificate',
-            '--no-cache-dir',
             
             '--output', tempFile
         ];
@@ -217,6 +245,12 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
         return { buffer, metodo: 'yt-dlp', formato: 'opus' };
     } catch (err) {
         console.error(`❌ [YT-DLP] Tentativa ${tentativa} falhou:`, err.message);
+        
+        // 🍪 DICA DE DIAGNÓSTICO: bloqueio anti-bot / cookies
+        if (err.message.includes('Sign in to confirm')) {
+            console.error('🍪 [DICA] O YouTube pediu login. Verifique se o Firefox está logado no YouTube ' +
+                '(mesmo usuário do Windows em que o bot roda) ou defina YTDLP_COOKIES_FILE / YTDLP_COOKIES_BROWSER.');
+        }
         
         // 🎵 PROBLEMA DE FORMATO
         if (err.message.includes('Requested format is not available') && tentativa < 3) {
