@@ -6,7 +6,8 @@
 //      malformados, tipos de mensagem que usuário comum não manda) - inclusive se for EDITADA depois;
 //   4) manda link/convite de OUTRO grupo de WhatsApp;
 //   5) manda comando de OUTRO bot (!menu, .s, /play...) que não existe no nosso bot.
-// Manda o número para a blacklist (com motivo) e avisa os admins.
+// Apenas REMOVE a pessoa do grupo e avisa os admins (NÃO envia para a blacklist:
+// para voltar a enviar, troque adicionarBlacklist para true).
 
 import { addToBlacklist } from './blacklist/blacklistFunctions.js';
 
@@ -94,7 +95,7 @@ export const CONFIG = {
 
     // ---------- Link/convite de OUTRO grupo ----------
     bloquearConviteGrupo: true,
-    acaoConviteGrupo: 'remover',   // 'remover' (remove + blacklist) ou 'apagar' (só apaga a mensagem)
+    acaoConviteGrupo: 'remover',   // 'remover' (só remove do grupo) ou 'apagar' (só apaga a mensagem)
 
     // ---------- Comandos de OUTROS bots ----------
     bloquearComandos: true,
@@ -112,7 +113,7 @@ export const CONFIG = {
 
     // O que fazer com "#algo" que NÃO existe no bot e NÃO parece erro de digitação (ex.: #vibeboa):
     //   'apagar'  = só apaga a mensagem, sem remover ninguém (recomendado)
-    //   'remover' = remove + blacklist
+    //   'remover' = só remove do grupo
     //   'ignorar' = não faz nada
     // Comandos de OUTROS prefixos (!menu, .s, /play) e travas sempre removem.
     acaoHashtagDesconhecida: 'apagar',
@@ -138,7 +139,7 @@ export const CONFIG = {
 
     apagarMensagens: true,          // apaga as mensagens do infrator
     avisarNoGrupo: true,            // manda aviso no grupo depois de remover
-    adicionarBlacklist: true,       // grava o número na blacklist (tabela que o #addlista usa)
+    adicionarBlacklist: false,      // FALSE = só remove do grupo, NÃO grava na blacklist (true = grava na tabela que o #addlista usa)
     grupoAvisoAdmins: '120363409228091157@g.us', // GRUPO_ADMINS; deixe '' para não avisar
     bloqueioPosRemocaoMs: 180000,   // por 3 min, qualquer mensagem que ainda chegue dele é apagada
     avisarBloqueioPosRemocao: true, // avisa 1x no grupo se a pessoa VOLTAR (ou continuar) e mandar algo durante o bloqueio
@@ -324,7 +325,7 @@ function analisarTextosTrava(textos) {
 }
 
 // Retorna { motivo, acao, titulo } se a mensagem é trava, convite de grupo ou comando de outro bot; senão null.
-// acao: 'remover' (remove + blacklist) ou 'apagar' (só apaga a mensagem)
+// acao: 'remover' (remove do grupo) ou 'apagar' (só apaga a mensagem)
 function detectarGatilho(m) {
     if (!m) return null;
     const textos = coletarTextos(m);
@@ -832,14 +833,14 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
             await sock.groupParticipantsUpdate(groupJid, [user], 'remove');
             console.log(`[antiflood] ${user} removido de ${groupJid} (${resumo})`);
         } catch (err) {
-            console.error('[antiflood] falha ao remover (seguindo com blacklist e limpeza):', err.message);
+            console.error('[antiflood] falha ao remover (seguindo com a limpeza):', err.message);
         }
         removidoEm.set(idUser, Date.now());
 
         // 2) Apaga as mensagens do flood (fila lenta em segundo plano)
         if (!gatilho && CONFIG.apagarMensagens) enfileirarDelete(sock, groupJid, keys);
 
-        // 3) Blacklist com motivo (mesma tabela do #addlista)
+        // 3) Blacklist com motivo (mesma tabela do #addlista) - só roda se adicionarBlacklist estiver true
         let blacklistOk = false;
         if (CONFIG.adicionarBlacklist) {
             try {
@@ -879,8 +880,8 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
                         `👥 Grupo: ${meta.subject || groupJid}\n` +
                         `📌 Motivo: ${titulo} - ${resumo}\n` +
                         `🕒 ${quando}\n` +
-                        `📋 Blacklist: ${blacklistOk ? '✅ adicionado' : CONFIG.adicionarBlacklist ? '⚠️ falhou (veja o log)' : 'desativada'}\n\n` +
-                        `Para desfazer: #remlista ${telefone}`,
+                        `📋 Blacklist: ${blacklistOk ? '✅ adicionado' : CONFIG.adicionarBlacklist ? '⚠️ falhou (veja o log)' : 'desativada (apenas removido)'}` +
+                        `${blacklistOk ? `\n\nPara desfazer: #remlista ${telefone}` : ''}`,
                 });
             } catch (_) { /* ignora */ }
         }
