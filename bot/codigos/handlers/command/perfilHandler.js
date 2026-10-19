@@ -2,7 +2,9 @@
 import axios from 'axios';
 import { Jimp, loadFont, HorizontalAlign } from 'jimp';
 import { createRequire } from 'module';
-import { dirname, resolve } from 'path';
+import { dirname, resolve, join } from 'path';
+import { fileURLToPath } from 'url';
+import { readdir, readFile } from 'fs/promises';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 👤 SISTEMA DE PERFIL - ESTILO TROLL COM BARRA DE PORCENTAGEM
@@ -13,18 +15,12 @@ import { dirname, resolve } from 'path';
 
 const PERFIL_JSON_URL = 'https://raw.githubusercontent.com/lucas-nascimento06/perfil-integrantes-admins/refs/heads/main/perfil-frases.json';
 
-const POSTER_URLS = [
-    'https://i.ibb.co/wZzQ1rCB/1.png',
-    'https://i.ibb.co/84RzKhsC/2.png',
-    'https://i.ibb.co/xt9zypby/3.png',
-    'https://i.ibb.co/bj3LXdfS/4.png',
-    'https://i.ibb.co/fz0dG5MZ/5.png',
-    'https://i.ibb.co/bMwxL8Y5/6.png',
-    'https://i.ibb.co/6cCKMh6z/7.png',
-    'https://i.ibb.co/pvvGPtz2/8.png',
-    'https://i.ibb.co/kVYXT52C/9-copiar.png',
-    'https://i.ibb.co/0yVVP69L/10-copiar.png',
-];
+// ── PASTA LOCAL DOS POSTERS ──────────────────────────────────────────────────
+// Este arquivo fica em bot/codigos/handlers/command/
+// ../../fotos-perfil → bot/codigos/fotos-perfil
+
+const __dirname   = dirname(fileURLToPath(import.meta.url));
+const POSTERS_DIR = resolve(__dirname, '../../fotos-perfil');
 
 // ── SLEEP ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +38,9 @@ const FONT_16_WHITE = resolve(_fontsDir, 'open-sans-16-white/open-sans-16-white.
 let perfilData = null;
 let _font32    = null;
 let _font16    = null;
+
+// Cache de posters já prontos (com título e thumbnail)
+const posterCache = [];
 
 // ── PRÉ-CARREGAMENTO DAS FONTES ───────────────────────────────────────────────
 
@@ -91,12 +90,58 @@ async function adicionarTituloNoPoster(buffer) {
             maxWidth: W
         });
 
-        console.log('✅ [PERFIL] Título adicionado ao poster.');
         return await image.getBuffer('image/jpeg');
     } catch (err) {
         console.error('❌ [PERFIL] Erro ao adicionar título no poster:', err.message);
         return buffer;
     }
+}
+
+// ── THUMBNAIL ────────────────────────────────────────────────────────────────
+
+async function gerarThumbnail(buffer, size = 256) {
+    try {
+        const image = await Jimp.read(buffer);
+        image.scaleToFit({ w: size, h: size });
+        return await image.getBuffer('image/jpeg');
+    } catch (err) {
+        console.error('Erro ao gerar thumbnail:', err);
+        return null;
+    }
+}
+
+// ── PRÉ-CARREGAR POSTERS LOCAIS (roda uma vez na inicialização) ──────────────
+
+async function preCarregarPosters() {
+    try {
+        const arquivos = (await readdir(POSTERS_DIR)).filter(f => /\.(png|jpe?g)$/i.test(f));
+
+        if (arquivos.length === 0) {
+            console.warn(`⚠️ [PERFIL] Nenhuma imagem encontrada em: ${POSTERS_DIR}`);
+            return;
+        }
+
+        for (const arquivo of arquivos) {
+            try {
+                let buf = await readFile(join(POSTERS_DIR, arquivo));
+                buf = await adicionarTituloNoPoster(buf);   // título aplicado uma única vez
+                const thumb = await gerarThumbnail(buf, 256);
+                posterCache.push({ buf, thumb });
+            } catch (e) {
+                console.warn(`⚠️ [PERFIL] Falha ao carregar ${arquivo}:`, e.message);
+            }
+        }
+
+        console.log(`✅ [PERFIL] ${posterCache.length} posters em cache`);
+    } catch (e) {
+        console.error('❌ [PERFIL] Erro ao ler pasta de posters:', e.message);
+    }
+}
+
+function obterPoster() {
+    return posterCache.length
+        ? posterCache[Math.floor(Math.random() * posterCache.length)]
+        : null;
 }
 
 // ── CARREGAMENTO DO JSON ────────────────────────────────────────────────────
@@ -174,38 +219,6 @@ function montarPerfil(nomeExibicao) {
     );
 }
 
-// ── HELPERS ────────────────────────────────────────────────────────────────
-
-async function gerarThumbnail(buffer, size = 256) {
-    try {
-        const image = await Jimp.read(buffer);
-        image.scaleToFit({ w: size, h: size });
-        return await image.getBuffer('image/jpeg');
-    } catch (err) {
-        console.error('Erro ao gerar thumbnail:', err);
-        return null;
-    }
-}
-
-async function baixarImagemPoster() {
-    const posterUrl = POSTER_URLS[Math.floor(Math.random() * POSTER_URLS.length)];
-
-    try {
-        console.log('🖼️ Baixando poster de perfil...');
-        const response = await axios.get(posterUrl, { responseType: 'arraybuffer' });
-
-        let buffer = Buffer.from(response.data, 'binary');
-        if (buffer.length < 1000) return null;
-
-        console.log(`✅ Poster baixado: ${buffer.length} bytes`);
-        buffer = await adicionarTituloNoPoster(buffer);
-        return buffer;
-    } catch (err) {
-        console.error('❌ Erro ao baixar poster:', err.message);
-        return null;
-    }
-}
-
 // ── RESOLVER SENDER REAL ──────────────────────────────────────────────────
 
 function resolverSenderId(message) {
@@ -281,7 +294,7 @@ export async function perfilHandler(sock, message) {
             { quoted: message }
         );
 
-        await sleep(3000);
+        await sleep(1500);
 
         // ⏳ MENSAGEM 2 — mais suspense
         await sock.sendMessage(
@@ -290,7 +303,7 @@ export async function perfilHandler(sock, message) {
             { quoted: message }
         );
 
-        await sleep(3000);
+        await sleep(1500);
 
         // ⏳ MENSAGEM 3 — suspense máximo
         await sock.sendMessage(
@@ -299,21 +312,20 @@ export async function perfilHandler(sock, message) {
             { quoted: message }
         );
 
-        await sleep(2000);
+        await sleep(1000);
 
         const perfilCompleto = montarPerfil(numeroExibicao);
 
-        // ── Tentar enviar com poster + título ─────────────────────────────
-        const posterBuffer = await baixarImagemPoster();
+        // ── Enviar com poster local (já em cache, com título e thumbnail) ──
+        const poster = obterPoster();
 
-        if (posterBuffer) {
-            const thumb = await gerarThumbnail(posterBuffer, 256);
+        if (poster) {
             try {
                 await sock.sendMessage(from, {
-                    image:         posterBuffer,
+                    image:         poster.buf,
                     caption:       perfilCompleto,
                     mentions:      mentionsFinais,
-                    jpegThumbnail: thumb,
+                    jpegThumbnail: poster.thumb,
                     contextInfo:   replyContext
                 });
                 console.log('✅ [PERFIL] Poster + perfil enviados!');
@@ -371,8 +383,9 @@ export async function atualizarPerfilHandler(sock, message) {
 }
 
 // ── INICIALIZAÇÃO ────────────────────────────────────────────────────────
+// As fontes carregam primeiro, porque o título dos posters depende delas.
 
 Promise.all([
     carregarPerfilData().catch(err => console.error('❌ Erro ao inicializar dados de perfil:', err)),
-    obterFontes()
+    obterFontes().then(preCarregarPosters)
 ]);
