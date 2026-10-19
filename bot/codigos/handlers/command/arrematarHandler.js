@@ -121,7 +121,7 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
 
         await client.query('COMMIT');
 
-        // ==========================================================
+        // ======================================================
         // 🔧 A PARTIR DAQUI: a transação já foi confirmada no banco —
         // débito, crédito e bloqueio de casal JÁ ACONTECERAM DE VERDADE.
         // Tudo abaixo é só notificação/registro (efeito colateral). Se
@@ -130,7 +130,7 @@ export async function arremaverLeilao(sock, grupoId, quotedFallback = null) {
         // "❌ Erro ao arrematar o leilão." — isso mascararia um arremate
         // que na verdade deu certo. Cada envio é isolado em seu próprio
         // try/catch, só logando o problema no console.
-        // ============================================================
+        // ========================================================
 
         const liderJid = `${leilao.lider_id}@s.whatsapp.net`;
         const leiloadoJid = `${leilao.leiloado_id}@s.whatsapp.net`;
