@@ -37,7 +37,7 @@ const CONFIGS = {
     }
 };
 
-// ── Formatação em negrito ──────────────────────────────────────────────────
+// ── Formatação em negrito ──────────────────────────────────────────────
 
 const negrito = (texto) =>
     texto.split('\n').map(linha =>
