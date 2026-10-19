@@ -13,7 +13,7 @@ import { Jimp } from 'jimp';
 import { getAtivos, getInativosComDias, getFantasmas, fecharDia } from '../../utils/rainhaModel.js';
 
 const GRUPO_PRINCIPAL = '120363412511975026@g.us';
-const GRUPO_ADMINS    = '120363409228091157@g.us';
+const GRUPO_ADMINS    = '120363431558953171@g.us';
 
 const FOTO_ALERTA_URL = 'https://i.ibb.co/fYV2rq3G/tropa-antifantasmas.png';
 

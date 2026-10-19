@@ -140,7 +140,7 @@ export const CONFIG = {
     apagarMensagens: true,          // apaga as mensagens do infrator
     avisarNoGrupo: true,            // manda aviso no grupo depois de remover
     adicionarBlacklist: false,      // FALSE = só remove do grupo, NÃO grava na blacklist (true = grava na tabela que o #addlista usa)
-    grupoAvisoAdmins: '120363409228091157@g.us', // GRUPO_ADMINS; deixe '' para não avisar
+    grupoAvisoAdmins: '120363431558953171@g.us', // GRUPO_ADMINS; deixe '' para não avisar
     bloqueioPosRemocaoMs: 180000,   // por 3 min, qualquer mensagem que ainda chegue dele é apagada
     avisarBloqueioPosRemocao: true, // avisa 1x no grupo se a pessoa VOLTAR (ou continuar) e mandar algo durante o bloqueio
     avisoPosRemocaoAposMs: 15000,   // só avisa se a mensagem chegar mais de 15s depois da remoção (ignora o flood em andamento)
