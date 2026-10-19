@@ -191,7 +191,7 @@ export async function handleBlacklistCommands(sock, from, userId, content, msg) 
     return false;
 }
 
-/* ============ Como fica ==============*/
+/* =========== Como fica =============*/
 
 //#ad +55 51 95456-8767  --->	5551954568767	Adicionado em (data)
 //#ad 5551954568767 golpista ----->	5551954568767	golpista
