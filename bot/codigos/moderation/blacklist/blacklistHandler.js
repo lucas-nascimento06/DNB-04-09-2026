@@ -34,6 +34,21 @@ const deleteCommandMessage = async (sock, groupId, messageKey) => {
 };
 
 /**
+ * 🆕 Detecta os comandos de adicionar/remover (nomes novos + antigos como atalho)
+ *   Adicionar: #ad  [número] [motivo]  | (antigo) #addlista [número] [motivo]
+ *   Remover:   #rem [número]           | (antigo) #remlista [número]
+ */
+const isAddCommand = (lower) => /^#(addlista|ad)\s+/.test(lower);
+
+const isRemCommand = (lower) => /^#(remlista|rem)\s+/.test(lower);
+
+/**
+ * Remove o comando do começo da mensagem e devolve só os argumentos
+ * Ex: "#ad 5521999999999 golpista" -> "5521999999999 golpista"
+ */
+const getCommandArgs = (content) => content.trim().replace(/^#\S+\s*/, '');
+
+/**
  * Handler principal dos comandos da blacklist
  */
 export async function handleBlacklistCommands(sock, from, userId, content, msg) {
@@ -43,8 +58,8 @@ export async function handleBlacklistCommands(sock, from, userId, content, msg) 
     if (!lowerContent) return false;
 
     // Só segue se for de fato um comando de blacklist — evita ruído de log em toda mensagem
-    const isBlacklistCommand = lowerContent.startsWith('#addlista ')
-        || lowerContent.startsWith('#remlista ')
+    const isBlacklistCommand = isAddCommand(lowerContent)
+        || isRemCommand(lowerContent)
         || lowerContent.startsWith('#verilista ')
         || lowerContent === '#lista'
         || lowerContent === '#infolista';
@@ -67,24 +82,37 @@ export async function handleBlacklistCommands(sock, from, userId, content, msg) 
         return true;
     }
 
-    // #addlista - Apenas adiciona à blacklist
-    if (lowerContent.startsWith('#addlista ')) {
+    // #ad (ou #addlista) - Apenas adiciona à blacklist
+    if (isAddCommand(lowerContent)) {
         // DELETA O COMANDO IMEDIATAMENTE - COM AWAIT
         await deleteCommandMessage(sock, from, userMsgKey);
 
         if (!await requireAdmin()) return true;
 
-        const args = content.split(' ');
-        const number = args[1]?.trim();
+        // 🆕 Aceita número com espaços, +, hífen e parênteses: +55 51 95456-8767
+        // Junta os pedaços que "parecem número" (até 15 dígitos) e o resto vira motivo
+        const tokens = getCommandArgs(content).split(/\s+/).filter(Boolean);
+        const numberParts = [];
+        let digitCount = 0;
+
+        for (const t of tokens) {
+            if (!/^[+\d()\-.]+$/.test(t)) break;
+            const d = t.replace(/\D/g, '').length;
+            if (digitCount + d > 15) break;
+            numberParts.push(t);
+            digitCount += d;
+        }
+
+        const number = numberParts.join('');
         if (!number) {
-            const sentMsg = await sock.sendMessage(from, { text: '❌ Uso correto: #addlista [número] [motivo opcional]' });
+            const sentMsg = await sock.sendMessage(from, { text: '❌ Uso correto: #ad [número] [motivo opcional]' });
             setTimeout(() => sock.sendMessage(from, { delete: sentMsg.key }).catch(() => {}), 5000);
             return true;
         }
 
         const now = new Date();
         const formattedDate = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const motivo = args.slice(2).join(' ') || `Adicionado em ${formattedDate}`;
+        const motivo = tokens.slice(numberParts.length).join(' ') || `Adicionado em ${formattedDate}`;
 
         const result = await addToBlacklist(number, motivo);
 
@@ -94,16 +122,16 @@ export async function handleBlacklistCommands(sock, from, userId, content, msg) 
         return true;
     }
 
-    // #remlista
-    if (lowerContent.startsWith('#remlista ')) {
+    // #rem (ou #remlista)
+    if (isRemCommand(lowerContent)) {
         // DELETA O COMANDO IMEDIATAMENTE - COM AWAIT
         await deleteCommandMessage(sock, from, userMsgKey);
 
         if (!await requireAdmin()) return true;
 
-        const number = content.replace('#remlista ', '').trim();
+        const number = getCommandArgs(content).trim();
         if (!number) {
-            const sentMsg = await sock.sendMessage(from, { text: '❌ Uso correto: #remlista [número]' });
+            const sentMsg = await sock.sendMessage(from, { text: '❌ Uso correto: #rem [número]' });
             setTimeout(() => sock.sendMessage(from, { delete: sentMsg.key }).catch(() => {}), 5000);
             return true;
         }
@@ -162,3 +190,10 @@ export async function handleBlacklistCommands(sock, from, userId, content, msg) 
 
     return false;
 }
+
+/* ============ Como fica ==============*/
+
+//#ad +55 51 95456-8767  --->	5551954568767	Adicionado em (data)
+//#ad 5551954568767 golpista ----->	5551954568767	golpista
+//#ad +55 51 95456-8767 golpista ----> 	5551954568767	golpista
+//#ad (51) 95456-8767 ---->	51954568767	Adicionado em (data)

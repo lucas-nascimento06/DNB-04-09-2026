@@ -208,8 +208,8 @@ export function getBlacklistHelp() {
 ${BOT_TITLE} \n\n
 📋 *COMANDOS DE BLACKLIST* 📋
 
-- #addlista [número] - Adiciona número à blacklist
-- #remlista [número] - Remove número da blacklist
+- #ad [número] [motivo] - Adiciona número à blacklist
+- #rem [número] - Remove número da blacklist
 - #verilista [número] - Verifica se número está na blacklist
 - #lista - Lista todos os números da blacklist
 - #varredura - Faz varredura no grupo e remove quem está na blacklist
