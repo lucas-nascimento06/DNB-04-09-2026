@@ -4,7 +4,8 @@ import { Jimp, loadFont, HorizontalAlign } from 'jimp';
 import { createRequire } from 'module';
 import { dirname, resolve, join } from 'path';
 import { fileURLToPath } from 'url';
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile, writeFile } from 'fs/promises';
+import https from 'https';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 👤 SISTEMA DE PERFIL - ESTILO TROLL COM BARRA DE PORCENTAGEM
@@ -21,6 +22,9 @@ const PERFIL_JSON_URL = 'https://raw.githubusercontent.com/lucas-nascimento06/pe
 
 const __dirname   = dirname(fileURLToPath(import.meta.url));
 const POSTERS_DIR = resolve(__dirname, '../../fotos-perfil');
+
+// Cópia local do JSON (bot/data/), usada se o GitHub falhar
+const CACHE_JSON = resolve(__dirname, '../../../data/perfil-frases.cache.json');
 
 // ── SLEEP ────────────────────────────────────────────────────────────────────
 
@@ -146,14 +150,55 @@ function obterPoster() {
 
 // ── CARREGAMENTO DO JSON ────────────────────────────────────────────────────
 
+async function baixarJsonComRetry(tentativas = 4) {
+    let ultimoErro;
+
+    for (let i = 1; i <= tentativas; i++) {
+        try {
+            const response = await axios.get(PERFIL_JSON_URL, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'application/json',
+                    'Accept-Encoding': 'identity'   // evita falha de descompressão em conexão instável
+                },
+                timeout: 15000,
+                httpsAgent: new https.Agent({ keepAlive: false })  // conexão nova a cada tentativa
+            });
+
+            const data = typeof response.data === 'string'
+                ? JSON.parse(response.data)
+                : response.data;
+
+            if (!data || typeof data !== 'object') throw new Error('JSON inválido');
+            return data;
+        } catch (err) {
+            ultimoErro = err;
+            console.warn(`⚠️ [PERFIL] Tentativa ${i}/${tentativas} falhou: ${err.code || ''} ${err.message}`);
+            if (i < tentativas) await sleep(1000 * i);
+        }
+    }
+
+    throw ultimoErro;
+}
+
 export async function carregarPerfilData() {
     try {
         console.log('🔄 Carregando dados de perfil...');
-        const response = await axios.get(PERFIL_JSON_URL, {
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
-            timeout: 15000
-        });
-        perfilData = response.data;
+
+        try {
+            perfilData = await baixarJsonComRetry();
+            // salva cópia local para uso offline
+            writeFile(CACHE_JSON, JSON.stringify(perfilData)).catch(() => {});
+        } catch (errRede) {
+            console.warn('⚠️ [PERFIL] GitHub indisponível, tentando cópia local...');
+            try {
+                perfilData = JSON.parse(await readFile(CACHE_JSON, 'utf-8'));
+                console.warn('✅ [PERFIL] Usando cópia local (pode estar desatualizada).');
+            } catch {
+                throw errRede;   // sem rede e sem cópia local
+            }
+        }
+
         console.log(`✅ Dados de perfil carregados!`);
         console.log(`   📊 Amorosa: ${perfilData.amorosa?.length || 0} frases`);
         console.log(`   📊 Grupo: ${perfilData.grupo?.length || 0} frases`);
@@ -386,6 +431,6 @@ export async function atualizarPerfilHandler(sock, message) {
 // As fontes carregam primeiro, porque o título dos posters depende delas.
 
 Promise.all([
-    carregarPerfilData().catch(err => console.error('❌ Erro ao inicializar dados de perfil:', err)),
+    carregarPerfilData().catch(err => console.error('❌ Erro ao inicializar dados de perfil:', err.message)),
     obterFontes().then(preCarregarPosters)
 ]);
