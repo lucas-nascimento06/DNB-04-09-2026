@@ -154,6 +154,11 @@ import {
     antiFlood
 } from '../../moderation/antiflood.js';
 
+// 🗳️ IMPORT — resultado do paredão (#v / #votacao / #votação)
+import {
+    votacaoHandler
+} from '../command/votacaoHandler.js';
+
 const autoTag = new AutoTagHandler();
 const replyTag = new ReplyTagHandler();
 
@@ -621,6 +626,15 @@ export async function handleMessages(sock, message) {
         // ============================================
         const leilaoHandled = await handleLeilaoCommands(sock, message, content, from);
         if (leilaoHandled) return;
+
+
+        // ============================================
+        // 🗳️ RESULTADO DO PAREDÃO — #v / #votacao / #votação
+        // ============================================
+        if (from.endsWith('@g.us')) {
+            const votacaoHandled = await votacaoHandler(sock, message, content, from, OWNER_NUMBERS);
+            if (votacaoHandled) return;
+        }
 
         // ============================================
         // 👑 COMANDOS RAINHA / RANKING
