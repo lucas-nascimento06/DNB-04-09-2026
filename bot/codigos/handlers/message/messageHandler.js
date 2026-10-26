@@ -140,14 +140,6 @@ import {
     handleDesafioMusical
 } from '../command/desafioMusicalHandler.js';
 
-// 🆕 IMPORT — #letra <número> (letra da música do desafio musical)
-import {
-    tratarComandoLetra
-} from '../command/desafioMusical/comandoLetra.js';
-// 🆕 IMPORT — grupos onde o desafio musical está liberado (o #letra segue a mesma regra)
-import {
-    GRUPOS_PERMITIDOS
-} from '../command/desafioMusical/config.js';
 
 // 🚫 IMPORT — anti-flood (remove quem manda muita mídia/figurinha em sequência)
 import {
@@ -394,18 +386,6 @@ export async function handleMessages(sock, message) {
         if (from.endsWith('@g.us')) {
             const dmHandled = await handleDesafioMusical(sock, message, content, from, OWNER_NUMBERS);
             if (dmHandled) return;
-        }
-
-        // ============================================
-        // 🆕 📝 #letra <número> — letra da música do desafio musical
-        // Só nos grupos onde o desafio está liberado.
-        // tratarComandoLetra devolve null se a mensagem NÃO for #letra
-        // (aí o fluxo segue normal) e true se ele respondeu.
-        // ============================================
-        if (from.endsWith('@g.us') && GRUPOS_PERMITIDOS.includes(from) && lowerContent.startsWith('#letra')) {
-            if (DEBUG_MODE) console.log('📝 Comando #letra detectado!');
-            const letraHandled = await tratarComandoLetra(sock, message, lowerContent, from);
-            if (letraHandled !== null) return;
         }
 
         // 💾 #salva / #s e #contato / #c

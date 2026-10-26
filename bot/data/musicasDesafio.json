@@ -1,102 +1,1311 @@
 [
-  { "id": 1, "titulo": "Fico Assim Sem Você", "artista": "Adriana Calcanhotto", "estilo": "mpb", "arquivo": "fico-assim-sem-voce.mp3" },
-  { "id": 2, "titulo": "La Belle de Jour", "artista": "Alceu Valença", "estilo": "mpb", "arquivo": "la-belle-de-jour.mp3" },
-  { "id": 3, "titulo": "Você Não Me Ensinou a Te Esquecer", "artista": "Caetano Veloso", "estilo": "mpb", "arquivo": "voce-nao-me-ensinou-a-te-esquecer.mp3" },
-  { "id": 4, "titulo": "Preciso Me Encontrar", "artista": "Cartola", "estilo": "pagode", "arquivo": "preciso-me-encontrar.mp3" },
-  { "id": 5, "titulo": "Malandragem", "artista": "Cássia Eller", "estilo": "rock", "arquivo": "malandragem.mp3" },
-  { "id": 6, "titulo": "Quando um Grande Amor Se Faz", "artista": "Cleiton e Camargo", "estilo": "sertanejo", "arquivo": "quando-um-grande-amor-se-faz.mp3" },
-  { "id": 7, "titulo": "Evidências", "artista": "Chitãozinho & Xororó", "estilo": "sertanejo", "arquivo": "evidencias.mp3" },
-  { "id": 8, "titulo": "Borbulhas de Amor", "artista": "Fagner", "estilo": "mpb", "arquivo": "borbulhas-de-amor.mp3" },
-  { "id": 9, "titulo": "Musa do Verão", "artista": "Felipe Dylon", "estilo": "pop", "arquivo": "musa-do-verao.mp3" },
-  { "id": 10, "titulo": "Garçom", "artista": "Reginaldo Rossi", "estilo": "brega", "arquivo": "garcon.mp3" },
-  { "id": 11, "titulo": "Gostava Tanto de Você", "artista": "Tim Maia", "estilo": "mpb", "arquivo": "gostava-tanto-de-voce.mp3" },
-  { "id": 12, "titulo": "Amor e Fé", "artista": "Hungria", "estilo": "urbano", "arquivo": "amor-e-fe.mp3" },
-  { "id": 13, "titulo": "Só Hoje", "artista": "Jota Quest", "estilo": "rock", "arquivo": "so-hoje.mp3" },
-  { "id": 14, "titulo": "Medo da Chuva", "artista": "Raul Seixas", "estilo": "rock", "arquivo": "medo-da-chuva.mp3" },
-  { "id": 15, "titulo": "Meu Erro", "artista": "Os Paralamas do Sucesso", "estilo": "rock", "arquivo": "meu-erro.mp3" },
-  { "id": 16, "titulo": "Mina de Fé", "artista": "Os Morenos", "estilo": "pagode", "arquivo": "mina-de-fe.mp3" },
-  { "id": 17, "titulo": "O Astronauta de Mármore", "artista": "Nenhum de Nós", "estilo": "rock", "arquivo": "o-astronauta-de-marmore.mp3" },
-  { "id": 18, "titulo": "Bilu Bilu", "artista": "Pablo", "estilo": "brega", "arquivo": "bilu-bilu.mp3" },
-  { "id": 19, "titulo": "Pensando em Você", "artista": "Paulinho Moska", "estilo": "mpb", "arquivo": "pensando-em-voce.mp3" },
-  { "id": 20, "titulo": "Dois", "artista": "Paulo Ricardo", "estilo": "rock", "arquivo": "dois.mp3" },
-  { "id": 21, "titulo": "Por Você", "artista": "Frejat", "estilo": "rock", "arquivo": "por-voce.mp3" },
-  { "id": 22, "titulo": "Cheia de Manias", "artista": "Raça Negra", "estilo": "pagode", "arquivo": "cheia-de-manias.mp3" },
-  { "id": 23, "titulo": "A Viagem", "artista": "Roupa Nova", "estilo": "pop", "arquivo": "a-viagem.mp3" },
-  { "id": 24, "titulo": "Resposta", "artista": "Skank", "estilo": "rock", "arquivo": "resposta.mp3" },
-  { "id": 25, "titulo": "Trem das Onze", "artista": "Demônios da Garoa", "estilo": "pagode", "arquivo": "trem-das-onze.mp3" },
-  { "id": 26, "titulo": "Tudo por Nada", "artista": "Paulo Ricardo", "estilo": "rock", "arquivo": "tudo-por-nada.mp3" },
-  { "id": 27, "titulo": "Velha Infância", "artista": "Tribalistas", "estilo": "mpb", "arquivo": "velha-infancia.mp3" },
-  { "id": 28, "titulo": "Você Vai Ver", "artista": "Zezé Di Camargo & Luciano", "estilo": "sertanejo", "arquivo": "voce-vai-ver.mp3" },
-  { "id": 29, "titulo": "Mistérios da Meia-Noite", "artista": "Zé Ramalho", "estilo": "mpb", "arquivo": "misterios-da-meia-noite.mp3" },
-  { "id": 30, "titulo": "É o Amor", "artista": "Zezé Di Camargo & Luciano", "estilo": "sertanejo", "arquivo": "e-o-amor.mp3" },
-  { "id": 31, "titulo": "A Maior Saudade", "artista": "Henrique e Juliano", "estilo": "sertanejo", "arquivo": "a-maior-saudade.mp3" },
-  { "id": 32, "titulo": "Solteiro Forçado", "artista": "Ana Castela", "estilo": "sertanejo", "arquivo": "solteiro-forcado.mp3" },
-  { "id": 33, "titulo": "Sozinho", "artista": "Caetano Veloso", "estilo": "mpb", "arquivo": "sozinho.mp3" },
-  { "id": 34, "titulo": "O Tempo Não Para", "artista": "Cazuza", "estilo": "rock", "arquivo": "o-tempo-nao-para.mp3" },
-  { "id": 35, "titulo": "Cheiro de Shampoo", "artista": "Chrystian & Ralf", "estilo": "sertanejo", "arquivo": "cheiro-de-shampoo.mp3" },
-  { "id": 36, "titulo": "Sinônimos", "artista": "Chitãozinho & Xororó", "estilo": "sertanejo", "arquivo": "sinonimos.mp3" },
-  { "id": 37, "titulo": "Apaga Apaga Apaga", "artista": "Danilo e Davi", "estilo": "sertanejo", "arquivo": "apaga-apaga-apaga.mp3" },
-  { "id": 38, "titulo": "Eu Não Sou Terapia", "artista": "Danilo e Davi", "estilo": "sertanejo", "arquivo": "eu-nao-sou-terapia.mp3" },
-  { "id": 39, "titulo": "Oceano", "artista": "Djavan", "estilo": "mpb", "arquivo": "oceano.mp3" },
-  { "id": 40, "titulo": "Dormi na Praça", "artista": "Bruno e Marrone", "estilo": "sertanejo", "arquivo": "dormi-na-praca.mp3" },
-  { "id": 41, "titulo": "Duas Metades", "artista": "Jorge e Mateus", "estilo": "sertanejo", "arquivo": "duas-metades.mp3" },
-  { "id": 42, "titulo": "E Daí", "artista": "Jorge e Mateus", "estilo": "sertanejo", "arquivo": "e-dai.mp3" },
-  { "id": 43, "titulo": "Foi Deus", "artista": "Edson & Hudson", "estilo": "sertanejo", "arquivo": "foi-deus.mp3" },
-  { "id": 44, "titulo": "Café e Amor", "artista": "Gusttavo Lima", "estilo": "sertanejo", "arquivo": "cafe-e-amor.mp3" },
-  { "id": 45, "titulo": "Fala Mal de Mim", "artista": "Gusttavo Lima", "estilo": "sertanejo", "arquivo": "fala-mal-de-mim.mp3" },
-  { "id": 46, "titulo": "Compensa Me Amar", "artista": "Henrique e Juliano", "estilo": "sertanejo", "arquivo": "compensa-me-amar.mp3" },
-  { "id": 47, "titulo": "Beijos, Blues e Poesia", "artista": "K-Sis", "estilo": "pop", "arquivo": "beijos-blues-e-poesia.mp3" },
-  { "id": 48, "titulo": "Água com Açúcar", "artista": "Luan Santana", "estilo": "sertanejo", "arquivo": "agua-com-acucar.mp3" },
-  { "id": 49, "titulo": "Ilha", "artista": "Luan Santana", "estilo": "sertanejo", "arquivo": "ilha.mp3" },
-  { "id": 50, "titulo": "Medo Bobo", "artista": "Maiara & Maraisa", "estilo": "sertanejo", "arquivo": "medo-bobo.mp3" },
-  { "id": 51, "titulo": "Diz Pra Mim", "artista": "Malta", "estilo": "pop", "arquivo": "diz-pra-mim.mp3" },
-  { "id": 52, "titulo": "Daqui Pra Sempre", "artista": "Manu Bahtidão", "estilo": "brega", "arquivo": "daqui-pra-sempre.mp3" },
-  { "id": 53, "titulo": "Quarta Cadeira", "artista": "Matheus & Kauan", "estilo": "sertanejo", "arquivo": "quarta-cadeira.mp3" },
-  { "id": 54, "titulo": "Azul Piscina", "artista": "MC Livinho", "estilo": "urbano", "arquivo": "azul-piscina.mp3" },
-  { "id": 55, "titulo": "Metamorfose Ambulante", "artista": "Raul Seixas", "estilo": "rock", "arquivo": "metamorfose-ambulante.mp3" },
-  { "id": 56, "titulo": "Minha Estrela Perdida", "artista": "João Paulo e Daniel", "estilo": "sertanejo", "arquivo": "minha-estrela-perdida.mp3" },
-  { "id": 57, "titulo": "Não Aprendi a Dizer Adeus", "artista": "Leandro & Leonardo", "estilo": "sertanejo", "arquivo": "nao-aprendi-a-dizer-adeus.mp3" },
-  { "id": 58, "titulo": "Cedo ou Tarde", "artista": "NX Zero", "estilo": "rock", "arquivo": "cedo-ou-tarde.mp3" },
-  { "id": 59, "titulo": "Razões e Emoções", "artista": "NX Zero", "estilo": "rock", "arquivo": "razoes-e-emocoes.mp3" },
-  { "id": 60, "titulo": "Nosso Quadro", "artista": "Ana Castela", "estilo": "sertanejo", "arquivo": "nosso-quadro.mp3" },
-  { "id": 61, "titulo": "Palpite", "artista": "Vanessa Rangel", "estilo": "pop", "arquivo": "palpite.mp3" },
-  { "id": 62, "titulo": "Eu Te Seguro", "artista": "Panda", "estilo": "rock", "arquivo": "eu-te-seguro.mp3" },
-  { "id": 63, "titulo": "Mil e Uma Noites de Amor", "artista": "Pepeu Gomes", "estilo": "rock", "arquivo": "mil-e-uma-noites-de-amor.mp3" },
-  { "id": 64, "titulo": "Pra Não Pensar em Você", "artista": "Zezé Di Camargo & Luciano", "estilo": "sertanejo", "arquivo": "pra-nao-pensar-em-voce.mp3" },
-  { "id": 65, "titulo": "Quase Sem Querer", "artista": "Legião Urbana", "estilo": "rock", "arquivo": "quase-sem-querer.mp3" },
-  { "id": 66, "titulo": "A Lenda", "artista": "Sandy e Junior", "estilo": "pop", "arquivo": "a-lenda.mp3" },
-  { "id": 67, "titulo": "Erro Gostoso", "artista": "Simone Mendes", "estilo": "sertanejo", "arquivo": "erro-gostoso.mp3" },
-  { "id": 68, "titulo": "Nosso Plano", "artista": "Tribo da Periferia", "estilo": "urbano", "arquivo": "nosso-plano.mp3" },
-  { "id": 69, "titulo": "Deixa a Vida Me Levar", "artista": "Zeca Pagodinho", "estilo": "pagode", "arquivo": "deixa-a-vida-me-levar.mp3" },
-  { "id": 70, "titulo": "Cadeira Cativa", "artista": "Zé Neto e Cristiano", "estilo": "sertanejo", "arquivo": "cadeira-cativa.mp3" },
-  { "id": 71, "titulo": "Plano C", "artista": "Zé Neto e Cristiano", "estilo": "sertanejo", "arquivo": "plano-c.mp3" },
-  { "id": 72, "titulo": "A Dois Passos do Paraíso", "artista": "Blitz", "estilo": "pop", "arquivo": "a-dois-passos-do-paraiso.mp3" },
-  { "id": 73, "titulo": "Como uma Onda", "artista": "Lulu Santos", "estilo": "pop", "arquivo": "como-uma-onda.mp3" },
-  { "id": 74, "titulo": "Era um Garoto Que Como Eu Amava os Beatles e os Rolling Stones", "artista": "Engenheiros do Hawaii", "estilo": "rock", "arquivo": "era-um-garoto.mp3" },
-  { "id": 75, "titulo": "Surra de Amor", "artista": "José Orlando", "estilo": "brega", "arquivo": "surra-de-amor.mp3" },
-  { "id": 76, "titulo": "Maria Chiquinha", "artista": "Sandy e Junior", "estilo": "pop", "arquivo": "maria-chiquinha.mp3" },
-  { "id": 77, "titulo": "Pelados em Santos", "artista": "Mamonas Assassinas", "estilo": "rock", "arquivo": "pelados-em-santos.mp3" },
-  { "id": 78, "titulo": "Ragatanga", "artista": "Rouge", "estilo": "pop", "arquivo": "ragatanga.mp3" },
-  { "id": 79, "titulo": "Mentiras", "artista": "Adriana Calcanhotto", "estilo": "mpb", "arquivo": "mentiras.mp3" },
-  { "id": 80, "titulo": "Pense em Mim", "artista": "Leandro & Leonardo", "estilo": "sertanejo", "arquivo": "pense-em-mim.mp3" },
-  { "id": 81, "titulo": "Meu Mundo e Nada Mais", "artista": "Guilherme Arantes", "estilo": "pop", "arquivo": "meu-mundo-e-nada-mais.mp3" },
-  { "id": 82, "titulo": "Um Certo Alguém", "artista": "Lulu Santos", "estilo": "pop", "arquivo": "um-certo-alguem.mp3" },
-  { "id": 83, "titulo": "Ilariê", "artista": "Xuxa", "estilo": "pop", "arquivo": "ilarie.mp3" },
-  { "id": 84, "titulo": "Exagerado", "artista": "Cazuza", "estilo": "rock", "arquivo": "exagerado.mp3" },
-  { "id": 85, "titulo": "Quero Te Encontrar", "artista": "Claudinho & Buchecha", "estilo": "urbano", "arquivo": "quero-te-encontrar.mp3" },
-  { "id": 86, "titulo": "Baba", "artista": "Kelly Key", "estilo": "pop", "arquivo": "baba.mp3" },
-  { "id": 87, "titulo": "Barbie Girl", "artista": "Kelly Key", "estilo": "pop", "arquivo": "barbie-girl.mp3" },
-  { "id": 88, "titulo": "Tempo Perdido", "artista": "Legião Urbana", "estilo": "rock", "arquivo": "tempo-perdido.mp3" },
-  { "id": 89, "titulo": "Depois do Prazer", "artista": "Só Pra Contrariar", "estilo": "pagode", "arquivo": "depois-do-prazer.mp3" },
-  { "id": 90, "titulo": "He-Man", "artista": "Trem da Alegria", "estilo": "pop", "arquivo": "he-man.mp3" },
-  { "id": 91, "titulo": "Feiticeira", "artista": "Carlos Alexandre", "estilo": "brega", "arquivo": "feiticeira.mp3" },
-  { "id": 92, "titulo": "Como Eu Quero", "artista": "Kid Abelha", "estilo": "pop", "arquivo": "como-eu-quero.mp3" },
-  { "id": 93, "titulo": "No Meio do Pitiú", "artista": "Dona Onete", "estilo": "mpb", "arquivo": "no-meio-do-pitiu.mp3" },
-  { "id": 94, "titulo": "O Grande Amor da Minha Vida", "artista": "Gian & Giovani", "estilo": "sertanejo", "arquivo": "o-grande-amor-da-minha-vida.mp3" },
-  { "id": 95, "titulo": "A Lua Que Eu Te Dei", "artista": "Ivete Sangalo", "estilo": "pop", "arquivo": "a-lua-que-eu-te-dei.mp3" },
-  { "id": 96, "titulo": "Como É Grande o Meu Amor por Você", "artista": "Roberto Carlos", "estilo": "mpb", "arquivo": "como-e-grande-o-meu-amor-por-voce.mp3" },
-  { "id": 97, "titulo": "Catedral", "artista": "Zélia Duncan", "estilo": "mpb", "arquivo": "catedral.mp3" },
-  { "id": 98, "titulo": "Estou Apaixonado", "artista": "João Paulo e Daniel", "estilo": "sertanejo", "arquivo": "estou-apaixonado.mp3" },
-  { "id": 99, "titulo": "Na Estrada", "artista": "Marisa Monte", "estilo": "mpb", "arquivo": "na-estrada.mp3" },
-  { "id": 100, "titulo": "Ela É Demais", "artista": "Rick & Renner", "estilo": "sertanejo", "arquivo": "ela-e-demais.mp3" }
+  {
+    "id": 1,
+    "titulo": "Fico Assim Sem Você",
+    "artista": "Adriana Calcanhotto",
+    "estilo": "mpb",
+    "arquivo": "fico-assim-sem-voce.mp3"
+  },
+  {
+    "id": 2,
+    "titulo": "La Belle de Jour",
+    "artista": "Alceu Valença",
+    "estilo": "mpb",
+    "arquivo": "la-belle-de-jour.mp3"
+  },
+  {
+    "id": 3,
+    "titulo": "Você Não Me Ensinou a Te Esquecer",
+    "artista": "Caetano Veloso",
+    "estilo": "mpb",
+    "arquivo": "voce-nao-me-ensinou-a-te-esquecer.mp3"
+  },
+  {
+    "id": 4,
+    "titulo": "Preciso Me Encontrar",
+    "artista": "Cartola",
+    "estilo": "pagode",
+    "arquivo": "preciso-me-encontrar.mp3"
+  },
+  {
+    "id": 5,
+    "titulo": "Malandragem",
+    "artista": "Cássia Eller",
+    "estilo": "rock",
+    "arquivo": "malandragem.mp3"
+  },
+  {
+    "id": 6,
+    "titulo": "Quando um Grande Amor Se Faz",
+    "artista": "Cleiton e Camargo",
+    "estilo": "sertanejo",
+    "arquivo": "quando-um-grande-amor-se-faz.mp3"
+  },
+  {
+    "id": 7,
+    "titulo": "Evidências",
+    "artista": "Chitãozinho & Xororó",
+    "estilo": "sertanejo",
+    "arquivo": "evidencias.mp3"
+  },
+  {
+    "id": 8,
+    "titulo": "Borbulhas de Amor",
+    "artista": "Fagner",
+    "estilo": "mpb",
+    "arquivo": "borbulhas-de-amor.mp3"
+  },
+  {
+    "id": 9,
+    "titulo": "Musa do Verão",
+    "artista": "Felipe Dylon",
+    "estilo": "pop",
+    "arquivo": "musa-do-verao.mp3"
+  },
+  {
+    "id": 10,
+    "titulo": "Garçom",
+    "artista": "Reginaldo Rossi",
+    "estilo": "brega",
+    "arquivo": "garcon.mp3"
+  },
+  {
+    "id": 11,
+    "titulo": "Gostava Tanto de Você",
+    "artista": "Tim Maia",
+    "estilo": "mpb",
+    "arquivo": "gostava-tanto-de-voce.mp3"
+  },
+  {
+    "id": 12,
+    "titulo": "Amor e Fé",
+    "artista": "Hungria",
+    "estilo": "urbano",
+    "arquivo": "amor-e-fe.mp3"
+  },
+  {
+    "id": 13,
+    "titulo": "Só Hoje",
+    "artista": "Jota Quest",
+    "estilo": "rock",
+    "arquivo": "so-hoje.mp3"
+  },
+  {
+    "id": 14,
+    "titulo": "Medo da Chuva",
+    "artista": "Raul Seixas",
+    "estilo": "rock",
+    "arquivo": "medo-da-chuva.mp3"
+  },
+  {
+    "id": 15,
+    "titulo": "Meu Erro",
+    "artista": "Os Paralamas do Sucesso",
+    "estilo": "rock",
+    "arquivo": "meu-erro.mp3"
+  },
+  {
+    "id": 16,
+    "titulo": "Mina de Fé",
+    "artista": "Os Morenos",
+    "estilo": "pagode",
+    "arquivo": "mina-de-fe.mp3"
+  },
+  {
+    "id": 17,
+    "titulo": "O Astronauta de Mármore",
+    "artista": "Nenhum de Nós",
+    "estilo": "rock",
+    "arquivo": "o-astronauta-de-marmore.mp3"
+  },
+  {
+    "id": 18,
+    "titulo": "Bilu Bilu",
+    "artista": "Pablo",
+    "estilo": "brega",
+    "arquivo": "bilu-bilu.mp3"
+  },
+  {
+    "id": 19,
+    "titulo": "Pensando em Você",
+    "artista": "Paulinho Moska",
+    "estilo": "mpb",
+    "arquivo": "pensando-em-voce.mp3"
+  },
+  {
+    "id": 20,
+    "titulo": "Dois",
+    "artista": "Paulo Ricardo",
+    "estilo": "rock",
+    "arquivo": "dois.mp3"
+  },
+  {
+    "id": 21,
+    "titulo": "Por Você",
+    "artista": "Frejat",
+    "estilo": "rock",
+    "arquivo": "por-voce.mp3"
+  },
+  {
+    "id": 22,
+    "titulo": "Cheia de Manias",
+    "artista": "Raça Negra",
+    "estilo": "pagode",
+    "arquivo": "cheia-de-manias.mp3"
+  },
+  {
+    "id": 23,
+    "titulo": "A Viagem",
+    "artista": "Roupa Nova",
+    "estilo": "pop",
+    "arquivo": "a-viagem.mp3"
+  },
+  {
+    "id": 24,
+    "titulo": "Resposta",
+    "artista": "Skank",
+    "estilo": "rock",
+    "arquivo": "resposta.mp3"
+  },
+  {
+    "id": 25,
+    "titulo": "Trem das Onze",
+    "artista": "Demônios da Garoa",
+    "estilo": "pagode",
+    "arquivo": "trem-das-onze.mp3"
+  },
+  {
+    "id": 26,
+    "titulo": "Tudo por Nada",
+    "artista": "Paulo Ricardo",
+    "estilo": "rock",
+    "arquivo": "tudo-por-nada.mp3"
+  },
+  {
+    "id": 27,
+    "titulo": "Velha Infância",
+    "artista": "Tribalistas",
+    "estilo": "mpb",
+    "arquivo": "velha-infancia.mp3"
+  },
+  {
+    "id": 28,
+    "titulo": "Você Vai Ver",
+    "artista": "Zezé Di Camargo & Luciano",
+    "estilo": "sertanejo",
+    "arquivo": "voce-vai-ver.mp3"
+  },
+  {
+    "id": 29,
+    "titulo": "Mistérios da Meia-Noite",
+    "artista": "Zé Ramalho",
+    "estilo": "mpb",
+    "arquivo": "misterios-da-meia-noite.mp3"
+  },
+  {
+    "id": 30,
+    "titulo": "É o Amor",
+    "artista": "Zezé Di Camargo & Luciano",
+    "estilo": "sertanejo",
+    "arquivo": "e-o-amor.mp3"
+  },
+  {
+    "id": 31,
+    "titulo": "A Maior Saudade",
+    "artista": "Henrique e Juliano",
+    "estilo": "sertanejo",
+    "arquivo": "a-maior-saudade.mp3"
+  },
+  {
+    "id": 32,
+    "titulo": "Solteiro Forçado",
+    "artista": "Ana Castela",
+    "estilo": "sertanejo",
+    "arquivo": "solteiro-forcado.mp3"
+  },
+  {
+    "id": 33,
+    "titulo": "Sozinho",
+    "artista": "Caetano Veloso",
+    "estilo": "mpb",
+    "arquivo": "sozinho.mp3"
+  },
+  {
+    "id": 34,
+    "titulo": "O Tempo Não Para",
+    "artista": "Cazuza",
+    "estilo": "rock",
+    "arquivo": "o-tempo-nao-para.mp3"
+  },
+  {
+    "id": 35,
+    "titulo": "Cheiro de Shampoo",
+    "artista": "Chrystian & Ralf",
+    "estilo": "sertanejo",
+    "arquivo": "cheiro-de-shampoo.mp3"
+  },
+  {
+    "id": 36,
+    "titulo": "Sinônimos",
+    "artista": "Chitãozinho & Xororó",
+    "estilo": "sertanejo",
+    "arquivo": "sinonimos.mp3"
+  },
+  {
+    "id": 37,
+    "titulo": "Apaga Apaga Apaga",
+    "artista": "Danilo e Davi",
+    "estilo": "sertanejo",
+    "arquivo": "apaga-apaga-apaga.mp3"
+  },
+  {
+    "id": 38,
+    "titulo": "Eu Não Sou Terapia",
+    "artista": "Danilo e Davi",
+    "estilo": "sertanejo",
+    "arquivo": "eu-nao-sou-terapia.mp3"
+  },
+  {
+    "id": 39,
+    "titulo": "Oceano",
+    "artista": "Djavan",
+    "estilo": "mpb",
+    "arquivo": "oceano.mp3"
+  },
+  {
+    "id": 40,
+    "titulo": "Dormi na Praça",
+    "artista": "Bruno e Marrone",
+    "estilo": "sertanejo",
+    "arquivo": "dormi-na-praca.mp3"
+  },
+  {
+    "id": 41,
+    "titulo": "Duas Metades",
+    "artista": "Jorge e Mateus",
+    "estilo": "sertanejo",
+    "arquivo": "duas-metades.mp3"
+  },
+  {
+    "id": 42,
+    "titulo": "E Daí",
+    "artista": "Jorge e Mateus",
+    "estilo": "sertanejo",
+    "arquivo": "e-dai.mp3"
+  },
+  {
+    "id": 43,
+    "titulo": "Foi Deus",
+    "artista": "Edson & Hudson",
+    "estilo": "sertanejo",
+    "arquivo": "foi-deus.mp3"
+  },
+  {
+    "id": 44,
+    "titulo": "Café e Amor",
+    "artista": "Gusttavo Lima",
+    "estilo": "sertanejo",
+    "arquivo": "cafe-e-amor.mp3"
+  },
+  {
+    "id": 45,
+    "titulo": "Fala Mal de Mim",
+    "artista": "Gusttavo Lima",
+    "estilo": "sertanejo",
+    "arquivo": "fala-mal-de-mim.mp3"
+  },
+  {
+    "id": 46,
+    "titulo": "Compensa Me Amar",
+    "artista": "Henrique e Juliano",
+    "estilo": "sertanejo",
+    "arquivo": "compensa-me-amar.mp3"
+  },
+  {
+    "id": 47,
+    "titulo": "Beijos, Blues e Poesia",
+    "artista": "K-Sis",
+    "estilo": "pop",
+    "arquivo": "beijos-blues-e-poesia.mp3"
+  },
+  {
+    "id": 48,
+    "titulo": "Água com Açúcar",
+    "artista": "Luan Santana",
+    "estilo": "sertanejo",
+    "arquivo": "agua-com-acucar.mp3"
+  },
+  {
+    "id": 49,
+    "titulo": "Ilha",
+    "artista": "Luan Santana",
+    "estilo": "sertanejo",
+    "arquivo": "ilha.mp3"
+  },
+  {
+    "id": 50,
+    "titulo": "Medo Bobo",
+    "artista": "Maiara & Maraisa",
+    "estilo": "sertanejo",
+    "arquivo": "medo-bobo.mp3"
+  },
+  {
+    "id": 51,
+    "titulo": "Diz Pra Mim",
+    "artista": "Malta",
+    "estilo": "pop",
+    "arquivo": "diz-pra-mim.mp3"
+  },
+  {
+    "id": 52,
+    "titulo": "Daqui Pra Sempre",
+    "artista": "Manu Bahtidão",
+    "estilo": "brega",
+    "arquivo": "daqui-pra-sempre.mp3"
+  },
+  {
+    "id": 53,
+    "titulo": "Quarta Cadeira",
+    "artista": "Matheus & Kauan",
+    "estilo": "sertanejo",
+    "arquivo": "quarta-cadeira.mp3"
+  },
+  {
+    "id": 54,
+    "titulo": "Azul Piscina",
+    "artista": "MC Livinho",
+    "estilo": "urbano",
+    "arquivo": "azul-piscina.mp3"
+  },
+  {
+    "id": 55,
+    "titulo": "Metamorfose Ambulante",
+    "artista": "Raul Seixas",
+    "estilo": "rock",
+    "arquivo": "metamorfose-ambulante.mp3"
+  },
+  {
+    "id": 56,
+    "titulo": "Minha Estrela Perdida",
+    "artista": "João Paulo e Daniel",
+    "estilo": "sertanejo",
+    "arquivo": "minha-estrela-perdida.mp3"
+  },
+  {
+    "id": 57,
+    "titulo": "Não Aprendi a Dizer Adeus",
+    "artista": "Leandro & Leonardo",
+    "estilo": "sertanejo",
+    "arquivo": "nao-aprendi-a-dizer-adeus.mp3"
+  },
+  {
+    "id": 58,
+    "titulo": "Cedo ou Tarde",
+    "artista": "NX Zero",
+    "estilo": "rock",
+    "arquivo": "cedo-ou-tarde.mp3"
+  },
+  {
+    "id": 59,
+    "titulo": "Razões e Emoções",
+    "artista": "NX Zero",
+    "estilo": "rock",
+    "arquivo": "razoes-e-emocoes.mp3"
+  },
+  {
+    "id": 60,
+    "titulo": "Nosso Quadro",
+    "artista": "Ana Castela",
+    "estilo": "sertanejo",
+    "arquivo": "nosso-quadro.mp3"
+  },
+  {
+    "id": 61,
+    "titulo": "Palpite",
+    "artista": "Vanessa Rangel",
+    "estilo": "pop",
+    "arquivo": "palpite.mp3"
+  },
+  {
+    "id": 62,
+    "titulo": "Eu Te Seguro",
+    "artista": "Panda",
+    "estilo": "rock",
+    "arquivo": "eu-te-seguro.mp3"
+  },
+  {
+    "id": 63,
+    "titulo": "Mil e Uma Noites de Amor",
+    "artista": "Pepeu Gomes",
+    "estilo": "rock",
+    "arquivo": "mil-e-uma-noites-de-amor.mp3"
+  },
+  {
+    "id": 64,
+    "titulo": "Pra Não Pensar em Você",
+    "artista": "Zezé Di Camargo & Luciano",
+    "estilo": "sertanejo",
+    "arquivo": "pra-nao-pensar-em-voce.mp3"
+  },
+  {
+    "id": 65,
+    "titulo": "Quase Sem Querer",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "quase-sem-querer.mp3"
+  },
+  {
+    "id": 66,
+    "titulo": "A Lenda",
+    "artista": "Sandy e Junior",
+    "estilo": "pop",
+    "arquivo": "a-lenda.mp3"
+  },
+  {
+    "id": 67,
+    "titulo": "Erro Gostoso",
+    "artista": "Simone Mendes",
+    "estilo": "sertanejo",
+    "arquivo": "erro-gostoso.mp3"
+  },
+  {
+    "id": 68,
+    "titulo": "Nosso Plano",
+    "artista": "Tribo da Periferia",
+    "estilo": "urbano",
+    "arquivo": "nosso-plano.mp3"
+  },
+  {
+    "id": 69,
+    "titulo": "Deixa a Vida Me Levar",
+    "artista": "Zeca Pagodinho",
+    "estilo": "pagode",
+    "arquivo": "deixa-a-vida-me-levar.mp3"
+  },
+  {
+    "id": 70,
+    "titulo": "Cadeira Cativa",
+    "artista": "Zé Neto e Cristiano",
+    "estilo": "sertanejo",
+    "arquivo": "cadeira-cativa.mp3"
+  },
+  {
+    "id": 71,
+    "titulo": "Plano C",
+    "artista": "Zé Neto e Cristiano",
+    "estilo": "sertanejo",
+    "arquivo": "plano-c.mp3"
+  },
+  {
+    "id": 72,
+    "titulo": "A Dois Passos do Paraíso",
+    "artista": "Blitz",
+    "estilo": "pop",
+    "arquivo": "a-dois-passos-do-paraiso.mp3"
+  },
+  {
+    "id": 73,
+    "titulo": "Como uma Onda",
+    "artista": "Lulu Santos",
+    "estilo": "pop",
+    "arquivo": "como-uma-onda.mp3"
+  },
+  {
+    "id": 74,
+    "titulo": "Era um Garoto Que Como Eu Amava os Beatles e os Rolling Stones",
+    "artista": "Engenheiros do Hawaii",
+    "estilo": "rock",
+    "arquivo": "era-um-garoto.mp3"
+  },
+  {
+    "id": 75,
+    "titulo": "Surra de Amor",
+    "artista": "José Orlando",
+    "estilo": "brega",
+    "arquivo": "surra-de-amor.mp3"
+  },
+  {
+    "id": 76,
+    "titulo": "Maria Chiquinha",
+    "artista": "Sandy e Junior",
+    "estilo": "pop",
+    "arquivo": "maria-chiquinha.mp3"
+  },
+  {
+    "id": 77,
+    "titulo": "Pelados em Santos",
+    "artista": "Mamonas Assassinas",
+    "estilo": "rock",
+    "arquivo": "pelados-em-santos.mp3"
+  },
+  {
+    "id": 78,
+    "titulo": "Ragatanga",
+    "artista": "Rouge",
+    "estilo": "pop",
+    "arquivo": "ragatanga.mp3"
+  },
+  {
+    "id": 79,
+    "titulo": "Mentiras",
+    "artista": "Adriana Calcanhotto",
+    "estilo": "mpb",
+    "arquivo": "mentiras.mp3"
+  },
+  {
+    "id": 80,
+    "titulo": "Pense em Mim",
+    "artista": "Leandro & Leonardo",
+    "estilo": "sertanejo",
+    "arquivo": "pense-em-mim.mp3"
+  },
+  {
+    "id": 81,
+    "titulo": "Meu Mundo e Nada Mais",
+    "artista": "Guilherme Arantes",
+    "estilo": "pop",
+    "arquivo": "meu-mundo-e-nada-mais.mp3"
+  },
+  {
+    "id": 82,
+    "titulo": "Um Certo Alguém",
+    "artista": "Lulu Santos",
+    "estilo": "pop",
+    "arquivo": "um-certo-alguem.mp3"
+  },
+  {
+    "id": 83,
+    "titulo": "Ilariê",
+    "artista": "Xuxa",
+    "estilo": "pop",
+    "arquivo": "ilarie.mp3"
+  },
+  {
+    "id": 84,
+    "titulo": "Exagerado",
+    "artista": "Cazuza",
+    "estilo": "rock",
+    "arquivo": "exagerado.mp3"
+  },
+  {
+    "id": 85,
+    "titulo": "Quero Te Encontrar",
+    "artista": "Claudinho & Buchecha",
+    "estilo": "urbano",
+    "arquivo": "quero-te-encontrar.mp3"
+  },
+  {
+    "id": 86,
+    "titulo": "Baba",
+    "artista": "Kelly Key",
+    "estilo": "pop",
+    "arquivo": "baba.mp3"
+  },
+  {
+    "id": 87,
+    "titulo": "Barbie Girl",
+    "artista": "Kelly Key",
+    "estilo": "pop",
+    "arquivo": "barbie-girl.mp3"
+  },
+  {
+    "id": 88,
+    "titulo": "Tempo Perdido",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "tempo-perdido.mp3"
+  },
+  {
+    "id": 89,
+    "titulo": "Depois do Prazer",
+    "artista": "Só Pra Contrariar",
+    "estilo": "pagode",
+    "arquivo": "depois-do-prazer.mp3"
+  },
+  {
+    "id": 90,
+    "titulo": "He-Man",
+    "artista": "Trem da Alegria",
+    "estilo": "pop",
+    "arquivo": "he-man.mp3"
+  },
+  {
+    "id": 91,
+    "titulo": "Feiticeira",
+    "artista": "Carlos Alexandre",
+    "estilo": "brega",
+    "arquivo": "feiticeira.mp3"
+  },
+  {
+    "id": 92,
+    "titulo": "Como Eu Quero",
+    "artista": "Kid Abelha",
+    "estilo": "pop",
+    "arquivo": "como-eu-quero.mp3"
+  },
+  {
+    "id": 93,
+    "titulo": "No Meio do Pitiú",
+    "artista": "Dona Onete",
+    "estilo": "mpb",
+    "arquivo": "no-meio-do-pitiu.mp3"
+  },
+  {
+    "id": 94,
+    "titulo": "O Grande Amor da Minha Vida",
+    "artista": "Gian & Giovani",
+    "estilo": "sertanejo",
+    "arquivo": "o-grande-amor-da-minha-vida.mp3"
+  },
+  {
+    "id": 95,
+    "titulo": "A Lua Que Eu Te Dei",
+    "artista": "Ivete Sangalo",
+    "estilo": "pop",
+    "arquivo": "a-lua-que-eu-te-dei.mp3"
+  },
+  {
+    "id": 96,
+    "titulo": "Como É Grande o Meu Amor por Você",
+    "artista": "Roberto Carlos",
+    "estilo": "mpb",
+    "arquivo": "como-e-grande-o-meu-amor-por-voce.mp3"
+  },
+  {
+    "id": 97,
+    "titulo": "Catedral",
+    "artista": "Zélia Duncan",
+    "estilo": "mpb",
+    "arquivo": "catedral.mp3"
+  },
+  {
+    "id": 98,
+    "titulo": "Estou Apaixonado",
+    "artista": "João Paulo e Daniel",
+    "estilo": "sertanejo",
+    "arquivo": "estou-apaixonado.mp3"
+  },
+  {
+    "id": 99,
+    "titulo": "Na Estrada",
+    "artista": "Marisa Monte",
+    "estilo": "mpb",
+    "arquivo": "na-estrada.mp3"
+  },
+  {
+    "id": 100,
+    "titulo": "Ela É Demais",
+    "artista": "Rick & Renner",
+    "estilo": "sertanejo",
+    "arquivo": "ela-e-demais.mp3"
+  },
+  {
+    "id": 101,
+    "titulo": "Ai Ai Ai",
+    "artista": "Vanessa da Mata",
+    "estilo": "mpb",
+    "arquivo": "ai-ai-ai.mp3"
+  },
+  {
+    "id": 102,
+    "titulo": "Making Love Out Of Nothing At All",
+    "artista": "Air Supply",
+    "estilo": "pop_int",
+    "arquivo": "making-love-out-of-nothing-at-all.mp3"
+  },
+  {
+    "id": 103,
+    "titulo": "Louca",
+    "artista": "Alice Caymmi",
+    "estilo": "mpb",
+    "arquivo": "louca.mp3"
+  },
+  {
+    "id": 104,
+    "titulo": "Forever Young",
+    "artista": "Alphaville",
+    "estilo": "rock_int",
+    "arquivo": "forever-young.mp3"
+  },
+  {
+    "id": 105,
+    "titulo": "I Want It That Way",
+    "artista": "Backstreet Boys",
+    "estilo": "pop_int",
+    "arquivo": "i-want-it-that-way.mp3"
+  },
+  {
+    "id": 106,
+    "titulo": "How Deep Is Your Love",
+    "artista": "Bee Gees",
+    "estilo": "pop_int",
+    "arquivo": "how-deep-is-your-love.mp3"
+  },
+  {
+    "id": 107,
+    "titulo": "Stand By Me",
+    "artista": "Ben E. King",
+    "estilo": "pop_int",
+    "arquivo": "stand-by-me.mp3"
+  },
+  {
+    "id": 108,
+    "titulo": "Take My Breath Away",
+    "artista": "Berlin",
+    "estilo": "pop_int",
+    "arquivo": "take-my-breath-away.mp3"
+  },
+  {
+    "id": 109,
+    "titulo": "The Time Of My Life",
+    "artista": "Bill Medley, Jennifer Warnes",
+    "estilo": "pop_int",
+    "arquivo": "the-time-of-my-life.mp3"
+  },
+  {
+    "id": 110,
+    "titulo": "Eyes Without A Face",
+    "artista": "Billy Idol",
+    "estilo": "rock_int",
+    "arquivo": "eyes-without-a-face.mp3"
+  },
+  {
+    "id": 111,
+    "titulo": "Always",
+    "artista": "Bon Jovi",
+    "estilo": "rock_int",
+    "arquivo": "always.mp3"
+  },
+  {
+    "id": 112,
+    "titulo": "Total Eclipse of the Heart",
+    "artista": "Bonnie Tyler",
+    "estilo": "pop_int",
+    "arquivo": "total-eclipse-of-the-heart.mp3"
+  },
+  {
+    "id": 113,
+    "titulo": "Heaven",
+    "artista": "Bryan Adams",
+    "estilo": "rock_int",
+    "arquivo": "heaven.mp3"
+  },
+  {
+    "id": 114,
+    "titulo": "Please Forgive Me",
+    "artista": "Bryan Adams",
+    "estilo": "rock_int",
+    "arquivo": "please-forgive-me.mp3"
+  },
+  {
+    "id": 115,
+    "titulo": "Cada Volta é um Recomeço",
+    "artista": "Zezé Di Camargo & Luciano",
+    "estilo": "sertanejo",
+    "arquivo": "cada-volta-e-um-recomeco.mp3"
+  },
+  {
+    "id": 116,
+    "titulo": "Coming Around Again",
+    "artista": "Carly Simon",
+    "estilo": "pop_int",
+    "arquivo": "coming-around-again.mp3"
+  },
+  {
+    "id": 117,
+    "titulo": "Céu Azul",
+    "artista": "Charlie Brown Jr",
+    "estilo": "rock",
+    "arquivo": "ceu-azul.mp3"
+  },
+  {
+    "id": 118,
+    "titulo": "Girassol",
+    "artista": "Cidade Negra",
+    "estilo": "mpb",
+    "arquivo": "girassol.mp3"
+  },
+  {
+    "id": 119,
+    "titulo": "Onde Você Mora",
+    "artista": "Cidade Negra",
+    "estilo": "mpb",
+    "arquivo": "onde-voce-mora.mp3"
+  },
+  {
+    "id": 120,
+    "titulo": "Adventure Of A Lifetime",
+    "artista": "Coldplay",
+    "estilo": "rock_int",
+    "arquivo": "adventure-of-a-lifetime.mp3"
+  },
+  {
+    "id": 121,
+    "titulo": "The Rhythm of the Night",
+    "artista": "Corona",
+    "estilo": "pop_int",
+    "arquivo": "the-rhythm-of-the-night.mp3"
+  },
+  {
+    "id": 122,
+    "titulo": "Girls Just Want To Have Fun",
+    "artista": "Cyndi Lauper",
+    "estilo": "pop_int",
+    "arquivo": "girls-just-want-to-have-fun.mp3"
+  },
+  {
+    "id": 123,
+    "titulo": "My Heart Will Go On",
+    "artista": "Céline Dion",
+    "estilo": "pop_int",
+    "arquivo": "my-heart-will-go-on.mp3"
+  },
+  {
+    "id": 124,
+    "titulo": "Declaração de Amor",
+    "artista": "Daniel",
+    "estilo": "sertanejo",
+    "arquivo": "declaracao-de-amor.mp3"
+  },
+  {
+    "id": 125,
+    "titulo": "Deixaria Tudo",
+    "artista": "Chayanne",
+    "estilo": "pop_int",
+    "arquivo": "deixaria-tudo.mp3"
+  },
+  {
+    "id": 126,
+    "titulo": "Thank You",
+    "artista": "Dido",
+    "estilo": "pop_int",
+    "arquivo": "thank-you.mp3"
+  },
+  {
+    "id": 127,
+    "titulo": "Please Don't Go",
+    "artista": "Double You",
+    "estilo": "pop_int",
+    "arquivo": "please-dont-go.mp3"
+  },
+  {
+    "id": 128,
+    "titulo": "Ordinary World",
+    "artista": "Duran Duran",
+    "estilo": "rock_int",
+    "arquivo": "ordinary-world.mp3"
+  },
+  {
+    "id": 129,
+    "titulo": "Pensando En Voz Alta",
+    "artista": "Ed Sheeran",
+    "estilo": "pop_int",
+    "arquivo": "pensando-en-voz-alta.mp3"
+  },
+  {
+    "id": 130,
+    "titulo": "Sacrifice",
+    "artista": "Elton John",
+    "estilo": "pop_int",
+    "arquivo": "sacrifice.mp3"
+  },
+  {
+    "id": 131,
+    "titulo": "Hungry Eyes",
+    "artista": "Eric Carmen",
+    "estilo": "pop_int",
+    "arquivo": "hungry-eyes.mp3"
+  },
+  {
+    "id": 132,
+    "titulo": "Carrie",
+    "artista": "Europe",
+    "estilo": "rock_int",
+    "arquivo": "carrie.mp3"
+  },
+  {
+    "id": 133,
+    "titulo": "More Than Words",
+    "artista": "Extreme",
+    "estilo": "rock_int",
+    "arquivo": "more-than-words.mp3"
+  },
+  {
+    "id": 134,
+    "titulo": "Easy",
+    "artista": "Faith No More",
+    "estilo": "rock_int",
+    "arquivo": "easy.mp3"
+  },
+  {
+    "id": 135,
+    "titulo": "Faroeste Caboclo",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "faroeste-caboclo.mp3"
+  },
+  {
+    "id": 136,
+    "titulo": "Alma Gêmea",
+    "artista": "Fábio Jr.",
+    "estilo": "pop",
+    "arquivo": "alma-gemea.mp3"
+  },
+  {
+    "id": 137,
+    "titulo": "Careless Whisper",
+    "artista": "George Michael",
+    "estilo": "pop_int",
+    "arquivo": "careless-whisper.mp3"
+  },
+  {
+    "id": 138,
+    "titulo": "Sweet Child O' Mine",
+    "artista": "Guns N' Roses",
+    "estilo": "rock_int",
+    "arquivo": "sweet-child-o-mine.mp3"
+  },
+  {
+    "id": 139,
+    "titulo": "Halo",
+    "artista": "Beyoncé",
+    "estilo": "pop_int",
+    "arquivo": "halo.mp3"
+  },
+  {
+    "id": 140,
+    "titulo": "As It Was",
+    "artista": "Harry Styles",
+    "estilo": "pop_int",
+    "arquivo": "as-it-was.mp3"
+  },
+  {
+    "id": 141,
+    "titulo": "Hotel California",
+    "artista": "Eagles",
+    "estilo": "rock_int",
+    "arquivo": "hotel-california.mp3"
+  },
+  {
+    "id": 142,
+    "titulo": "I Just Called To Say I Love You",
+    "artista": "Stevie Wonder",
+    "estilo": "pop_int",
+    "arquivo": "i-just-called-to-say-i-love-you.mp3"
+  },
+  {
+    "id": 143,
+    "titulo": "I Miss You",
+    "artista": "Haddaway",
+    "estilo": "pop_int",
+    "arquivo": "i-miss-you.mp3"
+  },
+  {
+    "id": 144,
+    "titulo": "Empire State Of Mind",
+    "artista": "Jay-Z",
+    "estilo": "pop_int",
+    "arquivo": "empire-state-of-mind.mp3"
+  },
+  {
+    "id": 145,
+    "titulo": "I Should Have Known Better",
+    "artista": "Jim Diamond",
+    "estilo": "pop_int",
+    "arquivo": "i-should-have-known-better.mp3"
+  },
+  {
+    "id": 146,
+    "titulo": "Footloose",
+    "artista": "Kenny Loggins",
+    "estilo": "rock_int",
+    "arquivo": "footloose.mp3"
+  },
+  {
+    "id": 147,
+    "titulo": "Die With A Smile",
+    "artista": "Lady Gaga, Bruno Mars",
+    "estilo": "pop_int",
+    "arquivo": "die-with-a-smile.mp3"
+  },
+  {
+    "id": 148,
+    "titulo": "Ainda É Cedo",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "ainda-e-cedo.mp3"
+  },
+  {
+    "id": 149,
+    "titulo": "Índios",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "indios.mp3"
+  },
+  {
+    "id": 150,
+    "titulo": "Hello",
+    "artista": "Lionel Richie",
+    "estilo": "pop_int",
+    "arquivo": "hello.mp3"
+  },
+  {
+    "id": 151,
+    "titulo": "Carla",
+    "artista": "LS Jack",
+    "estilo": "rock",
+    "arquivo": "carla.mp3"
+  },
+  {
+    "id": 152,
+    "titulo": "Tô nem Aí",
+    "artista": "Luka",
+    "estilo": "pop",
+    "arquivo": "to-nem-ai.mp3"
+  },
+  {
+    "id": 153,
+    "titulo": "Rude",
+    "artista": "MAGIC!",
+    "estilo": "pop_int",
+    "arquivo": "rude.mp3"
+  },
+  {
+    "id": 154,
+    "titulo": "Sugar",
+    "artista": "Maroon 5",
+    "estilo": "pop_int",
+    "arquivo": "sugar.mp3"
+  },
+  {
+    "id": 155,
+    "titulo": "Me Namora",
+    "artista": "Tribalistas",
+    "estilo": "mpb",
+    "arquivo": "me-namora.mp3"
+  },
+  {
+    "id": 156,
+    "titulo": "Você Partiu Meu Coração",
+    "artista": "Nego do Borel",
+    "estilo": "urbano",
+    "arquivo": "voce-partiu-meu-coracao.mp3"
+  },
+  {
+    "id": 157,
+    "titulo": "Wonderwall",
+    "artista": "Oasis",
+    "estilo": "rock_int",
+    "arquivo": "wonderwall.mp3"
+  },
+  {
+    "id": 158,
+    "titulo": "She's Like the Wind",
+    "artista": "Patrick Swayze",
+    "estilo": "pop_int",
+    "arquivo": "shes-like-the-wind.mp3"
+  },
+  {
+    "id": 159,
+    "titulo": "Everytime You Go Away",
+    "artista": "Paul Young",
+    "estilo": "pop_int",
+    "arquivo": "everytime-you-go-away.mp3"
+  },
+  {
+    "id": 160,
+    "titulo": "Toque de Mágica",
+    "artista": "Pedro & Thiago",
+    "estilo": "pop",
+    "arquivo": "toque-de-magica.mp3"
+  },
+  {
+    "id": 161,
+    "titulo": "Happy",
+    "artista": "Pharrell Williams",
+    "estilo": "pop_int",
+    "arquivo": "happy.mp3"
+  },
+  {
+    "id": 162,
+    "titulo": "One More Night",
+    "artista": "Phil Collins",
+    "estilo": "pop_int",
+    "arquivo": "one-more-night.mp3"
+  },
+  {
+    "id": 163,
+    "titulo": "Cry for Help",
+    "artista": "Rick Astley",
+    "estilo": "pop_int",
+    "arquivo": "cry-for-help.mp3"
+  },
+  {
+    "id": 164,
+    "titulo": "Diamonds",
+    "artista": "Rihanna",
+    "estilo": "pop_int",
+    "arquivo": "diamonds.mp3"
+  },
+  {
+    "id": 165,
+    "titulo": "A Força do Amor",
+    "artista": "Roupa Nova",
+    "estilo": "pop",
+    "arquivo": "a-forca-do-amor.mp3"
+  },
+  {
+    "id": 166,
+    "titulo": "It Must Have Been Love",
+    "artista": "Roxette",
+    "estilo": "rock_int",
+    "arquivo": "it-must-have-been-love.mp3"
+  },
+  {
+    "id": 167,
+    "titulo": "Maria Magdalena",
+    "artista": "Sandra",
+    "estilo": "pop_int",
+    "arquivo": "maria-magdalena.mp3"
+  },
+  {
+    "id": 168,
+    "titulo": "Seguindo no Trem Azul",
+    "artista": "Roupa Nova",
+    "estilo": "pop",
+    "arquivo": "seguindo-no-trem-azul.mp3"
+  },
+  {
+    "id": 169,
+    "titulo": "Set Fire To The Rain",
+    "artista": "Adele",
+    "estilo": "pop_int",
+    "arquivo": "set-fire-to-the-rain.mp3"
+  },
+  {
+    "id": 170,
+    "titulo": "Man! I Feel Like A Woman!",
+    "artista": "Shania Twain",
+    "estilo": "pop_int",
+    "arquivo": "man-i-feel-like-a-woman.mp3"
+  },
+  {
+    "id": 171,
+    "titulo": "Nothing Compares 2U",
+    "artista": "Sinéad O'Connor",
+    "estilo": "pop_int",
+    "arquivo": "nothing-compares-2u.mp3"
+  },
+  {
+    "id": 172,
+    "titulo": "Back for Good",
+    "artista": "Take That",
+    "estilo": "pop_int",
+    "arquivo": "back-for-good.mp3"
+  },
+  {
+    "id": 173,
+    "titulo": "Everybody Wants To Rule The World",
+    "artista": "Tears For Fears",
+    "estilo": "rock_int",
+    "arquivo": "everybody-wants-to-rule-the-world.mp3"
+  },
+  {
+    "id": 174,
+    "titulo": "Linger",
+    "artista": "The Cranberries",
+    "estilo": "rock_int",
+    "arquivo": "linger.mp3"
+  },
+  {
+    "id": 175,
+    "titulo": "Build",
+    "artista": "The Housemartins",
+    "estilo": "pop_int",
+    "arquivo": "build.mp3"
+  },
+  {
+    "id": 176,
+    "titulo": "Baby Can I Hold You",
+    "artista": "Tracy Chapman",
+    "estilo": "pop_int",
+    "arquivo": "baby-can-i-hold-you.mp3"
+  },
+  {
+    "id": 177,
+    "titulo": "Billionaire",
+    "artista": "Travie McCoy",
+    "estilo": "pop_int",
+    "arquivo": "billionaire.mp3"
+  },
+  {
+    "id": 178,
+    "titulo": "Já Sei Namorar",
+    "artista": "Tribalistas",
+    "estilo": "mpb",
+    "arquivo": "ja-sei-namorar.mp3"
+  },
+  {
+    "id": 179,
+    "titulo": "A Thousand Miles",
+    "artista": "Vanessa Carlton",
+    "estilo": "pop_int",
+    "arquivo": "a-thousand-miles.mp3"
+  },
+  {
+    "id": 180,
+    "titulo": "Vento no Litoral",
+    "artista": "Legião Urbana",
+    "estilo": "rock",
+    "arquivo": "vento-no-litoral.mp3"
+  },
+  {
+    "id": 181,
+    "titulo": "Você Não Soube Me Amar",
+    "artista": "Blitz",
+    "estilo": "rock",
+    "arquivo": "voce-nao-soube-me-amar.mp3"
+  },
+  {
+    "id": 182,
+    "titulo": "Vou Deixar",
+    "artista": "Skank",
+    "estilo": "rock",
+    "arquivo": "vou-deixar.mp3"
+  },
+  {
+    "id": 183,
+    "titulo": "Voyage Voyage",
+    "artista": "Desireless",
+    "estilo": "pop_int",
+    "arquivo": "voyage-voyage.mp3"
+  },
+  {
+    "id": 184,
+    "titulo": "We Are The World",
+    "artista": "Michael Jackson",
+    "estilo": "pop_int",
+    "arquivo": "we-are-the-world.mp3"
+  },
+  {
+    "id": 185,
+    "titulo": "What's Up",
+    "artista": "4 Non Blondes",
+    "estilo": "rock_int",
+    "arquivo": "whats-up.mp3"
+  },
+  {
+    "id": 186,
+    "titulo": "I Will Always Love You",
+    "artista": "Whitney Houston",
+    "estilo": "pop_int",
+    "arquivo": "i-will-always-love-you.mp3"
+  },
+  {
+    "id": 187,
+    "titulo": "Xibom Bombom",
+    "artista": "As Meninas",
+    "estilo": "pop",
+    "arquivo": "xibom-bombom.mp3"
+  }
 ]

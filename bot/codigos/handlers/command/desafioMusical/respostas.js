@@ -4,7 +4,7 @@
 import { CONFIG } from './config.js';
 import { jogos } from './state.js';
 import { jidDe, tag } from './utils.js';
-import { getTimeDoUsuario, pagarPremio } from './dados.js';
+import { getTimeDoUsuario, pagarPremio, membrosDoTime } from './dados.js';
 import { zoeiraAtraso } from './zoeira.js';
 import { finalizar, soltarPergunta, atualizarPlacarFixado } from './jogo.js';
 
@@ -89,7 +89,7 @@ async function avisarAtrasado(sock, message, from, jid, userId, r) {
 }
 
 // 🏆 acertou primeiro: faz o ponto na hora, mas os DCs só saem quando o ADM digitar #ok
-// (se a pessoa cantar errado, o ADM digita #errou: sem DCs e o ponto é apagado)
+// (se ninguém completar a música, o ADM digita #errou: sem DCs e o ponto é apagado)
 // Depois do acerto o bot NÃO manda mais nada sozinho: tudo segue pelos comandos do ADM.
 async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) {
     if (r.encerrada) return; // outro já ganhou enquanto consultávamos o banco
@@ -116,19 +116,36 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
         jogo.aguardando = true;
     }
 
+    // marca TODOS os integrantes do time de quem acertou, para a equipe inteira cantar
+    let jidsTime = [];
+    try {
+        jidsTime = (await membrosDoTime(from, time)).map(jidDe);
+    } catch (e) {
+        console.error('[desafioMusical] erro ao listar o time para a chamada:', e.message);
+    }
+    if (!jidsTime.includes(jid)) jidsTime.push(jid);
+
+    const nomeTime = time.toUpperCase();
+    const emojiTime = time === 'homens' ? '👨🏻' : '👩🏻';
+    const parteResto = Math.max(0, CONFIG.premioDC - CONFIG.premioAcertadorDC);
+
     await sock.sendMessage(
         from,
         {
             text:
-                `🏆 ${tag(jid)} acertou primeiro!\n\n` +
+                `🏆 ${tag(jid)} acertou primeiro e marcou *1 PONTO* para o time *${nomeTime}*! ${emojiTime}\n` +
                 `✅ *${r.letraCorreta}) ${r.musica.titulo}* — ${r.musica.artista}\n\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `🎤 *${tag(jid)}, AGORA COMPLETE A MÚSICA CANTANDO!*\n\n` +
-                `🪙 *SE COMPLETAR:* *${CONFIG.premioDC} DCs liberados* e o *ponto da equipe ${time.toUpperCase()} é mantido* ✅\n\n` +
-                `⚠️ *SE NÃO COMPLETAR:* *sem DCs* e o *ponto é cancelado* ❌\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n\n` +
-                `_🔢 Música nº ${r.musica.id}_`,
-            mentions: [jid],
+                '━━━━━━━━━━━━━━━━━━━━\n' +
+                `🎤🔥 *AGORA É A VEZ DO TIME ${nomeTime}!* 🔥🎤\n` +
+                '🚨 *TODA A EQUIPE TEM QUE CANTAR A MÚSICA!* 🚨\n' +
+                '━━━━━━━━━━━━━━━━━━━━\n\n' +
+                `${emojiTime} *CANTEM, ${nomeTime}!* 👇\n` +
+                `${jidsTime.map(tag).join(' ')}\n\n` +
+                `🪙 *${CONFIG.premioDC} DCs em jogo!* Quem cantar melhor leva *${CONFIG.premioAcertadorDC} DCs* ` +
+                `e os outros *${parteResto} DCs* são divididos com a equipe.\n` +
+                '⚖️ O ADM escolhe quem cantou melhor.\n\n' +
+                '❌ Se ninguém completar a música: sem DCs e sem ponto.',
+            mentions: [...new Set(jidsTime)],
         },
         { quoted: message }
     );
@@ -137,33 +154,50 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     if (jogos.get(from) === jogo) await atualizarPlacarFixado(sock, from, jogo);
 }
 
-// ✅ #ok do ADM: paga o prêmio pendente (60 para quem acertou, resto dividido com o time)
-export async function liberarPremio(sock, message, from, jogo) {
+// ✅ #ok do ADM: paga o prêmio pendente.
+// cantor (opcional): quem cantou melhor leva a parte maior; sem cantor, leva quem acertou.
+export async function liberarPremio(sock, message, from, jogo, cantor = null) {
     const p = jogo.premioPendente;
     if (!p) return false;
     jogo.premioPendente = null; // evita pagar duas vezes
 
     const nomeTime = p.time.toUpperCase();
+    const quem = cantor ? { jid: cantor.jid, userId: cantor.userId } : { jid: p.jid, userId: p.userId };
 
     let pagamento;
     try {
-        pagamento = await pagarPremio(from, p.time, p.userId, p.jid);
+        pagamento = await pagarPremio(from, p.time, quem.userId, quem.jid);
     } catch (e) {
         console.error('[desafioMusical] erro ao pagar prêmio:', e.message);
         pagamento = { ok: false, motivo: 'erro' };
     }
 
+    const mencionados = new Set([quem.jid, p.jid]);
+
     let textoDC;
     if (pagamento.ok) {
         const g = pagamento;
-        textoDC = `🪙 ${tag(p.jid)} você ganhou *${g.premio} DCs*!`;
-        if (g.beneficiados.length === 0) {
-            textoDC += `\n💰 Como você é o único do time, ficou com *${g.parteAcertador} DCs*.`;
+        const verbo = cantor ? 'cantou melhor e levou' : 'completou a música e levou';
+        textoDC = `🪙 *${g.premio} DCs* liberados para a equipe *${nomeTime}*!\n`;
+
+        if (g.totalOutros === 0) {
+            textoDC += `🥇 ${tag(quem.jid)} é o único do time e levou os *${g.parteAcertador} DCs*.`;
         } else {
-            // sem listar nomes (time grande deixaria a mensagem enorme)
-            textoDC += `\n💰 Você fica com *${g.parteAcertador} DCs* e os *${g.resto} DCs* restantes são divididos com a equipe *${nomeTime}*.`;
-            if (g.sorteio) {
-                textoDC += `\n🎲 Como o time é grande, *${g.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
+            textoDC += `🥇 ${tag(quem.jid)} ${verbo} *${g.parteAcertador} DCs*.`;
+            if (g.resto > 0) {
+                // lista quem recebeu a parte da equipe (limitado para time grande não estourar a mensagem)
+                const jids = g.beneficiados.map(jidDe);
+                const mostrados = jids.slice(0, CONFIG.maxMencoes);
+                mostrados.forEach(j => mencionados.add(j));
+                const extras = jids.length - mostrados.length;
+
+                textoDC += `\n🤝 Os *${g.resto} DCs* restantes foram divididos com a equipe: ` +
+                    `*${g.porMembro} DC${g.porMembro > 1 ? 's' : ''}* para cada um:\n` +
+                    `${mostrados.map(tag).join(' ')}` +
+                    (extras > 0 ? ` e mais *${extras}* da equipe` : '');
+                if (g.sorteio) {
+                    textoDC += `\n🎲 Como o time é grande, *${g.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
+                }
             }
         }
         if (g.sobra > 0) textoDC += `\n_(sobraram ${g.sobra} DC que ficam no pote)_`;
@@ -173,13 +207,20 @@ export async function liberarPremio(sock, message, from, jogo) {
         textoDC = '⚠️ Não consegui enviar os DCs desta rodada. Avise um ADM.';
     }
 
+    const linhaCantor = cantor
+        ? `🎤 Quem cantou melhor: ${tag(quem.jid)} (a letra foi acertada por ${tag(p.jid)})\n`
+        : '';
+
     await sock.sendMessage(
         from,
-        { text: `✅ *Música completada! DCs liberados pelo ADM.*\n🏆 O ponto do time *${nomeTime}* foi mantido!\n\n${textoDC}`, mentions: [p.jid] },
+        {
+            text: `✅ *Música completada! DCs liberados pelo ADM.*\n${linhaCantor}🏆 O ponto do time *${nomeTime}* foi mantido!\n\n${textoDC}`,
+            mentions: [...mencionados],
+        },
         { quoted: message }
     );
 
-    // última rodada: depois de liberar, mostra o resultado final (consequência do #ok do ADM)
+    // última rodada: depois de liberar, mostra o resultado final
     if (jogo.finalizando && jogos.get(from) === jogo) {
         clearTimeout(jogo.timer);
         jogo.timer = setTimeout(() => finalizar(sock, from, jogo), 4000);
@@ -187,8 +228,8 @@ export async function liberarPremio(sock, message, from, jogo) {
     return true;
 }
 
-// ❌ #errou do ADM: a pessoa não completou a música direito.
-// Sem DCs, o ponto que ela tinha feito é apagado e o placar é refeito (novo placar fixado).
+// ❌ #errou do ADM: ninguém completou a música direito.
+// Sem DCs, o ponto que o time tinha feito é apagado e o placar é refeito (novo placar fixado).
 export async function rejeitarPremio(sock, message, from, jogo) {
     const p = jogo.premioPendente;
     if (!p) return false;
@@ -218,7 +259,7 @@ export async function rejeitarPremio(sock, message, from, jogo) {
     // placar novo (já sem o ponto), tira o antigo e fixa este
     if (jogos.get(from) === jogo) await atualizarPlacarFixado(sock, from, jogo);
 
-    // última rodada: depois de resolver, mostra o resultado final (consequência do #errou do ADM)
+    // última rodada: depois de resolver, mostra o resultado final
     if (jogo.finalizando && jogos.get(from) === jogo) {
         clearTimeout(jogo.timer);
         jogo.timer = setTimeout(() => finalizar(sock, from, jogo), 4000);

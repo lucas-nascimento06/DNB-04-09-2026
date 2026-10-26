@@ -34,6 +34,12 @@ export async function garantirTabelas() {
         [CONFIG.poteInicial]
     );
 
+    // repõe o pote: se já existia com saldo menor que o poteInicial, sobe para o valor do config
+    await pool.query(
+        `UPDATE damas_dm_pote SET saldo = $1, atualizado_em = NOW() WHERE id = 1 AND saldo < $1`,
+        [CONFIG.poteInicial]
+    );
+
     // histórico de músicas já tocadas (para nunca repetir entre desafios)
     await pool.query(`
         CREATE TABLE IF NOT EXISTS damas_dm_usadas (

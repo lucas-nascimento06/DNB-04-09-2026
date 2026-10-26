@@ -27,19 +27,47 @@ export function embaralhar(arr) {
     return a;
 }
 
-export async function ehAdmin(sock, groupId, message, owners) {
-    if (message.key.fromMe) return true;
-    const jid = message.key.participant;
-    const alt = message.key.participantAlt;
-    const digits = extractDigits(alt || jid);
-    if (digits && owners.includes(digits)) return true;
+// ---------- identificação de ADM (mesmo método do #ban) ----------
+
+// tira o domínio (@...) e o sufixo de dispositivo (:12)
+const limpar = v => String(v || '').split('@')[0].replace(/:\d+$/, '');
+
+// Compara um participante do grupo com qualquer identificador (@lid, @s.whatsapp.net, número)
+function participanteCasa(p, id) {
+    if (!id) return false;
+    const alvo = limpar(id);
+    if (!alvo) return false;
+    return [p.id, p.lid, p.jid, p.phoneNumber].some(x => x && (x === id || limpar(x) === alvo));
+}
+
+// Verifica se quem mandou a mensagem é ADM do grupo (ou dono do bot).
+// Só vale quem aparece na lista de participantes com a flag "admin". Na dúvida, nega.
+export async function ehAdmin(sock, groupId, message, owners = []) {
+    const key = message.key || {};
+
+    // Possíveis identificadores de quem mandou o comando.
+    // Se a mensagem é do próprio número do bot (fromMe), key.participant vem vazio.
+    const senderIds = [
+        key.participant,
+        key.participantAlt,
+        key.fromMe ? sock.user?.id : null,
+        key.fromMe ? sock.user?.lid : null,
+    ].filter(x => typeof x === 'string' && x.length > 0);
+    if (senderIds.length === 0) return false; // sem identificação: nega
+
+    // donos do bot (comparação por dígitos, já sem sufixo de dispositivo)
+    const donos = (owners || []).map(o => String(o).replace(/\D/g, '')).filter(Boolean);
+    const digitos = senderIds.map(s => limpar(s).replace(/\D/g, '')).filter(Boolean);
+    if (digitos.some(d => donos.includes(d))) return true;
+
+    // admins do grupo
     try {
         const meta = await sock.groupMetadata(groupId);
-        return meta.participants.some(
-            p => p.admin && (p.id === jid || p.id === alt || p.lid === jid || p.phoneNumber === alt)
+        return meta.participants.some(p =>
+            p.admin && senderIds.some(s => participanteCasa(p, s))
         );
     } catch {
-        return false;
+        return false; // na dúvida, nega
     }
 }
 

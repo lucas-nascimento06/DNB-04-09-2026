@@ -11,6 +11,11 @@ import path from 'path';
 import { BANCO, ARQUIVO_FALSAS, PASTA_TRECHOS, PASTA_LETRAS, LETRAS, NUM_FALSAS } from './config.js';
 import { embaralhar } from './utils.js';
 
+// true  = 2 das 4 alternativas erradas misturam banda e música para confundir o pessoal
+//         (um par repetido com a resposta certa e outro par repetido só entre erradas).
+// false = todas as alternativas erradas são músicas reais de outros cantores.
+const MISTURAR = true;
+
 // Se faltar opção no mesmo estilo, completa com estes estilos (nesta ordem).
 const ESTILOS_PROXIMOS = {
     sertanejo: ['pagode', 'brega', 'pop'],
@@ -20,6 +25,8 @@ const ESTILOS_PROXIMOS = {
     pop: ['rock', 'mpb', 'brega'],
     brega: ['pop', 'sertanejo', 'pagode'],
     urbano: ['pop', 'brega', 'rock'],
+    pop_int: ['rock_int', 'pop'],
+    rock_int: ['pop_int', 'rock'],
 };
 
 // Lê o JSON e garante um id em cada música (se não tiver "id", usa a posição: 1, 2, 3...)
@@ -136,6 +143,29 @@ export function montarRodada(banco, usadas) {
             .map(m => `${m.titulo} — ${m.artista}`)
             .filter(t => !escolhidas.includes(t));
         escolhidas.push(...extras.slice(0, NUM_FALSAS - escolhidas.length));
+    }
+
+    // 4) pegadinhas misturadas, SEM entregar a resposta.
+    //    Sorteia um tipo por rodada:
+    //    - "titulo": uma opção usa o título CERTO com outra banda e, para equilibrar,
+    //                outra opção repete o título de uma música ERRADA com outra banda.
+    //    - "banda":  uma opção usa a banda CERTA com outro título e, para equilibrar,
+    //                outra opção repete a banda de uma música ERRADA com outro título.
+    //    Resultado: sempre aparecem 2 pares repetidos, e quem não ouviu a música não
+    //    tem como saber em qual par está a certa. Só título E banda certos valem.
+    if (MISTURAR && escolhidas.length >= 4) {
+        const w0 = partir(escolhidas[0]);
+        const w1 = partir(escolhidas[1]);
+        const w2 = partir(escolhidas[2]);
+        const tipo = Math.random() < 0.5 ? 'titulo' : 'banda';
+
+        if (tipo === 'titulo') {
+            escolhidas[0] = `${correta.titulo} — ${w0.artista}`; // título certo, banda errada
+            escolhidas[1] = `${w2.titulo} — ${w1.artista}`;      // repete o título de uma errada
+        } else {
+            escolhidas[0] = `${w0.titulo} — ${correta.artista}`; // banda certa, título errado
+            escolhidas[1] = `${w1.titulo} — ${w2.artista}`;      // repete a banda de uma errada
+        }
     }
 
     const textos = embaralhar([textoCorreto, ...escolhidas]);

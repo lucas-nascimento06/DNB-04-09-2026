@@ -92,8 +92,9 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         return true;
     }
 
-    // 4.5) ADM ouviu a música completa: libera os DCs de quem acertou
-    if (lower === '#ok') {
+    // 4.5) ADM ouviu a música completa: libera os DCs
+    // "#ok" = paga quem acertou | "#ok @fulano" = paga quem cantou melhor (do mesmo time)
+    if (/^#ok(\s|$)/.test(lower)) {
         const j = jogos.get(from);
         if (!j) return false; // sem desafio rolando: deixa outros handlers tratarem o #ok
         if (!(await admin())) { await negar(); return true; }
@@ -101,7 +102,28 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
             await sock.sendMessage(from, { text: 'ℹ️ Não há nenhum prêmio esperando liberação agora.' }, { quoted: message });
             return true;
         }
-        await liberarPremio(sock, message, from, j);
+
+        let cantor = null;
+        if (/^#ok\s+\S/.test(lower)) {
+            const alvo = await resolverAlvo(sock, from, message);
+            if (!alvo) {
+                await sock.sendMessage(from, {
+                    text: '❓ Marque quem cantou. Exemplo: *#ok @fulano* (ou só *#ok* para pagar quem acertou).',
+                }, { quoted: message });
+                return true;
+            }
+            const timeAlvo = await getTimeDoUsuario(from, alvo.userId);
+            if (timeAlvo !== j.premioPendente.time) {
+                await sock.sendMessage(from, {
+                    text: `🚫 ${tag(alvo.jid)} não está no time *${j.premioPendente.time.toUpperCase()}*.`,
+                    mentions: [alvo.jid],
+                }, { quoted: message });
+                return true;
+            }
+            cantor = alvo;
+        }
+
+        await liberarPremio(sock, message, from, j, cantor);
         return true;
     }
 
@@ -124,7 +146,7 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         if (!j) return false;
         if (!(await admin())) { await negar(); return true; }
 
-        // NOVO: com prêmio pendente, o ADM precisa decidir antes (nada de aviso automático depois)
+        // com prêmio pendente, o ADM precisa decidir antes (nada de aviso automático depois)
         if (j.premioPendente) {
             await sock.sendMessage(from, {
                 text: '⏳ Resolva o prêmio pendente com *#ok* (liberar) ou *#errou* (cancelar) antes de usar *#next*.',
