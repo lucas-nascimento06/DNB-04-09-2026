@@ -88,6 +88,27 @@ async function avisarAtrasado(sock, message, from, jid, userId, r) {
     return true;
 }
 
+// 🎤 Chame esta função para TODA mensagem do grupo (no handler principal, junto do tratarResposta).
+// Enquanto a equipe está cantando (prêmio pendente), quem for do time e mandar um ÁUDIO conta como "já cantou".
+// O ADM vê quem falta com #falta.
+export function registrarAudioCantor(from, userId, message) {
+    const p = jogos.get(from)?.premioPendente;
+    if (!p || !userId) return false;
+
+    let m = message?.message;
+    for (let i = 0; i < 4 && m; i++) {
+        const inner = m.ephemeralMessage?.message || m.viewOnceMessage?.message ||
+            m.viewOnceMessageV2?.message || m.documentWithCaptionMessage?.message || null;
+        if (!inner) break;
+        m = inner;
+    }
+    if (!m?.audioMessage) return false;
+
+    if (!p.cantaram) p.cantaram = new Set();
+    p.cantaram.add(userId);
+    return true;
+}
+
 // 🏆 acertou primeiro: faz o ponto na hora, mas os DCs só saem quando o ADM digitar #ok
 // (se ninguém completar a música, o ADM digita #errou: sem DCs e o ponto é apagado)
 // Depois do acerto o bot NÃO manda mais nada sozinho: tudo segue pelos comandos do ADM.
@@ -107,7 +128,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
     jogo.acertos.set(userId, reg);
 
     // prêmio fica guardado até o ADM liberar com #ok (ou cancelar com #errou)
-    jogo.premioPendente = { jid, userId, time };
+    jogo.premioPendente = { jid, userId, time, cantaram: new Set() }; // cantaram = quem já mandou áudio (#falta)
 
     // sem timers: o ADM resolve com #ok / #errou e depois usa #next
     if (jogo.rodadaAtual >= jogo.total) {
@@ -127,7 +148,6 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
 
     const nomeTime = time.toUpperCase();
     const emojiTime = time === 'homens' ? '👨🏻' : '👩🏻';
-    const parteResto = Math.max(0, CONFIG.premioDC - CONFIG.premioAcertadorDC);
 
     await sock.sendMessage(
         from,
@@ -141,8 +161,8 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
                 '━━━━━━━━━━━━━━━━━━━━\n\n' +
                 `${emojiTime} *CANTEM, ${nomeTime}!* 👇\n` +
                 `${jidsTime.map(tag).join(' ')}\n\n` +
-                `🪙 *${CONFIG.premioDC} DCs em jogo!* Quem cantar melhor leva *${CONFIG.premioAcertadorDC} DCs* ` +
-                `e os outros *${parteResto} DCs* são divididos com a equipe.\n` +
+                `🪙 Quem cantar melhor leva *${CONFIG.premioCantorDC} DCs* ` +
+                `e *cada um* do resto da equipe leva *${CONFIG.premioPorMembroDC} DCs*!\n` +
                 '⚖️ O ADM escolhe quem cantou melhor.\n\n' +
                 '❌ Se ninguém completar a música: sem DCs e sem ponto.',
             mentions: [...new Set(jidsTime)],
@@ -177,39 +197,29 @@ export async function liberarPremio(sock, message, from, jogo, cantor = null) {
     let textoDC;
     if (pagamento.ok) {
         const g = pagamento;
-        const verbo = cantor ? 'cantou melhor e levou' : 'completou a música e levou';
+        const verbo = 'cantou melhor e levou';
         textoDC = `🪙 *${g.premio} DCs* liberados para a equipe *${nomeTime}*!\n`;
 
         if (g.totalOutros === 0) {
             textoDC += `🥇 ${tag(quem.jid)} é o único do time e levou os *${g.parteAcertador} DCs*.`;
         } else {
             textoDC += `🥇 ${tag(quem.jid)} ${verbo} *${g.parteAcertador} DCs*.`;
-            if (g.resto > 0) {
-                // lista quem recebeu a parte da equipe (limitado para time grande não estourar a mensagem)
-                const jids = g.beneficiados.map(jidDe);
-                const mostrados = jids.slice(0, CONFIG.maxMencoes);
-                mostrados.forEach(j => mencionados.add(j));
-                const extras = jids.length - mostrados.length;
-
-                textoDC += `\n🤝 Os *${g.resto} DCs* restantes foram divididos com a equipe: ` +
-                    `*${g.porMembro} DC${g.porMembro > 1 ? 's' : ''}* para cada um:\n` +
-                    `${mostrados.map(tag).join(' ')}` +
-                    (extras > 0 ? ` e mais *${extras}* da equipe` : '');
-                if (g.sorteio) {
-                    textoDC += `\n🎲 Como o time é grande, *${g.beneficiados.length}* membros foram sorteados e ganharam *1 DC* cada.`;
-                }
-            }
+            // sem listar nem marcar os nomes de quem recebeu a parte da equipe
+            textoDC += `\n🤝 Cada um dos outros *${g.totalOutros}* da equipe *${nomeTime}* levou *${g.porMembro} DCs* ` +
+                `(*${g.resto} DCs* no total).`;
         }
         if (g.sobra > 0) textoDC += `\n_(sobraram ${g.sobra} DC que ficam no pote)_`;
     } else if (pagamento.motivo === 'pote-vazio') {
-        textoDC = '⚠️ O *pote de DCs acabou*! Esta rodada vale só o ponto. ADM, use *#pote 6000* para recarregar.';
+        textoDC = '⚠️ O *pote de DCs não tem saldo suficiente*! Esta rodada vale só o ponto. ADM, use *#pote 6000* para recarregar.';
     } else {
         textoDC = '⚠️ Não consegui enviar os DCs desta rodada. Avise um ADM.';
     }
 
-    const linhaCantor = cantor
-        ? `🎤 Quem cantou melhor: ${tag(quem.jid)} (a letra foi acertada por ${tag(p.jid)})\n`
-        : '';
+    // sempre mostra quem cantou melhor; sem #ok @fulano, quem acertou a letra é quem cantou
+    const mesmaPessoa = quem.userId === p.userId;
+    const linhaCantor = mesmaPessoa
+        ? `🎤 Quem cantou melhor: ${tag(quem.jid)} (acertou a letra e também cantou)\n`
+        : `🎤 Quem cantou melhor: ${tag(quem.jid)} (a letra foi acertada por ${tag(p.jid)})\n`;
 
     await sock.sendMessage(
         from,

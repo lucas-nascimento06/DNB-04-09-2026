@@ -132,7 +132,7 @@ export const CONFIG = {
         'status stk sv time times totag varredura veriflista verilista vip ' +
         'add amizade avisarconfissoes aviso confissao confissoes dm dmusical paquera ' +
         'postarconfissoes pote pronto recusar romancenoar leil dadis dadoss dadus dasos ' +
-        'errou placar')
+        'errou placar falta faltam')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],

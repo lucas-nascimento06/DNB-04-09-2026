@@ -11,6 +11,7 @@
 //   #dp | #dmparar             -> encerra o desafio (ADM)
 //   #ok                        -> ADM libera os DCs de quem acertou e completou a música (ADM)
 //   #errou                     -> ADM: a pessoa cantou errado -> sem DCs, ponto apagado e placar refeito (ADM)
+//   #falta | #faltam           -> ADM: mostra quem da equipe ainda NÃO mandou áudio cantando (ADM)
 //   #next | #n | #proxima      -> próxima música (ADM)
 //   #time | #times             -> mostra os times (ADM)
 //   #pote [valor]              -> mostra / define o pote de DCs (ADM)
@@ -36,7 +37,7 @@ import { extractDigits, getNumeroReal } from './desafioMusical/utils.js';
 import { garantirTabelas } from './desafioMusical/dados.js';
 import { tratarComandoAdmin } from './desafioMusical/comandosAdmin.js';
 import { tratarEntradaTime } from './desafioMusical/comandosTime.js';
-import { tratarResposta } from './desafioMusical/respostas.js';
+import { tratarResposta, registrarAudioCantor } from './desafioMusical/respostas.js';
 import { mostrarPlacarAtual } from './desafioMusical/jogo.js';
 
 console.log('[desafioMusical] v10 carregado (modular)');
@@ -48,8 +49,15 @@ export async function handleDesafioMusical(sock, message, content, from, ownerNu
     const texto = (content || '').trim();
     const lower = texto.toLowerCase();
 
+    // 🎤 cantoria: enquanto a equipe canta (prêmio pendente), quem mandar ÁUDIO conta como "já cantou" (#falta).
+    // Não consome a mensagem: o áudio segue para os outros handlers normalmente.
+    if (!message.key.fromMe && jogos.get(from)?.premioPendente) {
+        const uid = extractDigits(getNumeroReal(message));
+        if (uid) registrarAudioCantor(from, uid, message);
+    }
+
     // filtro rápido: só continua se for comando do desafio ou resposta A/B/C/D/E
-    const ehComando = /^#add(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar)(\s+\d+)?$/.test(lower);
+    const ehComando = /^#add(\s|$)/.test(lower) || /^#ok(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|falta|faltam|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar)(\s+\d+)?$/.test(lower);
     const ehLetra = /^[a-e]$/i.test(texto) && jogos.has(from);
     if (!ehComando && !ehLetra) return false;
 

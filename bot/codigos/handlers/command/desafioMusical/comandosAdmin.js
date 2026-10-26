@@ -1,12 +1,12 @@
 // bot/codigos/handlers/command/desafioMusical/comandosAdmin.js
-// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #ok, #errou, #next, #add, #time, #pote, #limpartimes, #limparmusicas
+// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #ok, #errou, #falta, #next, #add, #time, #pote, #limpartimes, #limparmusicas
 //
 // Retorno: null  -> não era um comando de ADM (o handler segue adiante)
 //          true/false -> valor que o handler principal deve retornar
 
 import { CONFIG } from './config.js';
 import { jogos, inscricoes, pendentes } from './state.js';
-import { ehAdmin, resolverAlvo, tag, blocoTimes } from './utils.js';
+import { ehAdmin, resolverAlvo, tag, blocoTimes, jidDe } from './utils.js';
 import {
     getPote, definirPote, getTimeDoUsuario, salvarTime, membrosDoTime, limparTimes, limparUsadas,
 } from './dados.js';
@@ -103,24 +103,53 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
             return true;
         }
 
+        // Quem cantou melhor pode ser indicado de 2 jeitos:
+        //   - "#ok @fulano"                      (menção no texto)
+        //   - "#ok" RESPONDENDO o áudio/mensagem de quem cantou
+        // Só "#ok" (sem menção e sem responder ninguém) paga quem acertou.
         let cantor = null;
-        if (/^#ok\s+\S/.test(lower)) {
+        const ctx = message.message?.extendedTextMessage?.contextInfo;
+        const marcouNoTexto = /^#ok\s+\S/.test(lower);
+        const respondeuAlguem = !!ctx?.participant || (ctx?.mentionedJid?.length || 0) > 0;
+
+        if (marcouNoTexto || respondeuAlguem) {
+            const limpar = v => String(v || '').split('@')[0].replace(/:\d+$/, '');
+            const ehBot = jid => [sock.user?.id, sock.user?.lid].filter(Boolean).some(b => limpar(b) === limpar(jid));
+            const timeVencedor = j.premioPendente.time;
+
             const alvo = await resolverAlvo(sock, from, message);
+            console.log('[#ok] marcouNoTexto:', marcouNoTexto, '| respondeu:', ctx?.participant,
+                '| mencionados:', ctx?.mentionedJid, '| alvo resolvido:', alvo);
+
             if (!alvo) {
-                await sock.sendMessage(from, {
-                    text: '❓ Marque quem cantou. Exemplo: *#ok @fulano* (ou só *#ok* para pagar quem acertou).',
-                }, { quoted: message });
-                return true;
+                if (marcouNoTexto) {
+                    await sock.sendMessage(from, {
+                        text: '❓ Marque quem cantou. Exemplo: *#ok @fulano* (ou responda o áudio de quem cantou com *#ok*, ou só *#ok* para pagar quem acertou).',
+                    }, { quoted: message });
+                    return true;
+                }
+            } else if (!ehBot(alvo.jid)) {
+                // a pessoa é do time vencedor? confere pelo número salvo OU pelo jid salvo
+                const ids = new Set([limpar(alvo.userId), limpar(alvo.jid), limpar(ctx?.participant)].filter(Boolean));
+                let noTime = (await getTimeDoUsuario(from, alvo.userId)) === timeVencedor;
+                if (!noTime) {
+                    const membros = await membrosDoTime(from, timeVencedor);
+                    noTime = membros.some(m => ids.has(limpar(m.user_id)) || ids.has(limpar(m.jid)));
+                }
+                console.log('[#ok] alvo no time', timeVencedor, '?', noTime);
+
+                if (noTime) {
+                    cantor = alvo;
+                } else {
+                    // marcou/respondeu alguém que não é do time que pontuou
+                    await sock.sendMessage(from, {
+                        text: `🚫 ${tag(alvo.jid)} não está no time *${timeVencedor.toUpperCase()}*.`,
+                        mentions: [alvo.jid],
+                    }, { quoted: message });
+                    return true;
+                }
             }
-            const timeAlvo = await getTimeDoUsuario(from, alvo.userId);
-            if (timeAlvo !== j.premioPendente.time) {
-                await sock.sendMessage(from, {
-                    text: `🚫 ${tag(alvo.jid)} não está no time *${j.premioPendente.time.toUpperCase()}*.`,
-                    mentions: [alvo.jid],
-                }, { quoted: message });
-                return true;
-            }
-            cantor = alvo;
+            // respondeu uma mensagem do próprio bot: ignora e paga quem acertou
         }
 
         await liberarPremio(sock, message, from, j, cantor);
@@ -137,6 +166,44 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
             return true;
         }
         await rejeitarPremio(sock, message, from, j);
+        return true;
+    }
+
+    // 4.7) ADM: quem da equipe ainda NÃO mandou áudio cantando (usar antes do #ok)
+    if (lower === '#falta' || lower === '#faltam') {
+        if (!(await admin())) { await negar(); return true; }
+        const j = jogos.get(from);
+        const p = j?.premioPendente;
+        if (!p) {
+            await sock.sendMessage(from, { text: 'ℹ️ Não há nenhuma equipe cantando agora.' }, { quoted: message });
+            return true;
+        }
+
+        const membros = await membrosDoTime(from, p.time);
+        const cantaram = p.cantaram || new Set();
+        const faltam = membros.filter(m => !cantaram.has(m.user_id));
+        const jaForam = membros.filter(m => cantaram.has(m.user_id));
+        const nomeTime = p.time.toUpperCase();
+        const emoji = p.time === 'homens' ? '👨🏻' : '👩🏻';
+        const lista = arr => arr.map(m => tag(jidDe(m))).join(' ');
+
+        let texto;
+        if (faltam.length === 0) {
+            texto =
+                `🎤 *EQUIPE ${nomeTime}* ${emoji}\n\n` +
+                `✅ Todos já cantaram (${jaForam.length}/${membros.length})! ADM, pode usar *#ok*.`;
+        } else {
+            texto =
+                `🎤 *QUEM FALTA CANTAR — EQUIPE ${nomeTime}* ${emoji}\n\n` +
+                `🔴 *Faltam (${faltam.length}):*\n${lista(faltam)}\n\n` +
+                `✅ Já cantaram (${jaForam.length}/${membros.length}): ${jaForam.length ? lista(jaForam) : '_ninguém ainda_'}\n\n` +
+                '📣 Mandem o áudio cantando!';
+        }
+
+        await sock.sendMessage(from, {
+            text: texto,
+            mentions: [...faltam, ...jaForam].map(jidDe),
+        }, { quoted: message });
         return true;
     }
 

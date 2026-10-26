@@ -129,39 +129,20 @@ export async function limparUsadas(grupoId) {
     await pool.query(`DELETE FROM damas_dm_usadas WHERE grupo_id = $1`, [grupoId]);
 }
 
-// Prêmio da rodada: parte maior para quem acertou, o resto dividido entre os OUTROS do time.
+// Prêmio da rodada: valor fixo para quem cantou melhor + valor fixo para CADA um dos OUTROS do time.
 // Tira do pote e credita nas carteiras (damas_dc_wallets).
 export async function pagarPremio(grupoId, time, userIdVencedor, jidVencedor) {
     const membros = await membrosDoTime(grupoId, time);
     const outros = membros.filter(m => m.user_id !== userIdVencedor);
 
-    const pote = await getPote();
-    const premio = Math.min(CONFIG.premioDC, pote);
-    if (premio <= 0) return { ok: false, motivo: 'pote-vazio' };
-
-    // sem outros no time: quem acertou leva tudo
-    let parteAcertador = outros.length === 0
-        ? premio
-        : Math.min(CONFIG.premioAcertadorDC, premio);
-    const resto = premio - parteAcertador;
-
-    let beneficiados = [];
-    let porMembro = 0;
-    let sorteio = false;
-
-    if (resto > 0 && outros.length > 0) {
-        beneficiados = outros;
-        porMembro = Math.floor(resto / outros.length);
-        // time grande: não dá 1 DC para cada um, então sorteia quem leva 1 DC
-        if (porMembro < 1) {
-            beneficiados = embaralhar(outros).slice(0, resto);
-            porMembro = 1;
-            sorteio = true;
-        }
-    }
-
-    const totalTime = porMembro * beneficiados.length;
-    const total = parteAcertador + totalTime; // o que sobrar fica no pote
+    // valores FIXOS (config): quem cantou melhor leva premioCantorDC; cada um dos OUTROS do time leva premioPorMembroDC
+    const parteAcertador = CONFIG.premioCantorDC;
+    const porMembro = CONFIG.premioPorMembroDC;
+    const beneficiados = outros;
+    const sorteio = false;
+    const resto = porMembro * beneficiados.length;
+    const total = parteAcertador + resto;
+    const premio = total;
 
     const baixa = await pool.query(
         `UPDATE damas_dm_pote SET saldo = saldo - $1, atualizado_em = NOW()
