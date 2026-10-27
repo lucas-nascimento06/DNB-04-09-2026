@@ -19,7 +19,8 @@ const GRUPO_DESAFIO_MUSICAL_DAMAS = '120363428983518322@g.us'; // "Desafio Music
 export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL, GRUPO_ADMINS, GRUPO_DESAFIO_MUSICAL_DAMAS];
 
 export const CONFIG = {
-    premioCantorDC: 50,     // DC fixos para quem cantou melhor (ou para quem acertou, se o ADM não indicar). Só essa pessoa ganha DCs.
+    premioCantorDC: 60,         // DC para quem cantou melhor (chegou mais perto de completar a letra e teve melhor interpretação).
+    premioParticipacaoDC: 10,   // DC para CADA outro integrante da equipe que cantou (mandou áudio) e tentou. 0 = desliga o bônus.
     poteInicial: 1000000,   // pote do bot: criado na 1ª vez e REPOSTO a esse valor sempre que o bot ligar com o pote abaixo dele
     maxMencoes: 15,         // quantos membros do time campeão marcar na mensagem final
     tempoRodadaMs: 0,       // 0 = SEM LIMITE (vale até alguém acertar; ADM pula com #next). Ex.: 180000 = 3 min

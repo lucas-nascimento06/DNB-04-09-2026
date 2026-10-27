@@ -210,9 +210,7 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
             texto =
                 `🎤 *QUEM FALTA CANTAR — EQUIPE ${nomeTime}* ${emoji}\n\n` +
                 `🔴 *Faltam (${faltam.length}):*\n${lista(faltam)}\n\n` +
-                `✅ Já cantaram (${jaForam.length}/${membros.length}): ${jaForam.length ? lista(jaForam) : '_ninguém ainda_'}\n\n` +
-                '📣 *Todos precisam mandar o áudio cantando!*\n' +
-                '⚠️ Quem não cantar faz o time perder o ponto.';
+                `✅ Já cantaram (${jaForam.length}/${membros.length}): ${jaForam.length ? lista(jaForam) : '_ninguém ainda_'}`;
         }
 
         await sock.sendMessage(from, {

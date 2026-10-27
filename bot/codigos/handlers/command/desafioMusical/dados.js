@@ -129,7 +129,7 @@ export async function limparUsadas(grupoId) {
     await pool.query(`DELETE FROM damas_dm_usadas WHERE grupo_id = $1`, [grupoId]);
 }
 
-// Prêmio da rodada: SÓ quem cantou melhor leva premioCantorDC.
+// Prêmio da rodada (versão antiga, mantida por compatibilidade): SÓ quem cantou melhor leva premioCantorDC.
 // Tira do pote e credita na carteira (damas_dc_wallets).
 export async function pagarPremio(userId) {
     const premio = CONFIG.premioCantorDC;
@@ -155,4 +155,77 @@ export async function pagarPremio(userId) {
     }
 
     return { ok: true, premio, poteRestante: Number(baixa.rows[0].saldo) };
+}
+
+// Prêmio da rodada (versão nova):
+//  - quem cantou melhor leva premioCantorDC (60)
+//  - cada outro integrante que cantou leva premioParticipacaoDC (10)
+// Tudo sai do pote. Se o pote não cobrir tudo, o melhor cantor tem prioridade e o bônus de participação é pulado.
+// Retorna { ok, premio, participantes: [{ userId, valor }], semParticipacao, poteRestante } ou { ok:false, motivo }
+export async function pagarPremios(cantorId, participantesIds = []) {
+    const premio = CONFIG.premioCantorDC;
+    const extra = CONFIG.premioParticipacaoDC || 0;
+
+    let ids = [...new Set((participantesIds || []).map(String))]
+        .filter(id => id && id !== String(cantorId));
+    if (extra <= 0) ids = [];
+
+    const deduzir = async (valor) => pool.query(
+        `UPDATE damas_dm_pote SET saldo = saldo - $1, atualizado_em = NOW()
+         WHERE id = 1 AND saldo >= $1 RETURNING saldo`,
+        [valor]
+    );
+
+    let semParticipacao = false;
+    let totalDeduzido = premio + ids.length * extra;
+    let baixa = await deduzir(totalDeduzido);
+
+    // pote não cobre tudo: paga só o melhor cantor
+    if (baixa.rowCount === 0 && ids.length > 0) {
+        semParticipacao = true;
+        ids = [];
+        totalDeduzido = premio;
+        baixa = await deduzir(totalDeduzido);
+    }
+    if (baixa.rowCount === 0) return { ok: false, motivo: 'pote-vazio' };
+
+    const lista = [
+        { userId: String(cantorId), valor: premio, cantor: true },
+        ...ids.map(id => ({ userId: id, valor: extra, cantor: false })),
+    ];
+
+    const pagos = [];
+    let restante = totalDeduzido;
+
+    for (const item of lista) {
+        try {
+            await pool.query(
+                `INSERT INTO damas_dc_wallets (user_id, saldo) VALUES ($1, $2)
+                 ON CONFLICT (user_id)
+                 DO UPDATE SET saldo = damas_dc_wallets.saldo + EXCLUDED.saldo, atualizado_em = NOW()`,
+                [item.userId, item.valor]
+            );
+            pagos.push(item);
+            restante -= item.valor;
+        } catch (e) {
+            console.error('[desafioMusical] erro ao creditar carteira:', e.message);
+        }
+    }
+
+    // devolve ao pote o que não conseguiu pagar
+    let poteRestante = Number(baixa.rows[0].saldo);
+    if (restante > 0) {
+        await pool.query(`UPDATE damas_dm_pote SET saldo = saldo + $1 WHERE id = 1`, [restante]).catch(() => {});
+        poteRestante += restante;
+    }
+
+    if (!pagos.some(p => p.cantor)) return { ok: false, motivo: 'erro' };
+
+    return {
+        ok: true,
+        premio,
+        participantes: pagos.filter(p => !p.cantor).map(p => ({ userId: p.userId, valor: p.valor })),
+        semParticipacao,
+        poteRestante,
+    };
 }

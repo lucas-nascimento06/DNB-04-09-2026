@@ -4,7 +4,7 @@
 import { CONFIG } from './config.js';
 import { jogos } from './state.js';
 import { jidDe, tag } from './utils.js';
-import { getTimeDoUsuario, pagarPremio, membrosDoTime } from './dados.js';
+import { getTimeDoUsuario, pagarPremios, membrosDoTime } from './dados.js';
 import { zoeiraAtraso } from './zoeira.js';
 import { finalizar, soltarPergunta, atualizarPlacarFixado } from './jogo.js';
 
@@ -161,11 +161,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
                 '🚨 *TODA A EQUIPE TEM QUE CANTAR A MÚSICA!* 🚨\n' +
                 '━━━━━━━━━━━━━━━━━━━━\n\n' +
                 `${emojiTime} *CANTEM, ${nomeTime}!* 👇\n` +
-                `${jidsTime.map(tag).join(' ')}\n\n` +
-                '📜 *REGRA:* *TODOS* do time têm que cantar a música completa, mandando *ÁUDIO* aqui no grupo!\n' +
-                '⚠️ Se *um* não cantar, o ponto vai para o time adversário!\n\n' +
-                `🪙 Quem cantar melhor leva *${CONFIG.premioCantorDC} DCs*.\n` +
-                '⚖️ O ADM escolhe quem interpretou melhor.',
+                `${jidsTime.map(tag).join(' ')}`,
             mentions: [...new Set(jidsTime)],
         },
         { quoted: message }
@@ -177,6 +173,7 @@ async function registrarAcerto(sock, message, from, jid, userId, time, jogo, r) 
 
 // ✅ #ok do ADM: paga o prêmio pendente.
 // cantor (opcional): quem cantou melhor leva os DCs; sem cantor, leva quem acertou.
+// TODOS os outros integrantes da equipe levam o bônus de participação (liberado só aqui, no #ok).
 export async function liberarPremio(sock, message, from, jogo, cantor = null) {
     const p = jogo.premioPendente;
     if (!p) return false;
@@ -185,17 +182,34 @@ export async function liberarPremio(sock, message, from, jogo, cantor = null) {
     const nomeTime = p.time.toUpperCase();
     const quem = cantor ? { jid: cantor.jid, userId: cantor.userId } : { jid: p.jid, userId: p.userId };
 
+    // todos do time, exceto o melhor cantor
+    let participantes = [];
+    try {
+        const membros = await membrosDoTime(from, p.time);
+        participantes = membros.filter(m => String(m.user_id) !== String(quem.userId));
+    } catch (e) {
+        console.error('[desafioMusical] erro ao listar a equipe:', e.message);
+    }
+
     let pagamento;
     try {
-        pagamento = await pagarPremio(quem.userId);
+        pagamento = await pagarPremios(quem.userId, participantes.map(m => m.user_id));
     } catch (e) {
         console.error('[desafioMusical] erro ao pagar prêmio:', e.message);
         pagamento = { ok: false, motivo: 'erro' };
     }
 
+    const mentions = [quem.jid, p.jid];
     let textoDC;
     if (pagamento.ok) {
-        textoDC = `🥇 ${tag(quem.jid)} cantou melhor e levou *${pagamento.premio} DCs*! 🪙`;
+        textoDC =
+            `🥇 ${tag(quem.jid)} cantou, chegou mais perto de completar a música e teve a melhor interpretação: levou *${pagamento.premio} DCs*! 🪙`;
+
+        if (pagamento.participantes.length > 0) {
+            textoDC += `\n\nO restante da equipe, por ter tentado, levou *${pagamento.participantes[0].valor} DCs* cada um.`;
+        } else if (pagamento.semParticipacao) {
+            textoDC += '\n\n⚠️ O pote não tinha saldo para o bônus de participação do restante da equipe.';
+        }
     } else if (pagamento.motivo === 'pote-vazio') {
         textoDC = '⚠️ O *pote de DCs não tem saldo suficiente*! Esta rodada vale só o ponto. ADM, use *#pote 6000* para recarregar.';
     } else {
@@ -206,10 +220,10 @@ export async function liberarPremio(sock, message, from, jogo, cantor = null) {
         from,
         {
             text:
-                `✅ *Música completada por toda a equipe ${nomeTime}!*\n` +
+                `✅ *Música cantada por toda a equipe ${nomeTime}!*\n` +
                 `🏆 O ponto do time *${nomeTime}* foi mantido!\n\n` +
                 textoDC,
-            mentions: [...new Set([quem.jid, p.jid])],
+            mentions: [...new Set(mentions)],
         },
         { quoted: message }
     );
@@ -245,7 +259,7 @@ export async function repassarPonto(sock, message, from, jogo) {
         {
             text:
                 '🔁 *PONTO REPASSADO!*\n\n' +
-                `❌ A equipe *${p.time.toUpperCase()}* não cantou completa (nem todos mandaram áudio).\n` +
+                `❌ Uma ou mais pessoas da equipe *${p.time.toUpperCase()}* não cantou.\n` +
                 `${emojiOutro} O ponto vai para a equipe *${outro.toUpperCase()}*!\n` +
                 '🚫 Sem DCs nesta rodada.',
         },
