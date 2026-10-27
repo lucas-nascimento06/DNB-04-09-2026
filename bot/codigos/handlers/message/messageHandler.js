@@ -140,6 +140,11 @@ import {
     handleDesafioMusical
 } from '../command/desafioMusicalHandler.js';
 
+// 💘 IMPORT — brincadeira do namoro (#entrar, #pedido, #aceito)
+import {
+    handleBrincadeiraNamoro
+} from '../command/brincadeiraNamoroHandler.js';
+
 
 // 🚫 IMPORT — anti-flood (remove quem manda muita mídia/figurinha em sequência)
 import {
@@ -398,6 +403,16 @@ export async function handleMessages(sock, message) {
             await handleListarContatos(sock, message);
             return;
         }
+
+        // ============================================
+        // 💘 BRINCADEIRA DO NAMORO (#entrar, #pedido, #aceito, #namoro, #casais)
+        // Fica junto do desafio musical, antes dos outros comandos e da IA.
+        // ============================================
+        if (from.endsWith('@g.us')) {
+            const namoroHandled = await handleBrincadeiraNamoro(sock, message, content, from, OWNER_NUMBERS);
+            if (namoroHandled) return;
+        }
+        
 
         // ============================================
         // 👑 MENU OWNER
