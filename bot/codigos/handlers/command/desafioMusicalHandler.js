@@ -9,8 +9,9 @@
 //   #dm | #dmusical [rodadas]  -> inicia o desafio (ADM)
 //   #add @pessoa [h|m]         -> ADM coloca alguém num time
 //   #dp | #dmparar             -> encerra o desafio (ADM)
-//   #ok                        -> ADM libera os DCs de quem acertou e completou a música (ADM)
-//   #errou                     -> ADM: a pessoa cantou errado -> sem DCs, ponto apagado e placar refeito (ADM)
+//   #ok [@pessoa]              -> ADM libera os DCs para quem cantou melhor (sem marcar, paga quem acertou) (ADM)
+//   #rep | #repassar           -> ADM: alguém do time não cantou -> o ponto vai para o time adversário, sem DCs (ADM)
+//   #errou                     -> ADM: ninguém completou a música -> sem DCs, ponto apagado e placar refeito (ADM)
 //   #falta | #faltam           -> ADM: mostra quem da equipe ainda NÃO mandou áudio cantando (ADM)
 //   #next | #n | #proxima      -> próxima música (ADM)
 //   #time | #times             -> mostra os times (ADM)
@@ -29,7 +30,7 @@
 //   jogo.js          -> fluxo do jogo (rodadas, fim, parar, fixar pergunta/placar, #placar)
 //   comandosAdmin.js -> comandos de ADM
 //   comandosTime.js  -> #h / #m
-//   respostas.js     -> respostas A-E, ponto, liberação do prêmio (#ok) e cancelamento (#errou)
+//   respostas.js     -> respostas A-E, ponto, liberação do prêmio (#ok), repasse (#rep) e cancelamento (#errou)
 
 import { GRUPOS_PERMITIDOS } from './desafioMusical/config.js';
 import { jogos } from './desafioMusical/state.js';
@@ -57,7 +58,7 @@ export async function handleDesafioMusical(sock, message, content, from, ownerNu
     }
 
     // filtro rápido: só continua se for comando do desafio ou resposta A/B/C/D/E
-    const ehComando = /^#add(\s|$)/.test(lower) || /^#ok(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|falta|faltam|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar)(\s+\d+)?$/.test(lower);
+    const ehComando = /^#add(\s|$)/.test(lower) || /^#ok(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|rep|repassar|falta|faltam|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar)(\s+\d+)?$/.test(lower);
     const ehLetra = /^[a-e]$/i.test(texto) && jogos.has(from);
     if (!ehComando && !ehLetra) return false;
 

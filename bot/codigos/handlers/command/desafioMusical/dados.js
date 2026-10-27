@@ -129,55 +129,30 @@ export async function limparUsadas(grupoId) {
     await pool.query(`DELETE FROM damas_dm_usadas WHERE grupo_id = $1`, [grupoId]);
 }
 
-// Prêmio da rodada: valor fixo para quem cantou melhor + valor fixo para CADA um dos OUTROS do time.
-// Tira do pote e credita nas carteiras (damas_dc_wallets).
-export async function pagarPremio(grupoId, time, userIdVencedor, jidVencedor) {
-    const membros = await membrosDoTime(grupoId, time);
-    const outros = membros.filter(m => m.user_id !== userIdVencedor);
-
-    // valores FIXOS (config): quem cantou melhor leva premioCantorDC; cada um dos OUTROS do time leva premioPorMembroDC
-    const parteAcertador = CONFIG.premioCantorDC;
-    const porMembro = CONFIG.premioPorMembroDC;
-    const beneficiados = outros;
-    const sorteio = false;
-    const resto = porMembro * beneficiados.length;
-    const total = parteAcertador + resto;
-    const premio = total;
+// Prêmio da rodada: SÓ quem cantou melhor leva premioCantorDC.
+// Tira do pote e credita na carteira (damas_dc_wallets).
+export async function pagarPremio(userId) {
+    const premio = CONFIG.premioCantorDC;
 
     const baixa = await pool.query(
         `UPDATE damas_dm_pote SET saldo = saldo - $1, atualizado_em = NOW()
          WHERE id = 1 AND saldo >= $1 RETURNING saldo`,
-        [total]
+        [premio]
     );
     if (baixa.rowCount === 0) return { ok: false, motivo: 'pote-vazio' };
 
-    const ids = [userIdVencedor, ...beneficiados.map(m => m.user_id)];
-    const valores = [parteAcertador, ...beneficiados.map(() => porMembro)];
-
     try {
         await pool.query(
-            `INSERT INTO damas_dc_wallets (user_id, saldo)
-             SELECT t.u, t.a FROM unnest($1::text[], $2::bigint[]) AS t(u, a)
+            `INSERT INTO damas_dc_wallets (user_id, saldo) VALUES ($1, $2)
              ON CONFLICT (user_id)
              DO UPDATE SET saldo = damas_dc_wallets.saldo + EXCLUDED.saldo, atualizado_em = NOW()`,
-            [ids, valores]
+            [userId, premio]
         );
     } catch (e) {
-        console.error('[desafioMusical] erro ao creditar carteiras:', e.message);
-        await pool.query(`UPDATE damas_dm_pote SET saldo = saldo + $1 WHERE id = 1`, [total]).catch(() => {});
+        console.error('[desafioMusical] erro ao creditar carteira:', e.message);
+        await pool.query(`UPDATE damas_dm_pote SET saldo = saldo + $1 WHERE id = 1`, [premio]).catch(() => {});
         return { ok: false, motivo: 'erro' };
     }
 
-    return {
-        ok: true,
-        premio,
-        parteAcertador,
-        beneficiados,
-        porMembro,
-        sorteio,
-        totalOutros: outros.length,
-        resto,
-        sobra: premio - total,
-        poteRestante: Number(baixa.rows[0].saldo),
-    };
+    return { ok: true, premio, poteRestante: Number(baixa.rows[0].saldo) };
 }

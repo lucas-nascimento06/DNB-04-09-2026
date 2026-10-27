@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/desafioMusical/comandosAdmin.js
-// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #ok, #errou, #falta, #next, #add, #time, #pote, #limpartimes, #limparmusicas
+// Comandos de ADM: #dmabrir, #dmfechar, #dm, #dp, #ok, #errou, #rep, #falta, #next, #add, #time, #pote, #limpartimes, #limparmusicas
 //
 // Retorno: null  -> não era um comando de ADM (o handler segue adiante)
 //          true/false -> valor que o handler principal deve retornar
@@ -13,7 +13,7 @@ import {
 import {
     iniciarDesafio, proximaRodada, acabouTempo, pararDesafio, mostrarTimes, finalizar,
 } from './jogo.js';
-import { liberarPremio, rejeitarPremio } from './respostas.js';
+import { liberarPremio, rejeitarPremio, repassarPonto } from './respostas.js';
 
 export async function tratarComandoAdmin(sock, message, lower, from, ownerNumbers) {
     const negar = () =>
@@ -169,6 +169,19 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         return true;
     }
 
+    // 4.6.5) ADM: alguém do time não cantou -> o ponto passa para o time adversário (sem DCs)
+    if (lower === '#rep' || lower === '#repassar') {
+        const j = jogos.get(from);
+        if (!j) return false; // sem desafio rolando: deixa outros handlers tratarem
+        if (!(await admin())) { await negar(); return true; }
+        if (!j.premioPendente) {
+            await sock.sendMessage(from, { text: 'ℹ️ Não há nenhum ponto esperando decisão agora.' }, { quoted: message });
+            return true;
+        }
+        await repassarPonto(sock, message, from, j);
+        return true;
+    }
+
     // 4.7) ADM: quem da equipe ainda NÃO mandou áudio cantando (usar antes do #ok)
     if (lower === '#falta' || lower === '#faltam') {
         if (!(await admin())) { await negar(); return true; }
@@ -191,13 +204,15 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         if (faltam.length === 0) {
             texto =
                 `🎤 *EQUIPE ${nomeTime}* ${emoji}\n\n` +
-                `✅ Todos já cantaram (${jaForam.length}/${membros.length})! ADM, pode usar *#ok*.`;
+                `✅ Todos já cantaram (${jaForam.length}/${membros.length})!\n` +
+                'ADM, use *#ok @fulano* para premiar quem cantou melhor.';
         } else {
             texto =
                 `🎤 *QUEM FALTA CANTAR — EQUIPE ${nomeTime}* ${emoji}\n\n` +
                 `🔴 *Faltam (${faltam.length}):*\n${lista(faltam)}\n\n` +
                 `✅ Já cantaram (${jaForam.length}/${membros.length}): ${jaForam.length ? lista(jaForam) : '_ninguém ainda_'}\n\n` +
-                '📣 Mandem o áudio cantando!';
+                '📣 *Todos precisam mandar o áudio cantando!*\n' +
+                '⚠️ Quem não cantar faz o time perder o ponto.';
         }
 
         await sock.sendMessage(from, {
@@ -216,7 +231,7 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         // com prêmio pendente, o ADM precisa decidir antes (nada de aviso automático depois)
         if (j.premioPendente) {
             await sock.sendMessage(from, {
-                text: '⏳ Resolva o prêmio pendente com *#ok* (liberar) ou *#errou* (cancelar) antes de usar *#next*.',
+                text: '⏳ Resolva antes com *#ok* (liberar), *#rep* (repassar o ponto) ou *#errou* (cancelar) antes de usar *#next*.',
             }, { quoted: message });
             return true;
         }
