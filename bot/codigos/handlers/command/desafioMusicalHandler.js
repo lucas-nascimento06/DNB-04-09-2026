@@ -5,6 +5,7 @@
 //   #h  | #homens              -> entrar no time dos HOMENS
 //   #m  | #mulheres            -> entrar no time das MULHERES
 //   #placar                    -> mostra o placar atual (todos os membros)
+//   #dmregras                  -> mostra as regras do desafio (todos os membros)
 //   #dmabrir / #dmfechar       -> abre / fecha as inscrições (ADM)
 //   #dm | #dmusical [rodadas]  -> inicia o desafio (ADM)
 //   #add @pessoa [h|m]         -> ADM coloca alguém num time
@@ -31,6 +32,7 @@
 //   comandosAdmin.js -> comandos de ADM
 //   comandosTime.js  -> #h / #m
 //   respostas.js     -> respostas A-E, ponto, liberação do prêmio (#ok), repasse (#rep) e cancelamento (#errou)
+//   regras.js        -> texto das regras (#dmregras)
 
 import { GRUPOS_PERMITIDOS } from './desafioMusical/config.js';
 import { jogos } from './desafioMusical/state.js';
@@ -40,6 +42,7 @@ import { tratarComandoAdmin } from './desafioMusical/comandosAdmin.js';
 import { tratarEntradaTime } from './desafioMusical/comandosTime.js';
 import { tratarResposta, registrarAudioCantor } from './desafioMusical/respostas.js';
 import { mostrarPlacarAtual } from './desafioMusical/jogo.js';
+import { mostrarRegras } from './desafioMusical/regras.js';
 
 console.log('[desafioMusical] v10 carregado (modular)');
 
@@ -58,7 +61,7 @@ export async function handleDesafioMusical(sock, message, content, from, ownerNu
     }
 
     // filtro rápido: só continua se for comando do desafio ou resposta A/B/C/D/E
-    const ehComando = /^#add(\s|$)/.test(lower) || /^#ok(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|rep|repassar|falta|faltam|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar)(\s+\d+)?$/.test(lower);
+    const ehComando = /^#add(\s|$)/.test(lower) || /^#ok(\s|$)/.test(lower) || /^#(dm|dmusical|dmabrir|dmfechar|dp|dmparar|ok|errou|rep|repassar|falta|faltam|next|n|proxima|time|times|pote|limpartimes|limparmusicas|h|homens|m|mulheres|placar|dmregras)(\s+\d+)?$/.test(lower);
     const ehLetra = /^[a-e]$/i.test(texto) && jogos.has(from);
     if (!ehComando && !ehLetra) return false;
 
@@ -86,6 +89,12 @@ async function processar(sock, message, texto, lower, from, ownerNumbers) {
     // 1.5) #placar: liberado para todos os membros
     if (lower === '#placar') {
         await mostrarPlacarAtual(sock, from, message);
+        return true;
+    }
+
+    // 1.6) #dmregras: liberado para todos os membros
+    if (lower === '#dmregras') {
+        await mostrarRegras(sock, from, message);
         return true;
     }
 
