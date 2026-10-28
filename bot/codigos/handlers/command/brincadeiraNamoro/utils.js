@@ -25,10 +25,11 @@ export function desembrulhar(message) {
     return m;
 }
 
-// devolve { img, texto, ctx } (texto = texto normal ou legenda da foto)
+// devolve { img, texto, ctx } (texto = texto normal ou legenda da foto/vídeo)
+// "img" é a mídia da mensagem: foto (imageMessage) OU vídeo (videoMessage)
 export function lerMensagem(message, content) {
     const m = desembrulhar(message);
-    const img = m.imageMessage || null;
+    const img = m.imageMessage || m.videoMessage || null;
     const texto = (
         content ||
         m.conversation ||
@@ -58,7 +59,7 @@ export function normalizarSigno(valor) {
     return SIGNOS.find((s) => v.includes(s)) || null;
 }
 
-// Lê "IDADE:", "SEXO (homem ou mulher):", "CIDADE:", "SIGNO:" da legenda da foto.
+// Lê "IDADE:", "SEXO (homem ou mulher):", "CIDADE:", "SIGNO:" da legenda da foto/vídeo.
 // Aceita negrito (*IDADE:*), emojis e qualquer maiúscula/minúscula.
 // Devolve também sexoTexto (o que a pessoa escreveu) para avisar quando for inválido.
 export function parseInscricao(legenda) {

@@ -17,7 +17,7 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     const reply = (t, mentions = []) => sock.sendMessage(from, { text: t, mentions }, { quoted: message });
 
     if (!img) {
-        return reply('📸 Para se inscrever, envie uma *foto* e coloque a ficha e o *#entrar* na *descrição da foto*.');
+        return reply('📸 Para se inscrever, envie uma *foto* ou *vídeo* e coloque a ficha e o *#entrar* na *descrição*.');
     }
 
     const { idade, sexo, sexoTexto, cidade, signo } = parseInscricao(texto);
@@ -63,7 +63,9 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     // sem campo Nome na ficha: usa o nome do perfil do WhatsApp
     const nome = (message.pushName || '').trim() || userId;
 
-    const fotoBase64 = await baixarFotoBase64(message);
+    // foto: baixa e guarda; vídeo: não baixa (pesado demais para o banco), segue sem foto_base64
+    const ehFoto = String(img.mimetype || '').startsWith('image');
+    const fotoBase64 = ehFoto ? await baixarFotoBase64(message) : null;
     await salvarParticipante(from, { userId, jid, nome, sexo, signo, idade, cidade, fotoBase64 });
 
     const lista = sexo === 'homem' ? 'dos *solteiros* 🕺' : 'das *solteiras* 💃';
