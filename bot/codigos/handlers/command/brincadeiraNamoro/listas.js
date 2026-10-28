@@ -7,7 +7,7 @@
 import { listarCasais, listarParticipantes, obterListaFixada, salvarListaFixada } from './dados.js';
 import { GRUPOS_LISTA_FIXADA } from './config.js';
 
-const MARCAR_NA_FIXADA = false;        // true = marca todos com @ (notifica o grupo inteiro)
+const MARCAR_NA_FIXADA = true;         // true = marca todos com @ (notifica o grupo inteiro)
 const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 
 const CABECALHO =

@@ -64,12 +64,12 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     const nome = (message.pushName || '').trim() || userId;
 
     const fotoBase64 = await baixarFotoBase64(message);
-    const { novo } = await salvarParticipante(from, { userId, jid, nome, sexo, signo, idade, cidade, fotoBase64 });
+    await salvarParticipante(from, { userId, jid, nome, sexo, signo, idade, cidade, fotoBase64 });
 
     const lista = sexo === 'homem' ? 'dos *solteiros* 🕺' : 'das *solteiras* 💃';
     await reply(
-        `${novo ? '✅ Inscrição confirmada' : '🔄 Inscrição atualizada'}!\n\n` +
-        `👤 Nome: *${nome}*\n🎂 Idade: *${idade}*\n⚧ Sexo: *${sexo}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${nomeSigno(signo)}*\n\n` +
+        `✅ Inscrição confirmada!\n\n` +
+        `👤 Nome: *${nome}*\n🎂 Idade: *${idade}*\n⚧ Sexo: *${sexo === 'homem' ? 'masculino' : 'feminino'}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${nomeSigno(signo)}*\n\n` +
         `Você foi adicionado(a) na lista ${lista}. Boa sorte! 💘`
     );
 
