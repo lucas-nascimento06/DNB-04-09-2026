@@ -4,15 +4,18 @@
 //  - #cumpri                 -> cada pessoa do casal envia foto/vídeo + texto + #cumpri
 //                               o bot manda para o grupo de moderação e atualiza a lista de status
 //  - #ndstatus | #nds (ADM)  -> reenvia a lista de status no grupo de moderação
+//  - #vd (ADM)               -> mostra a tabela de acompanhamento em tempo real no grupo onde for digitado
 
 import pool from '../../../../../db.js';
-import { GRUPO_MODERACAO } from './config.js';
+import { GRUPO_MODERACAO, GRUPO_PRINCIPAL } from './config.js';
 import { extractDigits } from './utils.js';
 import { buscarParticipante, emCasal, listarCasais } from './dados.js';
 
 const APAGAR_ORIGINAL = true;            // true = apaga a mensagem original do ADM depois de repostar (bot precisa ser admin)
 const EXIGIR_TEXTO_NO_CUMPRI = false;    // true = #cumpri só vale se tiver texto junto da foto/vídeo
 const LIMITE_LEGENDA = 800;              // máximo de caracteres do texto do #cumpri repassado à moderação
+const FIXAR_STATUS = true;               // true = a lista de acompanhamento fica fixada no grupo de moderação (desafixa/apaga a antiga e fixa a nova)
+const DURACAO_FIXO = 7 * 24 * 60 * 60;   // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 
 // ===================== TABELAS =====================
 let tabelasProntas = false;
@@ -149,7 +152,7 @@ function montarMidia(img, buffer, caption, mentions = []) {
 }
 
 // ADM = dono do bot (ownerNumbers) OU admin do grupo
-async function ehAdmin(sock, from, jid, userId, ownerNumbers = []) {
+export async function ehAdmin(sock, from, jid, userId, ownerNumbers = []) {
     if ((ownerNumbers || []).some((n) => extractDigits(String(n)) === userId)) return true;
     try {
         const meta = await sock.groupMetadata(from);
@@ -310,6 +313,32 @@ export async function tratarStatusDesafio(sock, message, from, jid, userId, owne
     return reply('📋 Lista de status atualizada no grupo de moderação.');
 }
 
+// ===================== #vd (ADM) =====================
+// Mostra a tabela de acompanhamento em tempo real no grupo onde o comando foi digitado
+// (normalmente o de moderação). Sempre lê os dados do grupo principal.
+export async function tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers) {
+    const reply = (t) => sock.sendMessage(from, { text: t }, { quoted: message });
+
+    await garantirTabelasDesafio();
+
+    if (!(await ehAdmin(sock, from, jid, userId, ownerNumbers))) {
+        return reply('🚫 Só ADM pode usar este comando.');
+    }
+
+    const status = await montarStatus(GRUPO_PRINCIPAL);
+    if (!status) return reply('🤔 Não há nenhum desafio ativo.');
+
+    const hora = new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Fortaleza',
+    });
+
+    return sock.sendMessage(
+        from,
+        { text: `${status.texto}\n\n🕒 _Consultado às ${hora}_`, mentions: status.mentions },
+        { quoted: message }
+    );
+}
+
 // ===================== LISTA DE STATUS (GRUPO DE MODERAÇÃO) =====================
 async function montarStatus(grupoDados) {
     const desafio = await desafioAtivo(grupoDados);
@@ -361,14 +390,26 @@ async function enviarStatus(sock, grupoDados, destino) {
     const status = await montarStatus(grupoDados);
     if (!status) return;
 
-    // apaga a lista antiga
+    // 1) remove a lista antiga (desafixa e apaga)
     const antigoId = await obterStatusMsgId(destino);
     if (antigoId) {
-        try { await sock.sendMessage(destino, { delete: { remoteJid: destino, fromMe: true, id: antigoId } }); }
+        const keyAntiga = { remoteJid: destino, fromMe: true, id: antigoId };
+        if (FIXAR_STATUS) {
+            try { await sock.sendMessage(destino, { pin: keyAntiga, type: 2 }); }
+            catch (e) { console.error('[brincadeiraNamoro] erro ao desafixar status antigo:', e.message); }
+        }
+        try { await sock.sendMessage(destino, { delete: keyAntiga }); }
         catch (e) { console.error('[brincadeiraNamoro] erro ao apagar status antigo:', e.message); }
     }
 
-    // envia a nova
+    // 2) envia a nova
     const enviada = await sock.sendMessage(destino, { text: status.texto, mentions: status.mentions });
-    if (enviada?.key?.id) await salvarStatusMsgId(destino, enviada.key.id);
+    if (!enviada?.key?.id) return;
+    await salvarStatusMsgId(destino, enviada.key.id);
+
+    // 3) fixa a nova (o bot precisa ser admin do destino ou o grupo permitir)
+    if (FIXAR_STATUS) {
+        try { await sock.sendMessage(destino, { pin: enviada.key, type: 1, time: DURACAO_FIXO }); }
+        catch (e) { console.error(`[brincadeiraNamoro] não consegui fixar o status em ${destino} (o bot é admin?):`, e.message); }
+    }
 }

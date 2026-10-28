@@ -1,13 +1,16 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/listas.js
 // Lista de participantes (solteiras, solteiros e casais).
 //  - mostrarLista: resposta aos comandos #inscritos, #ni, #nh, #nm, #casais, #nca
+//  - mostrarListaAtualizada: resposta ao #dlista (ADM) - lista atualizada do grupo principal,
+//    pode ser pedida de dentro do grupo de moderação
 //  - atualizarListaFixada: a cada mudança, envia a lista nova no(s) grupo(s) de
 //    GRUPOS_LISTA_FIXADA (moderação), apaga a antiga e fixa a nova
 
 import { listarCasais, listarParticipantes, obterListaFixada, salvarListaFixada } from './dados.js';
-import { GRUPOS_LISTA_FIXADA } from './config.js';
+import { GRUPOS_LISTA_FIXADA, GRUPO_PRINCIPAL } from './config.js';
 
 const MARCAR_NA_FIXADA = true;         // true = marca todos com @ (notifica o grupo inteiro)
+const MARCAR_NO_DLISTA = true;         // true = #dlista mostra os @ ; false = usa wa.me (sem notificar ninguém)
 const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 
 const CABECALHO =
@@ -83,6 +86,23 @@ ${numerar(formados)}`;
 export async function mostrarLista(sock, message, from) {
     const { texto, mentions } = await montarLista(from, true);
     return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
+}
+
+// resposta ao #dlista: lista atualizada na hora (dados do grupo principal),
+// enviada no grupo onde o comando foi digitado (ex.: moderação)
+export async function mostrarListaAtualizada(sock, message, from) {
+    const { texto, mentions } = await montarLista(GRUPO_PRINCIPAL, MARCAR_NO_DLISTA);
+
+    const hora = new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Fortaleza',
+    });
+    const corpo = `${texto}\n\n🕒 _Consultado às ${hora}_`;
+
+    return sock.sendMessage(
+        from,
+        MARCAR_NO_DLISTA ? { text: corpo, mentions } : { text: corpo },
+        { quoted: message }
+    );
 }
 
 // ===================== LISTA FIXADA AUTOMÁTICA =====================

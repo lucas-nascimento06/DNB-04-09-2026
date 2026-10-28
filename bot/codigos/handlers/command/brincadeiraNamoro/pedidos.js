@@ -11,6 +11,19 @@ import { atualizarListaFixada } from './listas.js';
 // texto do @ tem que ser igual à parte antes do "@" do jid, senão não vira menção
 const tag = (jid, userId) => `@${jid ? jid.split('@')[0] : userId}`;
 
+// ===================== DECORAÇÃO DO PEDIDO =====================
+const ENFEITE_TOPO =
+`⏜ᷤ•´¯•𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀🍃𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀•´¯•ᷤ⏜
+ۣۣۣۣۣۣۣۣۣ̅─ۣۣۣۣۣۣۣۣ͞─‌ۣۣۣۣۣۣۣ͞─‌ۣۣۣۣۣۣ͞─‌ۣۣۣۣۣ͞─‌ۣۣۣۣ͞─‌ۣۣۣ͞─‌ۣۣ͞─‌ۣ͞─‌ᷤ͜͡🌹🍃•̖´᷽ᷤ🌹᷽ᷤ\`̗•
+█✧⃝💑🅓𝕒𝕞𝕒𝕤 𝕕𝕒 🅝𝕚𝕘𝕙𝕥✧⃝💑 █
+❶⓿ 🅐🅝🅞🅢`;
+
+const ENFEITE_BASE =
+`̖´᷽ᷤ🌹᷽ᷤ\`̗•🍃́🌹ᷤ͜͡─‌ۜ͟─‌ۜۜ͟─‌ۜۜۜ͟─‌ۜۜۜۜ͟─‌ۜۜۜۜۜ͟─‌ۜۜۜۜۜۜ͟─‌ۜۜۜۜۜۜۜ͟─‌ۜۜۜۜۜۜۜۜ͟─‌̲ۜۜۜۜۜۜۜۜۜ
+█🅓𝕒𝕞𝕒𝕤 𝕕𝕒 🅝𝕚𝕘𝕙𝕥✧⃝💑
+❶⓿ 🅐🅝🅞🅢
+⏝•̖ᷤ⌣̗ᷤ•𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀🍃𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀•̖ᷤ⌣̗ᷤ•⏝`;
+
 export async function tratarPedido(sock, message, from, jid, userId, texto, ctx) {
     const reply = (t, mentions = []) => sock.sendMessage(from, { text: t, mentions }, { quoted: message });
 
@@ -32,10 +45,14 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
     await criarPedido(from, userId, alvo.userId, texto);
 
     const alvoMarca = alvo.jid || alvoJid;
+    const pronome = eu.sexo === 'mulher' ? 'ela' : 'ele';
     return reply(
-        `💌 *Pedido de namoro recebido!*\n\n` +
-        `${tag(alvoMarca, alvo.userId)}, *${eu.nome}* fez um pedido para você.\n` +
-        `Para aceitar, responda com *#aceito*. 💞`,
+        `${ENFEITE_TOPO}\n\n` +
+        `💌✨ *PEDIDO DE NAMORO* 💍\n\n` +
+        `${tag(alvoMarca, alvo.userId)}, ${eu.nome} quer conquistar seu coração! 🥹❤️\n\n` +
+        `🌹💕 *Você aceita namorar com ${pronome}?* 💕🌹\n\n` +
+        `💖 Responda *#aceito* para dizer SIM! 💍👩‍❤️‍👨\n\n` +
+        `${ENFEITE_BASE}`,
         [alvoMarca]
     );
 }

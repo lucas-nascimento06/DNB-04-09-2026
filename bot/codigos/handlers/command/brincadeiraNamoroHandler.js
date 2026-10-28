@@ -14,17 +14,19 @@
 //   #ndesafio | #nd (ADM)     -> (foto/vídeo + texto) posta o desafio marcando só os casais
 //   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio; vai para a moderação
 //   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
+//   #vd (ADM)                 -> mostra a tabela de acompanhamento em tempo real (use no grupo de moderação)
+//   #dlista (ADM)             -> mostra a lista de participantes e casais atualizada (use no grupo de moderação)
 //
 // Módulos (pasta ./brincadeiraNamoro/):
 //   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js, desafio.js
 
-import { CONFIG, GRUPOS_PERMITIDOS } from './brincadeiraNamoro/config.js';
+import { CONFIG, GRUPOS_PERMITIDOS, GRUPO_MODERACAO } from './brincadeiraNamoro/config.js';
 import { extractDigits, getNumeroReal, lerMensagem, temComando } from './brincadeiraNamoro/utils.js';
 import { garantirTabelas } from './brincadeiraNamoro/dados.js';
 import { tratarEntrar } from './brincadeiraNamoro/inscricao.js';
 import { tratarPedido, tratarAceito } from './brincadeiraNamoro/pedidos.js';
-import { mostrarLista } from './brincadeiraNamoro/listas.js';
-import { tratarDesafio, tratarCumpri, tratarStatusDesafio } from './brincadeiraNamoro/desafio.js';
+import { mostrarLista, mostrarListaAtualizada } from './brincadeiraNamoro/listas.js';
+import { tratarDesafio, tratarCumpri, tratarStatusDesafio, tratarVerDesafio, ehAdmin } from './brincadeiraNamoro/desafio.js';
 import {
     mostrarRegras, mostrarComandos,
     mostrarComandosCurto, mostrarRegrasCurto,
@@ -43,17 +45,21 @@ const COMANDOS_LISTA = [
 // Retorna true se a mensagem foi consumida pela brincadeira.
 export async function handleBrincadeiraNamoro(sock, message, content, from, ownerNumbers = []) {
     if (!from.endsWith('@g.us')) return false;
-    if (CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) return false;
     if (message.key.fromMe) return false;
 
     const { img, texto, ctx } = lerMensagem(message, content);
     if (!texto) return false;
     const lower = texto.toLowerCase();
 
+    // #vd e #dlista também funcionam no grupo de moderação; todos os outros comandos
+    // continuam restritos aos grupos permitidos, como antes
+    const ehVd = (lower === '#vd' || lower === '#dlista') && (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
+    if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) return false;
+
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds)$/.test(lower);
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista)$/.test(lower);
     if (!ehComando) return false;
 
     try {
@@ -72,6 +78,15 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (!jid || !userId) return false;
 
         // desafio
+        if (lower === '#vd') { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
+        if (lower === '#dlista') {
+            if (!(await ehAdmin(sock, from, jid, userId, ownerNumbers))) {
+                await sock.sendMessage(from, { text: '🚫 Só ADM pode usar este comando.' }, { quoted: message });
+                return true;
+            }
+            await mostrarListaAtualizada(sock, message, from);
+            return true;
+        }
         if (lower === '#ndstatus' || lower === '#nds') { await tratarStatusDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
         if (temComando(texto, 'ndesafio') || temComando(texto, 'nd')) { await tratarDesafio(sock, message, from, jid, userId, img, texto, ownerNumbers); return true; }
         if (temComando(texto, 'cumpri')) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
