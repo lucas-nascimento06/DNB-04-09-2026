@@ -10,8 +10,13 @@
 //   #namoro  | #nr            -> regras da brincadeira (#namoro completa, #nr resumida)
 //   #ncomandos | #nc          -> lista de comandos (#ncomandos detalhada, #nc resumida)
 //
+// Desafio (novo):
+//   #ndesafio | #nd (ADM)     -> (foto/vídeo + texto) posta o desafio marcando só os casais
+//   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio; vai para a moderação
+//   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
+//
 // Módulos (pasta ./brincadeiraNamoro/):
-//   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js
+//   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js, desafio.js
 
 import { CONFIG, GRUPOS_PERMITIDOS } from './brincadeiraNamoro/config.js';
 import { extractDigits, getNumeroReal, lerMensagem, temComando } from './brincadeiraNamoro/utils.js';
@@ -19,6 +24,7 @@ import { garantirTabelas } from './brincadeiraNamoro/dados.js';
 import { tratarEntrar } from './brincadeiraNamoro/inscricao.js';
 import { tratarPedido, tratarAceito } from './brincadeiraNamoro/pedidos.js';
 import { mostrarLista } from './brincadeiraNamoro/listas.js';
+import { tratarDesafio, tratarCumpri, tratarStatusDesafio } from './brincadeiraNamoro/desafio.js';
 import {
     mostrarRegras, mostrarComandos,
     mostrarComandosCurto, mostrarRegrasCurto,
@@ -46,8 +52,8 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
 
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
-        /(^|\s)#(entrar|ne|pedido|np|aceito|na)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc)$/.test(lower);
+        /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds)$/.test(lower);
     if (!ehComando) return false;
 
     try {
@@ -64,6 +70,11 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         const jid = message.key.participant;
         const userId = extractDigits(getNumeroReal(message));
         if (!jid || !userId) return false;
+
+        // desafio
+        if (lower === '#ndstatus' || lower === '#nds') { await tratarStatusDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
+        if (temComando(texto, 'ndesafio') || temComando(texto, 'nd')) { await tratarDesafio(sock, message, from, jid, userId, img, texto, ownerNumbers); return true; }
+        if (temComando(texto, 'cumpri')) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
 
         if (temComando(texto, 'entrar') || temComando(texto, 'ne')) { await tratarEntrar(sock, message, from, jid, userId, img, texto); return true; }
         if (temComando(texto, 'pedido') || temComando(texto, 'np')) { await tratarPedido(sock, message, from, jid, userId, texto, ctx); return true; }
