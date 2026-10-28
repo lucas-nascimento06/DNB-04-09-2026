@@ -59,8 +59,8 @@ export function normalizarSigno(valor) {
     return SIGNOS.find((s) => v.includes(s)) || null;
 }
 
-// Lê "IDADE:", "SEXO (homem ou mulher):", "CIDADE:", "SIGNO:" da legenda da foto/vídeo.
-// Aceita negrito (*IDADE:*), emojis e qualquer maiúscula/minúscula.
+// Lê "NOME:", "SEXO (masculino ou feminino):", "CIDADE:", "SIGNO:" da legenda da foto/vídeo.
+// Aceita negrito (*NOME:*), emojis e qualquer maiúscula/minúscula.
 // Devolve também sexoTexto (o que a pessoa escreveu) para avisar quando for inválido.
 export function parseInscricao(legenda) {
     const limpo = legenda
@@ -80,12 +80,11 @@ export function parseInscricao(legenda) {
         return bruto.replace(/[^\p{L}\p{N}\s,.\-\/]/gu, '').trim() || null;
     };
 
-    const idadeTxt = pega('idade');
-    const idadeNum = idadeTxt ? parseInt(idadeTxt.replace(/\D/g, ''), 10) : NaN;
+    const nomeTxt = pega('nome');
     const sexoTexto = pega('sexo', true);
 
     return {
-        idade: Number.isFinite(idadeNum) && idadeNum >= 1 && idadeNum <= 99 ? idadeNum : null,
+        nome: nomeTxt ? nomeTxt.slice(0, 40) : null,
         sexoTexto,
         sexo: normalizarSexo(sexoTexto),
         cidade: pega('cidade'),

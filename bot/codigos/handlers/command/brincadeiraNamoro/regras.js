@@ -8,7 +8,7 @@ const CABECALHO =
 👏🍻 *DﾑMﾑS 💃🔥 Dﾑ NIGӇԵ*💃🎶🍾🍸
 ╚═════ஜ۩۞۩ஜ════╝`;
 
-// Atenção: o bot lê as linhas IDADE, SEXO, CIDADE e SIGNO. Não troque esses nomes.
+// Atenção: o bot lê as linhas NOME, SEXO, CIDADE e SIGNO. Não troque esses nomes.
 const FICHA =
 `${CABECALHO}
 
@@ -17,7 +17,7 @@ const FICHA =
 
 ╭───────────────────╮
 📸 *FOTO:* envie junto com a ficha
-🎂 *IDADE:*
+👤 *NOME:*
 🚻 *SEXO (masculino ou feminino):*
 📍 *CIDADE:*
 ♌ *SIGNO:*
@@ -34,7 +34,7 @@ export function textoRegras() {
 
 📸 *1. COMO SE INSCREVER*
 
-Envie uma foto sua e, na descrição da foto, preencha a ficha acima (Idade, Sexo, Cidade e Signo).
+Envie uma foto sua e, na descrição da foto, preencha a ficha acima (Nome, Sexo, Cidade e Signo).
 No sexo, escreva a palavra *completa*, uma destas opções: *masculino* ou *feminino* (também vale *homem* ou *mulher*). Letras soltas como H, M ou F não valem.
 
 *No final da descrição, digite o comando #entrar.*
@@ -91,8 +91,8 @@ export function textoComandos() {
 
 📸 *#entrar* (ou *#ne*) — se inscrever
 Envie uma foto e na descrição escreva:
-🎂 IDADE: 25
-🚻 SEXO (masculino ou feminino): masculino
+👤 NOME: Maria
+🚻 SEXO (masculino ou feminino): feminino
 📍 CIDADE: Fortaleza
 ♌ SIGNO: leão
 #entrar
@@ -122,7 +122,7 @@ export async function mostrarComandos(sock, from, message) {
 export function textoComandosCurto() {
     return `💘 *COMANDOS DO NAMORO* 💘
 
-📸 *#ne* — entrar (foto + Idade, Sexo, Cidade e Signo | mín. ${CONFIG.DC_MINIMO} DCs)
+📸 *#ne* — entrar (foto + Nome, Sexo, Cidade e Signo | mín. ${CONFIG.DC_MINIMO} DCs)
 💌 *#np* — pedido (declaração + @pessoa)
 💞 *#na* — aceitar o pedido
 
@@ -133,7 +133,7 @@ export function textoComandosCurto() {
 export function textoRegrasCurto() {
     return `💘 *BRINCADEIRA DO NAMORO* 💘
 
-1️⃣ Envie uma foto com Idade, Sexo (masculino ou feminino, por extenso), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
+1️⃣ Envie uma foto com Nome, Sexo (masculino ou feminino, por extenso), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
 2️⃣ Faça sua declaração, marque a pessoa com @ e termine com *#np*
 3️⃣ Quem recebeu responde *#na* e o casal é formado 💑
 

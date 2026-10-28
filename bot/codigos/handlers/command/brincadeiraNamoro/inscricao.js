@@ -1,5 +1,5 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/inscricao.js
-// #entrar | #ne -> inscrição com foto + ficha (Idade / Sexo / Cidade / Signo)
+// #entrar | #ne -> inscrição com foto + ficha (Nome / Sexo / Cidade / Signo)
 
 import { CONFIG } from './config.js';
 import { parseInscricao, nomeSigno } from './utils.js';
@@ -7,8 +7,8 @@ import { obterDCs, baixarFotoBase64, salvarParticipante } from './dados.js';
 import { atualizarListaFixada } from './listas.js';
 
 const EXEMPLO =
-    '🎂 IDADE: 25\n' +
-    '🚻 SEXO (masculino ou feminino): masculino\n' +
+    '👤 NOME: Maria\n' +
+    '🚻 SEXO (masculino ou feminino): feminino\n' +
     '📍 CIDADE: Fortaleza\n' +
     '♌ SIGNO: leão\n' +
     '#entrar';
@@ -20,7 +20,7 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
         return reply('📸 Para se inscrever, envie uma *foto* ou *vídeo* e coloque a ficha e o *#entrar* na *descrição*.');
     }
 
-    const { idade, sexo, sexoTexto, cidade, signo } = parseInscricao(texto);
+    const { nome: nomeFicha, sexo, sexoTexto, cidade, signo } = parseInscricao(texto);
 
     // SEXO: só aceita palavra completa (homem/mulher ou masculino/feminino). Sem isso, não inscreve.
     if (!sexo) {
@@ -43,7 +43,6 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     }
 
     const faltando = [];
-    if (!idade) faltando.push('Idade');
     if (!cidade) faltando.push('Cidade');
     if (!signo) faltando.push('Signo');
     if (faltando.length) {
@@ -60,18 +59,18 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
         return reply(`💰 Você precisa de pelo menos *${CONFIG.DC_MINIMO} DCs* para participar. Você tem *${dcs}*.`);
     }
 
-    // sem campo Nome na ficha: usa o nome do perfil do WhatsApp
-    const nome = (message.pushName || '').trim() || userId;
+    // nome escrito na ficha; se vier em branco, usa o nome do perfil do WhatsApp
+    const nome = nomeFicha || (message.pushName || '').trim() || userId;
 
     // foto: baixa e guarda; vídeo: não baixa (pesado demais para o banco), segue sem foto_base64
     const ehFoto = String(img.mimetype || '').startsWith('image');
     const fotoBase64 = ehFoto ? await baixarFotoBase64(message) : null;
-    await salvarParticipante(from, { userId, jid, nome, sexo, signo, idade, cidade, fotoBase64 });
+    await salvarParticipante(from, { userId, jid, nome, sexo, signo, cidade, fotoBase64 });
 
     const lista = sexo === 'homem' ? 'dos *solteiros* 🕺' : 'das *solteiras* 💃';
     await reply(
         `✅ Inscrição confirmada!\n\n` +
-        `👤 Nome: *${nome}*\n🎂 Idade: *${idade}*\n⚧ Sexo: *${sexo === 'homem' ? 'masculino' : 'feminino'}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${nomeSigno(signo)}*\n\n` +
+        `👤 Nome: *${nome}*\n⚧ Sexo: *${sexo === 'homem' ? 'masculino' : 'feminino'}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${nomeSigno(signo)}*\n\n` +
         `Você foi adicionado(a) na lista ${lista}. Boa sorte! 💘`
     );
 
