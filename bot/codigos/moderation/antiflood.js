@@ -132,7 +132,10 @@ export const CONFIG = {
         'status stk sv time times totag varredura veriflista verilista vip ' +
         'add amizade avisarconfissoes aviso confissao confissoes dm dmusical paquera ' +
         'postarconfissoes pote pronto recusar romancenoar leil dadis dadoss dadus dasos ' +
-        'errou placar falta faltam rep repassar dmregras')
+        'errou placar falta faltam rep repassar dmregras ' +
+        // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
+        'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
+        'namoromulheres nm namoro nr ncomandos nc')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],
