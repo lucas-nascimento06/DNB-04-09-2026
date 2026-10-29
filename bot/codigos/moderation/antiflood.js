@@ -136,8 +136,8 @@ export const CONFIG = {
         // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
         'namoromulheres nm namoro nr ncomandos nc listpart ficha ' +
-        // Desafio do Namoro (ndesafio/nd = ADM, cumpri = casais, ndstatus/nds = ADM)
-        'ndesafio nd cumpri ndstatus nds')
+        // Desafio do Namoro (ndesafio/nd = ADM, cumpri = casais, ndstatus/nds = ADM, vd/dlista = ADM)
+        'ndesafio nd cumpri ndstatus nds vd dlista')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],

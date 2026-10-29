@@ -7,11 +7,21 @@ import { flushDC } from '../../../features/dcTracker.js';
 import { CONFIG } from './config.js';
 
 // ===================== TABELAS =====================
-let tabelasProntas = false;
+// Usa uma Promise compartilhada: se várias mensagens chegarem juntas na primeira vez,
+// todas esperam a MESMA criação das tabelas (antes cada uma rodava os CREATE ao mesmo tempo).
+let promessaTabelas = null;
 
-export async function garantirTabelas() {
-    if (tabelasProntas) return;
+export function garantirTabelas() {
+    if (!promessaTabelas) {
+        promessaTabelas = criarTabelas().catch((e) => {
+            promessaTabelas = null; // se falhar, permite tentar de novo na próxima mensagem
+            throw e;
+        });
+    }
+    return promessaTabelas;
+}
 
+async function criarTabelas() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS damas_namoro_participantes (
             grupo         TEXT        NOT NULL,
@@ -67,17 +77,24 @@ export async function garantirTabelas() {
             atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `);
-
-    tabelasProntas = true;
 }
 
 // ===================== DCs =====================
+// Várias inscrições ao mesmo tempo compartilham UM único flush (em vez de um por pessoa).
+let flushEmAndamento = null;
+function flushUnico() {
+    if (!flushEmAndamento) {
+        flushEmAndamento = Promise.resolve(flushDC()).finally(() => { flushEmAndamento = null; });
+    }
+    return flushEmAndamento;
+}
+
 // Lê o saldo da tabela damas_dc_wallets (a mesma usada pelo #dc).
 // Retorna o saldo (número) ou null se não conseguir ler.
 export async function obterDCs(userId) {
     try {
         // grava no banco os DCs que ainda estão no buffer (flush de 30s), igual ao #dc
-        await flushDC();
+        await flushUnico();
 
         const result = await pool.query(
             `SELECT saldo FROM damas_dc_wallets WHERE user_id = $1`,

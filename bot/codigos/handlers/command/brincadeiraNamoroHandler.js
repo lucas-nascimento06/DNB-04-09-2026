@@ -12,7 +12,7 @@
 //   #namoro  | #nr            -> regras da brincadeira (#namoro completa, #nr resumida)
 //   #ncomandos | #nc          -> lista de comandos (#ncomandos detalhada, #nc resumida)
 //
-// Desafio (novo):
+// Desafio:
 //   #ndesafio | #nd (ADM)     -> (foto/vídeo + texto) posta o desafio marcando só os casais
 //   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio; vai para a moderação
 //   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
@@ -35,10 +35,9 @@ import {
     mostrarFicha,
 } from './brincadeiraNamoro/regras.js';
 
-console.log('[brincadeiraNamoro] v1 carregado (modular)');
+console.log('[brincadeiraNamoro] v3 carregado (modular + LID + inscrição simultânea)');
 
-// DEBUG: true = mostra no console o caminho de cada mensagem da brincadeira (para achar por que
-// uma inscrição foi ignorada). Depois de resolver, troque para false.
+// DEBUG: true = logs detalhados de cada passo. Os logs "[namoro]" abaixo aparecem sempre.
 const DEBUG = false;
 const dbg = (...a) => { if (DEBUG) console.log('[brincadeiraNamoro][DEBUG]', ...a); };
 
@@ -50,6 +49,80 @@ const COMANDOS_LISTA = [
     '#namoromulheres', '#nm',
 ];
 
+// ===================== PROTEÇÃO CONTRA DUPLICIDADE / SIMULTANEIDADE =====================
+const emAndamento = new Set();     // evita a mesma pessoa ser processada 2x ao mesmo tempo
+const mensagensVistas = new Set(); // evita a mesma mensagem ser processada 2x (reentrega após reconexão)
+
+function jaVista(id) {
+    if (!id) return false;
+    if (mensagensVistas.has(id)) return true;
+    mensagensVistas.add(id);
+    if (mensagensVistas.size > 500) mensagensVistas.delete(mensagensVistas.values().next().value);
+    return false;
+}
+
+// ===================== IDENTIFICAÇÃO DA PESSOA =====================
+const ehLid = (j) => String(j || '').endsWith('@lid');
+const ehNumeroValido = (id) => /^\d{8,15}$/.test(String(id || ''));
+
+// Garante que o "userId" é um número de telefone e não o próprio LID.
+function idPareceValido(userId, jid) {
+    if (!ehNumeroValido(userId)) return false;
+    if (ehLid(jid) && userId === extractDigits(jid)) return false; // devolveu o LID como se fosse número
+    return true;
+}
+
+// Resolve { jid, userId } mesmo quando a pessoa chega como @lid e o cache ainda está vazio.
+// Ordem: getNumeroReal -> participantAlt/participantPn -> groupMetadata (com 1 nova tentativa).
+async function resolverUsuario(sock, message, from) {
+    const jid = message.key.participant;
+    if (!jid) return { jid: null, userId: null, origem: 'sem participant' };
+
+    // 1) o jeito que o resto do bot já usa (mantém o mesmo user_id do #dc)
+    try {
+        const id = extractDigits(getNumeroReal(message));
+        if (idPareceValido(id, jid)) return { jid, userId: id, origem: 'getNumeroReal' };
+    } catch (e) {
+        dbg('getNumeroReal falhou:', e.message);
+    }
+
+    // 2) se o próprio jid já é número
+    if (!ehLid(jid)) {
+        const id = extractDigits(jid);
+        if (ehNumeroValido(id)) return { jid, userId: id, origem: 'jid' };
+    }
+
+    // 3) campos alternativos do Baileys (v7+)
+    const alternativos = [message.key.participantAlt, message.key.participantPn, message.participantPn]
+        .filter(Boolean);
+    for (const alt of alternativos) {
+        if (!ehLid(alt)) {
+            const id = extractDigits(alt);
+            if (ehNumeroValido(id)) return { jid, userId: id, origem: 'participantAlt' };
+        }
+    }
+
+    // 4) groupMetadata (2 tentativas: a 1ª pode vir sem o mapeamento)
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        try {
+            const meta = await sock.groupMetadata(from);
+            const p = (meta.participants || []).find((x) =>
+                [x.id, x.lid, x.jid].filter(Boolean).includes(jid)
+            );
+            const cand = [p?.phoneNumber, p?.jid, p?.id].filter((v) => v && !ehLid(v));
+            for (const c of cand) {
+                const id = extractDigits(c);
+                if (ehNumeroValido(id)) return { jid, userId: id, origem: `groupMetadata#${tentativa}` };
+            }
+        } catch (e) {
+            dbg('groupMetadata falhou:', e.message);
+        }
+        if (tentativa === 1) await new Promise((r) => setTimeout(r, 600));
+    }
+
+    return { jid, userId: null, origem: 'não resolvido' };
+}
+
 // Retorna true se a mensagem foi consumida pela brincadeira.
 export async function handleBrincadeiraNamoro(sock, message, content, from, ownerNumbers = []) {
     if (!from.endsWith('@g.us')) return false;
@@ -57,7 +130,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
 
     const { img, texto, ctx } = lerMensagem(message, content);
     if (!texto) {
-        if (img) dbg(`mídia SEM legenda ignorada (de ${message.key.participant}) - a legenda não chegou junto da foto`);
+        if (img) console.log(`[namoro] mídia SEM legenda ignorada (de ${message.key.participant})`);
         return false;
     }
     const lower = texto.toLowerCase();
@@ -72,7 +145,8 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
         /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista|listpart|ficha)$/.test(lower);
     if (!ehComando) return false;
-    dbg(`comando detectado | mídia=${img ? 'sim' : 'não'} | de=${message.key.participant} | texto="${texto.slice(0, 60).replace(/\n/g, ' ')}"`);
+
+    console.log(`[namoro] comando | de=${message.key.participant} | mídia=${img ? 'sim' : 'não'} | "${texto.slice(0, 40).replace(/\n/g, ' ')}"`);
 
     try {
         await garantirTabelas();
@@ -87,11 +161,17 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (COMANDOS_LISTA.includes(lower)) { await mostrarLista(sock, message, from); return true; }
 
         // ações de participantes
-        const jid = message.key.participant;
-        const userId = extractDigits(getNumeroReal(message));
+        const { jid, userId, origem } = await resolverUsuario(sock, message, from);
+        console.log(`[namoro] identificação: jid=${jid} userId=${userId} (${origem})`);
+
         if (!jid || !userId) {
-            dbg(`IGNORADO: não consegui identificar a pessoa | jid=${jid} | userId=${userId}`);
-            return false;
+            // nunca mais em silêncio
+            await sock.sendMessage(
+                from,
+                { text: '⚠️ Não consegui identificar você agora. Envie a mensagem novamente, por favor. 🙏' },
+                { quoted: message }
+            ).catch(() => {});
+            return true;
         }
 
         // desafio
@@ -108,11 +188,32 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (temComando(texto, 'ndesafio') || temComando(texto, 'nd')) { await tratarDesafio(sock, message, from, jid, userId, img, texto, ownerNumbers); return true; }
         if (temComando(texto, 'cumpri')) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
 
-        if (temComando(texto, 'entrar') || temComando(texto, 'ne')) { dbg(`inscrição de ${userId} (mídia=${img ? 'sim' : 'não'})`); await tratarEntrar(sock, message, from, jid, userId, img, texto); return true; }
+        // inscrição: roda em segundo plano para não segurar as mensagens das outras pessoas
+        if (temComando(texto, 'entrar') || temComando(texto, 'ne')) {
+            if (jaVista(message.key.id)) { dbg(`inscrição duplicada ignorada (${message.key.id})`); return true; }
+
+            const chave = `${from}:${userId}`;
+            if (emAndamento.has(chave)) { dbg(`inscrição de ${userId} já em andamento`); return true; }
+            emAndamento.add(chave);
+
+            dbg(`inscrição de ${userId} (mídia=${img ? 'sim' : 'não'})`);
+            tratarEntrar(sock, message, from, jid, userId, img, texto)
+                .catch(async (e) => {
+                    console.error('[brincadeiraNamoro] erro na inscrição:', e);
+                    await sock.sendMessage(
+                        from,
+                        { text: '❌ Erro na inscrição. Tente enviar de novo.' },
+                        { quoted: message }
+                    ).catch(() => {});
+                })
+                .finally(() => emAndamento.delete(chave));
+            return true;
+        }
+
         if (temComando(texto, 'pedido') || temComando(texto, 'np')) { await tratarPedido(sock, message, from, jid, userId, texto, ctx); return true; }
         if (temComando(texto, 'aceito') || temComando(texto, 'na')) { await tratarAceito(sock, message, from, jid, userId, ctx); return true; }
     } catch (e) {
-        console.error('[brincadeiraNamoro] erro:', e.message);
+        console.error('[brincadeiraNamoro] erro:', e);
         await sock.sendMessage(from, { text: '❌ Erro na brincadeira do namoro. Avise um ADM.' }).catch(() => {});
         return true;
     }

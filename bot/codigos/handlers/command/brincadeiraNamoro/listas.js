@@ -13,6 +13,7 @@ import { GRUPOS_LISTA_FIXADA, GRUPO_PRINCIPAL } from './config.js';
 const MARCAR_NA_FIXADA = true;         // true = marca todos com @ (notifica o grupo inteiro)
 const MARCAR_NO_DLISTA = true;         // true = #dlista mostra os @ ; false = usa wa.me (sem notificar ninguém)
 const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
+const ESPERA_LISTA_MS = 3000;          // várias mudanças seguidas geram UMA lista só, 3s depois da última
 
 const CABECALHO =
 `╔═════ஜ۩۞۩ஜ════╗
@@ -147,19 +148,25 @@ export async function mostrarListaAtualizada(sock, message, from) {
 // fila por grupo de destino: duas atualizações seguidas não geram duas listas ao mesmo tempo
 const filas = new Map();
 
+// agendamento por grupo de dados: várias inscrições/pedidos em sequência viram UMA atualização
+const agendados = new Map();
+
 // grupoDados = grupo onde a pessoa se inscreveu (de onde vêm os dados)
-// a lista é enviada e fixada em cada grupo de GRUPOS_LISTA_FIXADA
+// a lista é enviada e fixada em cada grupo de GRUPOS_LISTA_FIXADA.
+// Retorna na hora (quem chamou não fica esperando a lista ser reenviada).
 export function atualizarListaFixada(sock, grupoDados) {
-    return Promise.all(
-        GRUPOS_LISTA_FIXADA.map((destino) => {
+    clearTimeout(agendados.get(grupoDados));
+    agendados.set(grupoDados, setTimeout(() => {
+        agendados.delete(grupoDados);
+        for (const destino of GRUPOS_LISTA_FIXADA) {
             const anterior = filas.get(destino) || Promise.resolve();
             const atual = anterior
                 .then(() => atualizar(sock, grupoDados, destino))
                 .catch((e) => console.error(`[brincadeiraNamoro] erro ao atualizar lista fixada em ${destino}:`, e.message));
             filas.set(destino, atual);
-            return atual;
-        })
-    );
+        }
+    }, ESPERA_LISTA_MS));
+    return Promise.resolve();
 }
 
 async function atualizar(sock, grupoDados, destino) {
