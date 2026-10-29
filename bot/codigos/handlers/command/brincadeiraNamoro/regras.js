@@ -17,14 +17,12 @@ const FICHA =
 💞 *BRINCADEIRA DO NAMORO* 💞
 
 ╭───────────────────╮
-📸 *FOTO:* envie junto com a ficha
+📸 *FOTO OU VIDEO:* envie junto com a ficha
 👤 *NOME:*
-🚻 *SEXO (masculino ou feminino):*
+🚻 *SEXO (masculino(M) ou feminino(F)):*
 📍 *CIDADE:*
 ♌ *SIGNO:*
 ╰───────────────────╯
-
-✍️ _Escreva tudo por extenso, sem abreviar._
 
 *#entrar*`;
 
@@ -92,8 +90,8 @@ export function textoComandos() {
 
 📸 *#entrar* (ou *#ne*) — se inscrever
 Envie uma foto e na descrição escreva:
-👤 NOME: Maria
-🚻 SEXO (masculino ou feminino): feminino
+👤 NOME: Emily
+🚻 SEXO (masculino(M) ou feminino(F)): F
 📍 CIDADE: Fortaleza
 ♌ SIGNO: leão
 #entrar
@@ -134,7 +132,7 @@ export function textoComandosCurto() {
 export function textoRegrasCurto() {
     return `💘 *BRINCADEIRA DO NAMORO* 💘
 
-1️⃣ Envie uma foto com Nome, Sexo (masculino ou feminino), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
+1️⃣ Envie uma foto com Nome, Sexo (masculino(M) ou feminino(F)), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
 2️⃣ Faça sua declaração, marque a pessoa com @ e termine com *#np*
 3️⃣ Quem recebeu responde *#na* e o casal é formado 💑
 
@@ -166,12 +164,10 @@ export function textoFicha() {
 ╭───────────────────╮
 📸 *FOTO OU VÍDEO*: envie junto com a ficha
 👤 *NOME*:  
-🚻 *SEXO* : masculino(M) ou feminino(F): 
+🚻 *SEXO (masculino(M) ou feminino(F))*: 
 📍 *CIDADE*:  
 ♌ *SIGNO*:  
 ╰───────────────────╯
-
-✍️ Escreva tudo por extenso, sem abreviar.
 
 #entrar`;
 }

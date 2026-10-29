@@ -16,13 +16,13 @@ const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dia
 const ESPERA_LISTA_MS = 3000;          // várias mudanças seguidas geram UMA lista só, 3s depois da última
 
 const CABECALHO =
-`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
+`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
   👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
-╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
+╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
 
-💘✨ *BRINCADEIRA DO NAMORO!*✨💘
 
-📋 *LISTA DOS PARTICIPANTES*`;
+♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
+💜⃟⃨⃜ ̶💃 ͆͢ 📝*LISTA DOS PARTICIPANTES*💃⃟̶⃨⃜💜`;
 
 // cabeçalho do comando #listpart
 const CABECALHO_LISTPART =
