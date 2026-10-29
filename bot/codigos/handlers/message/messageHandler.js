@@ -274,13 +274,23 @@ function normalizarComando(texto) {
 // ============================================
 export async function handleMessages(sock, message) {
     try {
+        // IMPORTANTE: checa o conteúdo ANTES de registrar o ID no dedupe.
+        // Quando o WhatsApp ainda não descriptografou a mensagem, ela chega vazia e depois é
+        // reenviada completa com o MESMO ID. Se o ID fosse registrado aqui, o reenvio
+        // (a mensagem de verdade) seria descartado como "duplicada".
+        if (!message?.key || !message?.message) {
+            console.log('[MSG-3] sem conteúdo (aguardando reenvio descriptografado), ID NÃO registrado');
+            return;
+        }
+
         const uniqueId = getMessageUniqueId(message.key);
-        if (processedMessages.has(uniqueId)) return;
+        if (processedMessages.has(uniqueId)) {
+            console.log(`[MSG-2] DESCARTADA pelo dedupe (${message.key.id})`);
+            return;
+        }
 
         processedMessages.add(uniqueId);
         cleanMessageCache();
-
-        if (!message?.key || !message?.message) return;
 
         const from = message.key.remoteJid;
         const userId = message.key.participant || message.key.remoteJid;
@@ -353,7 +363,10 @@ export async function handleMessages(sock, message) {
         // ============================================
         if (from.endsWith('@g.us') && !message.key.fromMe) {
             const floodHandled = await antiFlood(sock, message, OWNER_NUMBERS);
-            if (floodHandled) return;
+            if (floodHandled) {
+                console.log(`[MSG-4] CONSUMIDA pelo antiflood (de=${message.key.participant})`);
+                return;
+            }
         }
 
         if (!content?.trim() && !isMediaMessage) return;
@@ -412,7 +425,7 @@ export async function handleMessages(sock, message) {
             const namoroHandled = await handleBrincadeiraNamoro(sock, message, content, from, OWNER_NUMBERS);
             if (namoroHandled) return;
         }
-        
+
 
         // ============================================
         // 👑 MENU OWNER

@@ -35,7 +35,7 @@ import {
     mostrarFicha,
 } from './brincadeiraNamoro/regras.js';
 
-console.log('[brincadeiraNamoro] v3 carregado (modular + LID + inscrição simultânea)');
+console.log('[brincadeiraNamoro] v4 carregado (modular + LID + inscrição simultânea + anti-trava)');
 
 // DEBUG: true = logs detalhados de cada passo. Os logs "[namoro]" abaixo aparecem sempre.
 const DEBUG = false;
@@ -52,6 +52,7 @@ const COMANDOS_LISTA = [
 // ===================== PROTEÇÃO CONTRA DUPLICIDADE / SIMULTANEIDADE =====================
 const emAndamento = new Set();     // evita a mesma pessoa ser processada 2x ao mesmo tempo
 const mensagensVistas = new Set(); // evita a mesma mensagem ser processada 2x (reentrega após reconexão)
+const TEMPO_MAX_INSCRICAO_MS = 60_000; // se a inscrição travar, a trava da pessoa é liberada sozinha
 
 function jaVista(id) {
     if (!id) return false;
@@ -138,13 +139,24 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     // #vd e #dlista também funcionam no grupo de moderação; todos os outros comandos
     // continuam restritos aos grupos permitidos, como antes
     const ehVd = (lower === '#vd' || lower === '#dlista') && (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
-    if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) return false;
+    if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) {
+        if (/#(entrar|ne)(\s|$)/i.test(texto)) {
+            console.log(`[namoro] IGNORADO: grupo não permitido (${from})`);
+        }
+        return false;
+    }
 
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
         /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista|listpart|ficha)$/.test(lower);
-    if (!ehComando) return false;
+    if (!ehComando) {
+        // parece comando mas não casou com o filtro? avisa no log para diagnóstico
+        if (/#\s*(entrar|ne|pedido|np|aceito|na)/i.test(texto)) {
+            console.log(`[namoro] AVISO: parece comando mas não casou | de=${message.key.participant} | fim=${JSON.stringify(texto.slice(-50))}`);
+        }
+        return false;
+    }
 
     console.log(`[namoro] comando | de=${message.key.participant} | mídia=${img ? 'sim' : 'não'} | "${texto.slice(0, 40).replace(/\n/g, ' ')}"`);
 
@@ -190,11 +202,24 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
 
         // inscrição: roda em segundo plano para não segurar as mensagens das outras pessoas
         if (temComando(texto, 'entrar') || temComando(texto, 'ne')) {
-            if (jaVista(message.key.id)) { dbg(`inscrição duplicada ignorada (${message.key.id})`); return true; }
+            if (jaVista(message.key.id)) {
+                console.log(`[namoro] IGNORADO: mensagem repetida (${message.key.id})`);
+                return true;
+            }
 
             const chave = `${from}:${userId}`;
-            if (emAndamento.has(chave)) { dbg(`inscrição de ${userId} já em andamento`); return true; }
+            if (emAndamento.has(chave)) {
+                console.log(`[namoro] IGNORADO: inscrição de ${userId} ainda em andamento (presa?)`);
+                return true;
+            }
             emAndamento.add(chave);
+
+            // destrava sozinho: mesmo que algo trave, a pessoa pode tentar de novo depois de 60s
+            const timer = setTimeout(() => {
+                if (emAndamento.delete(chave)) {
+                    console.log(`[namoro] trava de ${userId} liberada após ${TEMPO_MAX_INSCRICAO_MS / 1000}s`);
+                }
+            }, TEMPO_MAX_INSCRICAO_MS);
 
             dbg(`inscrição de ${userId} (mídia=${img ? 'sim' : 'não'})`);
             tratarEntrar(sock, message, from, jid, userId, img, texto)
@@ -206,7 +231,10 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
                         { quoted: message }
                     ).catch(() => {});
                 })
-                .finally(() => emAndamento.delete(chave));
+                .finally(() => {
+                    clearTimeout(timer);
+                    emAndamento.delete(chave);
+                });
             return true;
         }
 

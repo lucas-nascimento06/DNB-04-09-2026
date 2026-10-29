@@ -79,12 +79,23 @@ async function criarTabelas() {
     `);
 }
 
+// ===================== TIMEOUT =====================
+// Se algo travar (flush, banco, download), a operação falha depois de "ms" em vez de
+// ficar pendurada para sempre e deixar o bot mudo.
+const comTimeout = (p, ms, nome) =>
+    Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`${nome} demorou mais de ${ms}ms`)), ms)),
+    ]);
+
 // ===================== DCs =====================
 // Várias inscrições ao mesmo tempo compartilham UM único flush (em vez de um por pessoa).
+// O flush tem limite de 5s: se travar, a trava é liberada e o bot segue em frente.
 let flushEmAndamento = null;
 function flushUnico() {
     if (!flushEmAndamento) {
-        flushEmAndamento = Promise.resolve(flushDC()).finally(() => { flushEmAndamento = null; });
+        flushEmAndamento = comTimeout(Promise.resolve(flushDC()), 5000, 'flushDC')
+            .finally(() => { flushEmAndamento = null; });
     }
     return flushEmAndamento;
 }
@@ -94,11 +105,15 @@ function flushUnico() {
 export async function obterDCs(userId) {
     try {
         // grava no banco os DCs que ainda estão no buffer (flush de 30s), igual ao #dc
-        await flushUnico();
+        // se o flush falhar ou demorar, segue em frente e lê o que já está no banco
+        await flushUnico().catch((e) =>
+            console.error('[brincadeiraNamoro] flush falhou, seguindo:', e.message)
+        );
 
-        const result = await pool.query(
-            `SELECT saldo FROM damas_dc_wallets WHERE user_id = $1`,
-            [userId]
+        const result = await comTimeout(
+            pool.query(`SELECT saldo FROM damas_dc_wallets WHERE user_id = $1`, [userId]),
+            8000,
+            'consulta de saldo'
         );
         return Number(result.rows[0]?.saldo || 0);
     } catch (e) {
@@ -108,13 +123,17 @@ export async function obterDCs(userId) {
 }
 
 // ===================== FOTO =====================
-// Baixa a foto da inscrição e devolve em base64 (ou null se falhar).
+// Baixa a foto da inscrição e devolve em base64 (ou null se falhar ou demorar mais de 15s).
 export async function baixarFotoBase64(message) {
     try {
         let baileys;
         try { baileys = await import('@whiskeysockets/baileys'); }
         catch { baileys = await import('baileys'); }
-        const buffer = await baileys.downloadMediaMessage(message, 'buffer', {});
+        const buffer = await comTimeout(
+            baileys.downloadMediaMessage(message, 'buffer', {}),
+            15000,
+            'download da foto'
+        );
         return Buffer.from(buffer).toString('base64');
     } catch (e) {
         console.error('[brincadeiraNamoro] erro ao baixar foto:', e.message);
