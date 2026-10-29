@@ -7,6 +7,14 @@ import { SIGNOS, NOMES_SIGNOS } from './config.js';
 export { extractDigits, getNumeroReal } from '../desafioMusical/utils.js';
 
 export const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// igual ao semAcento, mas GARANTE o mesmo tamanho do texto original (letra por letra).
+// Necessário porque a ficha decorada tem símbolos combinantes que o semAcento apagaria,
+// deslocando as posições e fazendo o parseInscricao ler o campo errado.
+export const semAcentoMesmoTamanho = (s) =>
+    Array.from(s).map((ch) => {
+        const b = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return b.length === ch.length ? b : ch;
+    }).join('');
 export const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export const nomeSigno = (s) => NOMES_SIGNOS[s] || capitalizar(s);
 
@@ -43,14 +51,14 @@ export function lerMensagem(message, content) {
 
 export const temComando = (texto, cmd) => new RegExp(`(^|\\s)#${cmd}(\\s|$)`, 'i').test(texto);
 
-// ===================== SEXO (RÍGIDO) =====================
-// Vale UMA das palavras completas: homem / mulher OU masculino / feminino.
-// Abreviações (H, M, F, masc, fem...) NÃO são aceitas: o bot não inscreve
-// e pede para a pessoa escrever por extenso.
+// ===================== SEXO =====================
+// Vale: masculino / feminino, ou só a letra M / F. (homem / mulher continuam sendo
+// entendidos, mas o bot só pede masculino (M) ou feminino (F).)
+// Qualquer outra coisa: o bot não inscreve e pede para corrigir.
 export function normalizarSexo(valor) {
     const v = semAcento(String(valor || '').toLowerCase()).replace(/[^a-z]/g, '');
-    if (v === 'homem' || v === 'masculino') return 'homem';
-    if (v === 'mulher' || v === 'feminino') return 'mulher';
+    if (v === 'm' || v === 'homem' || v === 'masculino') return 'homem';
+    if (v === 'f' || v === 'mulher' || v === 'feminino') return 'mulher';
     return null;
 }
 
@@ -69,7 +77,7 @@ export function parseInscricao(legenda) {
         // aceita também o modelo "SEXO : (masculino ou feminino): feminino"
         // (só mexe na linha do SEXO; o formato antigo continua funcionando igual)
         .replace(/(sexo[^:\n]*):[ \t]*\([^)\n]*\)[ \t]*:?/gi, '$1:');
-    const sem = semAcento(limpo);
+    const sem = semAcentoMesmoTamanho(limpo);
 
     // "extra" permite texto entre o rótulo e os dois pontos, ex.: SEXO (homem ou mulher):
     // [ \t]* (e não \s*) evita ler a linha de baixo quando o campo está em branco.

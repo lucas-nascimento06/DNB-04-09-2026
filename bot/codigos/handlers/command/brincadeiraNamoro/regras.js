@@ -36,7 +36,7 @@ export function textoRegras() {
 📸 *1. COMO SE INSCREVER*
 
 Envie uma foto sua e, na descrição da foto, preencha a ficha acima (Nome, Sexo, Cidade e Signo).
-No sexo, escreva a palavra *completa*, uma destas opções: *masculino* ou *feminino* (também vale *homem* ou *mulher*). Letras soltas como H, M ou F não valem.
+No sexo, escreva uma destas opções: *masculino* (M) ou *feminino* (F).
 
 *No final da descrição, digite o comando #entrar.*
 
@@ -97,7 +97,7 @@ Envie uma foto e na descrição escreva:
 📍 CIDADE: Fortaleza
 ♌ SIGNO: leão
 #entrar
-✍️ Sexo por extenso: masculino, feminino, homem ou mulher (sem abreviar).
+✍️ Sexo: masculino (M) ou feminino (F).
 💰 Precisa ter pelo menos ${CONFIG.DC_MINIMO} DCs.
 
 💌 *#pedido* (ou *#np*) — pedir em namoro
@@ -134,7 +134,7 @@ export function textoComandosCurto() {
 export function textoRegrasCurto() {
     return `💘 *BRINCADEIRA DO NAMORO* 💘
 
-1️⃣ Envie uma foto com Nome, Sexo (masculino ou feminino, por extenso), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
+1️⃣ Envie uma foto com Nome, Sexo (masculino ou feminino), Cidade e Signo na legenda + *#ne* (mín. ${CONFIG.DC_MINIMO} DCs)
 2️⃣ Faça sua declaração, marque a pessoa com @ e termine com *#np*
 3️⃣ Quem recebeu responde *#na* e o casal é formado 💑
 

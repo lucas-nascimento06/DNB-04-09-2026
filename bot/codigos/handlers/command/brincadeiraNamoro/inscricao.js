@@ -22,21 +22,18 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
 
     const { nome: nomeFicha, sexo, sexoTexto, cidade, signo } = parseInscricao(texto);
 
-    // SEXO: só aceita palavra completa (homem/mulher ou masculino/feminino). Sem isso, não inscreve.
+    // SEXO: aceita masculino(M) / feminino(F). Sem isso, não inscreve.
     if (!sexo) {
         const escreveu = sexoTexto
             ? `Você escreveu: *${sexoTexto}*\n\n`
             : 'Não encontrei a linha *SEXO* na sua ficha.\n\n';
-        const abreviado = sexoTexto && sexoTexto.replace(/[^a-zA-Z]/g, '').length <= 4;
         return reply(
             '🚫 *Inscrição não realizada!*\n\n' +
-            (abreviado
-                ? 'Abreviações (H, M, F...) não valem. Escreva a palavra *completa*.\n\n'
-                : 'Não consegui identificar o seu *sexo*, e sem isso o bot não sabe em qual lista te colocar.\n\n') +
+            'Não consegui identificar o seu *sexo*, e sem isso o bot não sabe em qual lista te colocar.\n\n' +
             escreveu +
-            'No campo SEXO escreva *por extenso*, uma destas opções:\n' +
-            '👨 *masculino* ou *homem*\n' +
-            '👩 *feminino* ou *mulher*\n\n' +
+            'No campo SEXO escreva por extenso, uma destas opções:\n' +
+            '👨 masculino(M)\n' +
+            '👩 feminino(F)\n\n' +
             `Exemplo:\n${EXEMPLO}\n\n` +
             'Corrija e envie a foto novamente. 📸'
         );
