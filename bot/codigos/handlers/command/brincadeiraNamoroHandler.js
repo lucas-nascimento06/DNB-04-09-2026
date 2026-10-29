@@ -37,6 +37,11 @@ import {
 
 console.log('[brincadeiraNamoro] v1 carregado (modular)');
 
+// DEBUG: true = mostra no console o caminho de cada mensagem da brincadeira (para achar por que
+// uma inscrição foi ignorada). Depois de resolver, troque para false.
+const DEBUG = false;
+const dbg = (...a) => { if (DEBUG) console.log('[brincadeiraNamoro][DEBUG]', ...a); };
+
 // comandos que mostram a lista completa
 const COMANDOS_LISTA = [
     '#inscritos', '#ni',
@@ -51,7 +56,10 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     if (message.key.fromMe) return false;
 
     const { img, texto, ctx } = lerMensagem(message, content);
-    if (!texto) return false;
+    if (!texto) {
+        if (img) dbg(`mídia SEM legenda ignorada (de ${message.key.participant}) - a legenda não chegou junto da foto`);
+        return false;
+    }
     const lower = texto.toLowerCase();
 
     // #vd e #dlista também funcionam no grupo de moderação; todos os outros comandos
@@ -64,6 +72,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
         /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista|listpart|ficha)$/.test(lower);
     if (!ehComando) return false;
+    dbg(`comando detectado | mídia=${img ? 'sim' : 'não'} | de=${message.key.participant} | texto="${texto.slice(0, 60).replace(/\n/g, ' ')}"`);
 
     try {
         await garantirTabelas();
@@ -80,7 +89,10 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         // ações de participantes
         const jid = message.key.participant;
         const userId = extractDigits(getNumeroReal(message));
-        if (!jid || !userId) return false;
+        if (!jid || !userId) {
+            dbg(`IGNORADO: não consegui identificar a pessoa | jid=${jid} | userId=${userId}`);
+            return false;
+        }
 
         // desafio
         if (lower === '#vd') { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
@@ -96,7 +108,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (temComando(texto, 'ndesafio') || temComando(texto, 'nd')) { await tratarDesafio(sock, message, from, jid, userId, img, texto, ownerNumbers); return true; }
         if (temComando(texto, 'cumpri')) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
 
-        if (temComando(texto, 'entrar') || temComando(texto, 'ne')) { await tratarEntrar(sock, message, from, jid, userId, img, texto); return true; }
+        if (temComando(texto, 'entrar') || temComando(texto, 'ne')) { dbg(`inscrição de ${userId} (mídia=${img ? 'sim' : 'não'})`); await tratarEntrar(sock, message, from, jid, userId, img, texto); return true; }
         if (temComando(texto, 'pedido') || temComando(texto, 'np')) { await tratarPedido(sock, message, from, jid, userId, texto, ctx); return true; }
         if (temComando(texto, 'aceito') || temComando(texto, 'na')) { await tratarAceito(sock, message, from, jid, userId, ctx); return true; }
     } catch (e) {

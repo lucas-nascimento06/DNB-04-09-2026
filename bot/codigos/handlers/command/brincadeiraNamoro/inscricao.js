@@ -53,7 +53,17 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     const dcs = await obterDCs(userId);
     if (dcs === null) return reply('⚠️ Não consegui verificar seus DCs agora. Avise um ADM.');
     if (dcs < CONFIG.DC_MINIMO) {
-        return reply(`💰 Você precisa de pelo menos *${CONFIG.DC_MINIMO} DCs* para participar. Você tem *${dcs}*.`);
+        const faltam = CONFIG.DC_MINIMO - dcs;
+        return reply(
+            `🚫💰 *INSCRIÇÃO NÃO REALIZADA!* 💰🚫\n\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `⚠️ *DCs INSUFICIENTES* ⚠️\n` +
+            `━━━━━━━━━━━━━━━━━━\n\n` +
+            `Para participar da brincadeira você precisa ter pelo menos *${CONFIG.DC_MINIMO} DCs*.\n\n` +
+            `💰 Você tem: *${dcs} DCs*\n` +
+            `📉 Faltam: *${faltam} DCs*\n\n` +
+            `Junte mais DCs e envie a ficha novamente. 📸`
+        );
     }
 
     // nome escrito na ficha; se vier em branco, usa o nome do perfil do WhatsApp
