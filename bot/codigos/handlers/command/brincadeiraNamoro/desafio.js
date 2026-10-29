@@ -1,20 +1,22 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/desafio.js
-// Desafio do namoro:
-//  - #ndesafio | #nd  (ADM)  -> posta o desafio (foto/vídeo + texto) marcando SÓ os casais formados
-//  - #cumpri                 -> cada pessoa do casal envia foto/vídeo + texto + #cumpri
-//                               o bot manda para o grupo de moderação e atualiza a lista de status
-//  - #ndstatus | #nds (ADM)  -> reenvia a lista de status no grupo de moderação
-//  - #vd (ADM)               -> mostra a tabela de acompanhamento em tempo real no grupo onde for digitado
+// Desafio do namoro (1 a CONFIG.LIMITE_DESAFIOS desafios, numerados):
+//  - #ndesafio | #nd  (ADM)  -> posta o desafio N (foto/vídeo + texto) marcando SÓ os casais formados
+//  - #cumpri                 -> cada pessoa do casal envia foto/vídeo + texto + #cumpri (vale para o desafio ativo)
+//  - #ndstatus | #nds (ADM)  -> reenvia a lista de status do desafio ativo no grupo de moderação
+//  - #vd (ADM)               -> status do desafio ativo | #vd 2 -> status do desafio 2 | #vd todos -> resumo geral
+//
+// As listas de status dos desafios ANTIGOS não são apagadas: ficam no grupo de moderação como histórico
+// (desafixadas e marcadas como encerradas). Só a do desafio ativo fica fixada e é atualizada.
 
 import pool from '../../../../../db.js';
-import { GRUPO_MODERACAO, GRUPO_PRINCIPAL } from './config.js';
+import { GRUPO_MODERACAO, GRUPO_PRINCIPAL, CONFIG } from './config.js';
 import { extractDigits } from './utils.js';
 import { buscarParticipante, emCasal, listarCasais } from './dados.js';
 
 const APAGAR_ORIGINAL = true;            // true = apaga a mensagem original do ADM depois de repostar (bot precisa ser admin)
 const EXIGIR_TEXTO_NO_CUMPRI = false;    // true = #cumpri só vale se tiver texto junto da foto/vídeo
 const LIMITE_LEGENDA = 800;              // máximo de caracteres do texto do #cumpri repassado à moderação
-const FIXAR_STATUS = true;               // true = a lista de acompanhamento fica fixada no grupo de moderação (desafixa/apaga a antiga e fixa a nova)
+const FIXAR_STATUS = true;               // true = a lista do desafio ativo fica fixada no grupo de moderação
 const DURACAO_FIXO = 7 * 24 * 60 * 60;   // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 
 // ===================== TABELAS =====================
@@ -37,6 +39,13 @@ export async function garantirTabelasDesafio() {
         CREATE INDEX IF NOT EXISTS idx_damas_namoro_desafios_grupo
         ON damas_namoro_desafios (grupo, ativo)
     `);
+    // número do desafio (1, 2, 3...). Os desafios antigos recebem número pela ordem de criação.
+    await pool.query(`ALTER TABLE damas_namoro_desafios ADD COLUMN IF NOT EXISTS numero INTEGER`);
+    await pool.query(`
+        UPDATE damas_namoro_desafios d SET numero = x.rn
+        FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY grupo ORDER BY id) AS rn FROM damas_namoro_desafios) x
+        WHERE d.id = x.id AND d.numero IS NULL
+    `);
 
     await pool.query(`
         CREATE TABLE IF NOT EXISTS damas_namoro_cumpridos (
@@ -50,12 +59,14 @@ export async function garantirTabelasDesafio() {
         )
     `);
 
-    // mensagem da lista de status no grupo de moderação (1 por destino)
+    // 1 mensagem de status POR DESAFIO no grupo de moderação (as antigas ficam como histórico)
     await pool.query(`
-        CREATE TABLE IF NOT EXISTS damas_namoro_status_desafio (
-            destino       TEXT        PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS damas_namoro_status_msgs (
+            destino       TEXT        NOT NULL,
+            desafio_id    BIGINT      NOT NULL,
             msg_id        TEXT        NOT NULL,
-            atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (destino, desafio_id)
         )
     `);
 
@@ -63,22 +74,47 @@ export async function garantirTabelasDesafio() {
 }
 
 // ===================== BANCO =====================
-async function criarDesafio(grupo, texto, tipoMidia) {
-    // só um desafio ativo por grupo: o novo encerra o anterior
+async function proximoNumero(grupo) {
+    const r = await pool.query(
+        `SELECT COALESCE(MAX(numero), 0) AS n FROM damas_namoro_desafios WHERE grupo = $1`,
+        [grupo]
+    );
+    return Number(r.rows[0].n) + 1;
+}
+
+async function criarDesafio(grupo, numero, texto, tipoMidia) {
+    // só um desafio ativo por grupo: o novo encerra o anterior (o anterior continua guardado)
     await pool.query(`UPDATE damas_namoro_desafios SET ativo = FALSE WHERE grupo = $1 AND ativo`, [grupo]);
     const r = await pool.query(
-        `INSERT INTO damas_namoro_desafios (grupo, texto, tipo_midia) VALUES ($1, $2, $3) RETURNING id`,
-        [grupo, texto || null, tipoMidia || null]
+        `INSERT INTO damas_namoro_desafios (grupo, numero, texto, tipo_midia) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [grupo, numero, texto || null, tipoMidia || null]
     );
     return r.rows[0].id;
 }
 
 async function desafioAtivo(grupo) {
     const r = await pool.query(
-        `SELECT id, texto FROM damas_namoro_desafios WHERE grupo = $1 AND ativo ORDER BY id DESC LIMIT 1`,
+        `SELECT id, numero, texto, ativo FROM damas_namoro_desafios
+         WHERE grupo = $1 AND ativo ORDER BY id DESC LIMIT 1`,
         [grupo]
     );
     return r.rows[0] || null;
+}
+
+async function desafioPorNumero(grupo, numero) {
+    const r = await pool.query(
+        `SELECT id, numero, texto, ativo FROM damas_namoro_desafios WHERE grupo = $1 AND numero = $2 LIMIT 1`,
+        [grupo, numero]
+    );
+    return r.rows[0] || null;
+}
+
+async function listarDesafios(grupo) {
+    const r = await pool.query(
+        `SELECT id, numero, texto, ativo FROM damas_namoro_desafios WHERE grupo = $1 ORDER BY numero`,
+        [grupo]
+    );
+    return r.rows;
 }
 
 async function jaCumpriu(desafioId, userId) {
@@ -106,17 +142,20 @@ async function idsCumpridos(desafioId) {
     return new Set(r.rows.map((x) => x.user_id));
 }
 
-async function obterStatusMsgId(destino) {
-    const r = await pool.query(`SELECT msg_id FROM damas_namoro_status_desafio WHERE destino = $1`, [destino]);
+async function obterStatusMsgId(destino, desafioId) {
+    const r = await pool.query(
+        `SELECT msg_id FROM damas_namoro_status_msgs WHERE destino = $1 AND desafio_id = $2`,
+        [destino, desafioId]
+    );
     return r.rows[0]?.msg_id || null;
 }
 
-async function salvarStatusMsgId(destino, msgId) {
+async function salvarStatusMsgId(destino, desafioId, msgId) {
     await pool.query(
-        `INSERT INTO damas_namoro_status_desafio (destino, msg_id)
-         VALUES ($1, $2)
-         ON CONFLICT (destino) DO UPDATE SET msg_id = EXCLUDED.msg_id, atualizado_em = NOW()`,
-        [destino, msgId]
+        `INSERT INTO damas_namoro_status_msgs (destino, desafio_id, msg_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (destino, desafio_id) DO UPDATE SET msg_id = EXCLUDED.msg_id, atualizado_em = NOW()`,
+        [destino, desafioId, msgId]
     );
 }
 
@@ -181,6 +220,12 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
         return reply('✍️ Envie a *foto/vídeo* (opcional) com o *texto do desafio* e termine com *#ndesafio*.');
     }
 
+    // número do próximo desafio (e limite)
+    const numero = await proximoNumero(from);
+    if (numero > CONFIG.LIMITE_DESAFIOS) {
+        return reply(`🚫 O limite de *${CONFIG.LIMITE_DESAFIOS} desafios* já foi atingido. Não dá para postar o desafio ${numero}.`);
+    }
+
     const casais = await listarCasais(from);
     if (!casais.length) return reply('💔 Ainda não há casais formados para receber o desafio.');
 
@@ -199,21 +244,27 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     const linhas = casais.map((c, i) =>
         `${i + 1}. ${contato(c.jid_a, c.user_a)} 💞 ${contato(c.jid_b, c.user_b)}`
     );
+    const titulo = `🎯 *DESAFIO Nº ${numero}* 🎯`;
     const blocoCasais =
-        `💑 *CASAIS DO DESAFIO*\n${linhas.join('\n')}\n\n` +
-        `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*, conforme explicado no desafio postado pelo ADM.\n
-        ✅ No final da postagem, coloque *#cumpri* para confirmar que realizou o desafio!`;
+        `💑 *CASAIS DO DESAFIO ${numero}*\n${linhas.join('\n')}\n\n` +
+        `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*, conforme explicado no desafio postado pelo ADM.\n\n` +
+        `✅ No final da postagem, coloque *#cumpri* para confirmar que realizou o desafio ${numero}!`;
+
+    // guarda o desafio ativo (antes de repostar, para o número já estar valendo)
+    const anterior = await desafioAtivo(from);
+    const desafioId = await criarDesafio(
+        from, numero, conteudo,
+        img ? (String(img.mimetype || '').startsWith('video') ? 'video' : 'image') : null
+    );
 
     // reposta
     if (img) {
-        const principal = await sock.sendMessage(from, montarMidia(img, buffer, conteudo, []));
+        const legenda = conteudo ? `${titulo}\n\n${conteudo}` : titulo;
+        const principal = await sock.sendMessage(from, montarMidia(img, buffer, legenda, []));
         await sock.sendMessage(from, { text: blocoCasais, mentions }, principal ? { quoted: principal } : {});
     } else {
-        await sock.sendMessage(from, { text: `${conteudo}\n\n${blocoCasais}`, mentions });
+        await sock.sendMessage(from, { text: `${titulo}\n\n${conteudo}\n\n${blocoCasais}`, mentions });
     }
-
-    // guarda o desafio ativo
-    await criarDesafio(from, conteudo, img ? (String(img.mimetype || '').startsWith('video') ? 'video' : 'image') : null);
 
     // apaga a mensagem original do ADM
     if (APAGAR_ORIGINAL) {
@@ -221,8 +272,12 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
         catch (e) { console.error('[brincadeiraNamoro] não consegui apagar a mensagem original (o bot é admin?):', e.message); }
     }
 
-    // lista de status inicial (todo mundo pendente) no grupo de moderação
+    // o desafio anterior vira histórico: desafixa e marca como encerrado (NÃO apaga)
+    if (anterior) await encerrarStatusAnterior(sock, from, anterior);
+
+    // lista de status do novo desafio (todo mundo pendente) no grupo de moderação
     await atualizarStatusDesafio(sock, from);
+    console.log(`[namoro] desafio ${numero} postado (id ${desafioId})`);
 }
 
 // ===================== #cumpri =====================
@@ -238,10 +293,10 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
     const desafio = await desafioAtivo(from);
     if (!desafio) return reply('🤔 Não há nenhum desafio ativo agora. Aguarde o ADM postar.');
 
-    if (await jaCumpriu(desafio.id, userId)) return reply('✅ Você já cumpriu este desafio!');
+    if (await jaCumpriu(desafio.id, userId)) return reply(`✅ Você já cumpriu o desafio ${desafio.numero}!`);
 
     if (!img) {
-        return reply('📸 Envie uma *foto* ou *vídeo* com um texto e termine a descrição com *#cumpri*.');
+        return reply(`📸 Envie uma *foto* ou *vídeo* com um texto e termine a descrição com *#cumpri* (desafio ${desafio.numero}).`);
     }
 
     const conteudo = limparComando(texto, ['cumpri']);
@@ -253,7 +308,7 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
     if (!buffer) return reply('⚠️ Não consegui baixar sua mídia. Envie de novo.');
 
     const novo = await registrarCumprimento(desafio.id, from, userId, conteudo);
-    if (!novo) return reply('✅ Você já cumpriu este desafio!');
+    if (!novo) return reply(`✅ Você já cumpriu o desafio ${desafio.numero}!`);
 
     const parceiroId = casal.user_a === userId ? casal.user_b : casal.user_a;
     const parceiro = await buscarParticipante(from, parceiroId);
@@ -268,21 +323,21 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
     // confirmação no grupo da brincadeira
     if (parceiroCumpriu) {
         await reply(
-            `🎉 ${tagEu} cumpriu o desafio e o casal está *completo*! 💚`,
+            `🎉 ${tagEu} cumpriu o *desafio ${desafio.numero}* e o casal está *completo*! 💚`,
             [jidEu].filter(Boolean)
         );
     } else {
         await reply(
-            `✅ ${tagEu}, seu desafio foi registrado!\nFalta ${rotuloParceiro} ${tagParceiro}. 💌`,
+            `✅ ${tagEu}, seu *desafio ${desafio.numero}* foi registrado!\nFalta ${rotuloParceiro} ${tagParceiro}. 💌`,
             [jidEu, jidParceiro].filter(Boolean)
         );
     }
 
-    // envia para o grupo de moderação: mídia + frase
+    // envia para o grupo de moderação: mídia + frase (com o número do desafio)
     const linhaParceiro = parceiroCumpriu
         ? `🎉 O casal completou o desafio! (${tagParceiro} já tinha cumprido)`
         : `Falta ${rotuloParceiro} ${tagParceiro}`;
-    let legenda = `${tagEu} mandou seu desafio ✅\n${linhaParceiro}`;
+    let legenda = `🎯 *DESAFIO ${desafio.numero}*\n${tagEu} mandou seu desafio ✅\n${linhaParceiro}`;
     if (conteudo) {
         legenda += `\n\n📝 ${conteudo.length > LIMITE_LEGENDA ? conteudo.slice(0, LIMITE_LEGENDA) + '…' : conteudo}`;
     }
@@ -295,7 +350,7 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
         console.error('[brincadeiraNamoro] erro ao enviar desafio para a moderação:', e.message);
     }
 
-    // lista de status atualizada (apaga a antiga e envia a nova)
+    // lista de status atualizada (só a do desafio ativo)
     await atualizarStatusDesafio(sock, from);
 }
 
@@ -314,10 +369,10 @@ export async function tratarStatusDesafio(sock, message, from, jid, userId, owne
     return reply('📋 Lista de status atualizada no grupo de moderação.');
 }
 
-// ===================== #vd (ADM) =====================
-// Mostra a tabela de acompanhamento em tempo real no grupo onde o comando foi digitado
-// (normalmente o de moderação). Sempre lê os dados do grupo principal.
-export async function tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers) {
+// ===================== #vd | #vd 2 | #vd todos (ADM) =====================
+// Mostra no grupo onde o comando foi digitado (normalmente o de moderação).
+// Sempre lê os dados do grupo principal.
+export async function tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers, lower = '#vd') {
     const reply = (t) => sock.sendMessage(from, { text: t }, { quoted: message });
 
     await garantirTabelasDesafio();
@@ -326,13 +381,37 @@ export async function tratarVerDesafio(sock, message, from, jid, userId, ownerNu
         return reply('🚫 Só ADM pode usar este comando.');
     }
 
-    const status = await montarStatus(GRUPO_PRINCIPAL);
-    if (!status) return reply('🤔 Não há nenhum desafio ativo.');
+    const arg = (lower.match(/^#vd\s+(\d{1,2}|todos)$/) || [])[1];
 
     const hora = new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Fortaleza',
     });
 
+    // resumo de todos os desafios
+    if (arg === 'todos') {
+        const desafios = await listarDesafios(GRUPO_PRINCIPAL);
+        if (!desafios.length) return reply('🤔 Nenhum desafio foi postado ainda.');
+        const casais = await listarCasais(GRUPO_PRINCIPAL);
+        const linhas = [];
+        for (const d of desafios) {
+            const cumpridos = await idsCumpridos(d.id);
+            const completos = casais.filter((c) => cumpridos.has(c.user_a) && cumpridos.has(c.user_b)).length;
+            const selo = d.ativo ? '🟢 ativo' : '🔒 encerrado';
+            linhas.push(`🎯 *Desafio ${d.numero}* — ${completos}/${casais.length} casais completos (${selo})`);
+        }
+        return reply(
+            `📚 *RESUMO DOS DESAFIOS* (${desafios.length}/${CONFIG.LIMITE_DESAFIOS})\n\n${linhas.join('\n')}\n\n` +
+            `Use *#vd 1*, *#vd 2*... para ver o detalhe de cada um.\n🕒 _Consultado às ${hora}_`
+        );
+    }
+
+    // desafio específico ou o ativo
+    const desafio = arg ? await desafioPorNumero(GRUPO_PRINCIPAL, Number(arg)) : await desafioAtivo(GRUPO_PRINCIPAL);
+    if (!desafio) {
+        return reply(arg ? `🤔 O desafio ${arg} não existe.` : '🤔 Não há nenhum desafio ativo. Use *#vd todos* para ver o histórico.');
+    }
+
+    const status = await montarStatus(GRUPO_PRINCIPAL, desafio);
     return sock.sendMessage(
         from,
         { text: `${status.texto}\n\n🕒 _Consultado às ${hora}_`, mentions: status.mentions },
@@ -341,10 +420,7 @@ export async function tratarVerDesafio(sock, message, from, jid, userId, ownerNu
 }
 
 // ===================== LISTA DE STATUS (GRUPO DE MODERAÇÃO) =====================
-async function montarStatus(grupoDados) {
-    const desafio = await desafioAtivo(grupoDados);
-    if (!desafio) return null;
-
+async function montarStatus(grupoDados, desafio) {
     const [casais, cumpridos] = await Promise.all([
         listarCasais(grupoDados),
         idsCumpridos(desafio.id),
@@ -366,8 +442,9 @@ async function montarStatus(grupoDados) {
         `💑 *Casal ${i + 1}*\n${linha(c.jid_a, c.user_a)}\n${linha(c.jid_b, c.user_b)}`
     );
 
+    const selo = desafio.ativo ? '' : ' 🔒 _(encerrado)_';
     const texto =
-        `📋 *ACOMPANHAMENTO DO DESAFIO*\n` +
+        `📋 *ACOMPANHAMENTO — DESAFIO ${desafio.numero}*${selo}\n` +
         `✅ Casais completos: *${completos}* de *${casais.length}*\n\n` +
         (blocos.length ? blocos.join('\n\n') : 'Nenhum casal formado ainda.');
 
@@ -377,36 +454,62 @@ async function montarStatus(grupoDados) {
 // fila por destino: duas atualizações seguidas não geram duas listas ao mesmo tempo
 const filas = new Map();
 
-export function atualizarStatusDesafio(sock, grupoDados) {
-    const destino = GRUPO_MODERACAO;
+function naFila(destino, fn) {
     const anterior = filas.get(destino) || Promise.resolve();
     const atual = anterior
-        .then(() => enviarStatus(sock, grupoDados, destino))
-        .catch((e) => console.error(`[brincadeiraNamoro] erro ao atualizar status do desafio em ${destino}:`, e.message));
+        .then(fn)
+        .catch((e) => console.error(`[brincadeiraNamoro] erro no status do desafio em ${destino}:`, e.message));
     filas.set(destino, atual);
     return atual;
 }
 
-async function enviarStatus(sock, grupoDados, destino) {
-    const status = await montarStatus(grupoDados);
-    if (!status) return;
+// atualiza a lista do desafio ATIVO
+export function atualizarStatusDesafio(sock, grupoDados) {
+    return naFila(GRUPO_MODERACAO, () => enviarStatus(sock, grupoDados, GRUPO_MODERACAO));
+}
 
-    // 1) remove a lista antiga (desafixa e apaga)
-    const antigoId = await obterStatusMsgId(destino);
+// desafio antigo: desafixa, marca como encerrado (edita o texto) e MANTÉM a mensagem no grupo
+function encerrarStatusAnterior(sock, grupoDados, desafioAnterior) {
+    return naFila(GRUPO_MODERACAO, async () => {
+        const destino = GRUPO_MODERACAO;
+        const msgId = await obterStatusMsgId(destino, desafioAnterior.id);
+        if (!msgId) return;
+        const key = { remoteJid: destino, fromMe: true, id: msgId };
+
+        if (FIXAR_STATUS) {
+            try { await sock.sendMessage(destino, { pin: key, type: 2 }); }
+            catch (e) { console.error('[brincadeiraNamoro] erro ao desafixar status antigo:', e.message); }
+        }
+        try {
+            const status = await montarStatus(grupoDados, { ...desafioAnterior, ativo: false });
+            await sock.sendMessage(destino, { text: status.texto, mentions: status.mentions, edit: key });
+        } catch (e) {
+            console.error('[brincadeiraNamoro] não consegui marcar o status antigo como encerrado:', e.message);
+        }
+    });
+}
+
+async function enviarStatus(sock, grupoDados, destino) {
+    const desafio = await desafioAtivo(grupoDados);
+    if (!desafio) return;
+    const status = await montarStatus(grupoDados, desafio);
+
+    // 1) remove só a lista ANTERIOR DESTE MESMO desafio (as de outros desafios ficam)
+    const antigoId = await obterStatusMsgId(destino, desafio.id);
     if (antigoId) {
         const keyAntiga = { remoteJid: destino, fromMe: true, id: antigoId };
         if (FIXAR_STATUS) {
             try { await sock.sendMessage(destino, { pin: keyAntiga, type: 2 }); }
-            catch (e) { console.error('[brincadeiraNamoro] erro ao desafixar status antigo:', e.message); }
+            catch (e) { console.error('[brincadeiraNamoro] erro ao desafixar status:', e.message); }
         }
         try { await sock.sendMessage(destino, { delete: keyAntiga }); }
-        catch (e) { console.error('[brincadeiraNamoro] erro ao apagar status antigo:', e.message); }
+        catch (e) { console.error('[brincadeiraNamoro] erro ao apagar status:', e.message); }
     }
 
     // 2) envia a nova
     const enviada = await sock.sendMessage(destino, { text: status.texto, mentions: status.mentions });
     if (!enviada?.key?.id) return;
-    await salvarStatusMsgId(destino, enviada.key.id);
+    await salvarStatusMsgId(destino, desafio.id, enviada.key.id);
 
     // 3) fixa a nova (o bot precisa ser admin do destino ou o grupo permitir)
     if (FIXAR_STATUS) {

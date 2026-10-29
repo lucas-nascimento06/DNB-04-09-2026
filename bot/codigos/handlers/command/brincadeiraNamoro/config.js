@@ -18,6 +18,7 @@ export const CONFIG = {
     DC_MINIMO: 250,                               // DCs mínimos para se inscrever (sem máximo)
     PEDIDO_VALIDADE_MS: 24 * 60 * 60 * 1000,      // pedido expira em 24h
     SOMENTE_GRUPOS_PERMITIDOS: true,              // false = funciona em qualquer grupo
+    LIMITE_DESAFIOS: 10,                          // máximo de desafios (1 a 10). Quer só 5? Troque aqui.
 };
 
 export const SIGNOS = [

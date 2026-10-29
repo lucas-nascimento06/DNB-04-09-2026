@@ -12,11 +12,11 @@
 //   #namoro  | #nr            -> regras da brincadeira (#namoro completa, #nr resumida)
 //   #ncomandos | #nc          -> lista de comandos (#ncomandos detalhada, #nc resumida)
 //
-// Desafio:
+// Desafio (numerado de 1 a CONFIG.LIMITE_DESAFIOS):
 //   #ndesafio | #nd (ADM)     -> (foto/vídeo + texto) posta o desafio marcando só os casais
-//   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio; vai para a moderação
+//   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio ativo; vai para a moderação
 //   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
-//   #vd (ADM)                 -> mostra a tabela de acompanhamento em tempo real (use no grupo de moderação)
+//   #vd (ADM)                 -> tabela do desafio ativo | #vd 2 -> desafio 2 | #vd todos -> resumo geral
 //   #dlista (ADM)             -> mostra a lista de participantes e casais atualizada (use no grupo de moderação)
 //
 // Módulos (pasta ./brincadeiraNamoro/):
@@ -136,9 +136,10 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     }
     const lower = texto.toLowerCase();
 
-    // #vd e #dlista também funcionam no grupo de moderação; todos os outros comandos
-    // continuam restritos aos grupos permitidos, como antes
-    const ehVd = (lower === '#vd' || lower === '#dlista') && (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
+    // #vd (também "#vd 2" e "#vd todos") e #dlista funcionam no grupo de moderação;
+    // todos os outros comandos continuam restritos aos grupos permitidos, como antes
+    const ehVd = /^#(vd(\s+(\d{1,2}|todos))?|dlista)$/.test(lower) &&
+        (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
     if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) {
         if (/#(entrar|ne)(\s|$)/i.test(texto)) {
             console.log(`[namoro] IGNORADO: grupo não permitido (${from})`);
@@ -149,7 +150,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista|listpart|ficha)$/.test(lower);
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd(\s+(\d{1,2}|todos))?|dlista|listpart|ficha)$/.test(lower);
     if (!ehComando) {
         // parece comando mas não casou com o filtro? avisa no log para diagnóstico
         if (/#\s*(entrar|ne|pedido|np|aceito|na)/i.test(texto)) {
@@ -187,7 +188,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         }
 
         // desafio
-        if (lower === '#vd') { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
+        if (/^#vd(\s|$)/.test(lower)) { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers, lower); return true; }
         if (lower === '#dlista') {
             if (!(await ehAdmin(sock, from, jid, userId, ownerNumbers))) {
                 await sock.sendMessage(from, { text: '🚫 Só ADM pode usar este comando.' }, { quoted: message });
