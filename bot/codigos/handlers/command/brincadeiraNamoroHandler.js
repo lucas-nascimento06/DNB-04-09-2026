@@ -7,6 +7,8 @@
 //   #aceito  | #na            -> aceita o pedido recebido e forma o casal
 //   #inscritos | #ni          -> lista completa (solteiras, solteiros e casais)
 //   #casais | #nca | #namorohomens | #nh | #namoromulheres | #nm -> mesma lista (antigos)
+//   #listpart                 -> mesma lista, com o cabeçalho "Damas da Night"
+//   #ficha                    -> envia a ficha de inscrição pronta para copiar
 //   #namoro  | #nr            -> regras da brincadeira (#namoro completa, #nr resumida)
 //   #ncomandos | #nc          -> lista de comandos (#ncomandos detalhada, #nc resumida)
 //
@@ -25,11 +27,12 @@ import { extractDigits, getNumeroReal, lerMensagem, temComando } from './brincad
 import { garantirTabelas } from './brincadeiraNamoro/dados.js';
 import { tratarEntrar } from './brincadeiraNamoro/inscricao.js';
 import { tratarPedido, tratarAceito } from './brincadeiraNamoro/pedidos.js';
-import { mostrarLista, mostrarListaAtualizada } from './brincadeiraNamoro/listas.js';
+import { mostrarLista, mostrarListaAtualizada, mostrarListPart } from './brincadeiraNamoro/listas.js';
 import { tratarDesafio, tratarCumpri, tratarStatusDesafio, tratarVerDesafio, ehAdmin } from './brincadeiraNamoro/desafio.js';
 import {
     mostrarRegras, mostrarComandos,
     mostrarComandosCurto, mostrarRegrasCurto,
+    mostrarFicha,
 } from './brincadeiraNamoro/regras.js';
 
 console.log('[brincadeiraNamoro] v1 carregado (modular)');
@@ -59,7 +62,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista)$/.test(lower);
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd|dlista|listpart|ficha)$/.test(lower);
     if (!ehComando) return false;
 
     try {
@@ -70,6 +73,8 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (lower === '#nr') { await mostrarRegrasCurto(sock, from, message); return true; }
         if (lower === '#ncomandos') { await mostrarComandos(sock, from, message); return true; }
         if (lower === '#nc') { await mostrarComandosCurto(sock, from, message); return true; }
+        if (lower === '#ficha') { await mostrarFicha(sock, from, message); return true; }
+        if (lower === '#listpart') { await mostrarListPart(sock, message, from); return true; }
         if (COMANDOS_LISTA.includes(lower)) { await mostrarLista(sock, message, from); return true; }
 
         // ações de participantes

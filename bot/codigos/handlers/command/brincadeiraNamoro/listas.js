@@ -1,6 +1,7 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/listas.js
 // Lista de participantes (solteiras, solteiros e casais).
 //  - mostrarLista: resposta aos comandos #inscritos, #ni, #nh, #nm, #casais, #nca
+//  - mostrarListPart: resposta ao #listpart (mesma lista, com o cabeçalho "Damas da Night")
 //  - mostrarListaAtualizada: resposta ao #dlista (ADM) - lista atualizada do grupo principal,
 //    pode ser pedida de dentro do grupo de moderação
 //  - atualizarListaFixada: a cada mudança, envia a lista nova no(s) grupo(s) de
@@ -22,9 +23,20 @@ const CABECALHO =
 
 📋 *LISTA DOS PARTICIPANTES*`;
 
+// cabeçalho do comando #listpart
+const CABECALHO_LISTPART =
+`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
+  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
+╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
+
+
+♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
+💜⃟⃨⃜ ̶💃 ͆͢ 📝*LISTA DOS PARTICIPANTES*💃⃟̶⃨⃜💜`;
+
 // monta a lista com os dados do grupo "grupoDados" (onde as pessoas se inscreveram).
 // marcar=true usa @ (menção); marcar=false usa wa.me (sem notificar ninguém)
-async function montarLista(grupoDados, marcar) {
+// cabecalho: opcional (padrão = CABECALHO)
+async function montarLista(grupoDados, marcar, cabecalho = CABECALHO) {
     const [homens, mulheres, casais] = await Promise.all([
         listarParticipantes(grupoDados, 'homem'),
         listarParticipantes(grupoDados, 'mulher'),
@@ -62,7 +74,7 @@ async function montarLista(grupoDados, marcar) {
     );
 
     const texto =
-`${CABECALHO}
+`${cabecalho}
 
 ╭───────────────╮
 💃 *SOLTEIRAS* 💃
@@ -85,6 +97,12 @@ ${numerar(formados)}`;
 // resposta aos comandos de lista (#inscritos, #ni, #casais, #nca, #nh, #nm...)
 export async function mostrarLista(sock, message, from) {
     const { texto, mentions } = await montarLista(from, true);
+    return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
+}
+
+// resposta ao #listpart: mesma lista, com o cabeçalho "Damas da Night"
+export async function mostrarListPart(sock, message, from) {
+    const { texto, mentions } = await montarLista(from, true, CABECALHO_LISTPART);
     return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
 }
 

@@ -1,5 +1,6 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/regras.js
 // #namoro -> regras | #ncomandos -> comandos | #nc -> comandos curto | #nr -> regras curto
+// #ficha -> ficha de inscrição pronta para copiar
 
 import { CONFIG } from './config.js';
 
@@ -146,4 +147,35 @@ export async function mostrarComandosCurto(sock, from, message) {
 
 export async function mostrarRegrasCurto(sock, from, message) {
     await sock.sendMessage(from, { text: textoRegrasCurto() }, { quoted: message });
+}
+
+// ===================== FICHA (comando #ficha) =====================
+// Ficha de inscrição no modelo "Damas da Night", pronta para copiar e preencher.
+export function textoFicha() {
+    return `╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
+  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
+╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
+
+
+💘✨ *FICHA DE INSCRIÇÃO* ✨💘
+
+
+♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
+💜⃟⃨⃜ ̶💃͆͢🅓α֟፝֟֠֩֯͝м︭αѕ 🅓͢α 🅝︧︨ιgнт͢͡💃⃟̶⃨⃜💜
+
+╭───────────────────╮
+📸 *FOTO OU VÍDEO*: envie junto com a ficha
+👤 *NOME*:  
+🚻 *SEXO* : (masculino ou feminino): 
+📍 *CIDADE*:  
+♌ *SIGNO*:  
+╰───────────────────╯
+
+✍️ Escreva tudo por extenso, sem abreviar.
+
+#entrar`;
+}
+
+export async function mostrarFicha(sock, from, message) {
+    await sock.sendMessage(from, { text: textoFicha() }, { quoted: message });
 }

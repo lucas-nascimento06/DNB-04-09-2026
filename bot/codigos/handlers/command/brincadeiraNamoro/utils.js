@@ -65,7 +65,10 @@ export function normalizarSigno(valor) {
 export function parseInscricao(legenda) {
     const limpo = legenda
         .replace(/#(entrar|ne)(?=\s|$)/gi, '')
-        .replace(/[*_~]/g, '');
+        .replace(/[*_~]/g, '')
+        // aceita também o modelo "SEXO : (masculino ou feminino): feminino"
+        // (só mexe na linha do SEXO; o formato antigo continua funcionando igual)
+        .replace(/(sexo[^:\n]*):[ \t]*\([^)\n]*\)[ \t]*:?/gi, '$1:');
     const sem = semAcento(limpo);
 
     // "extra" permite texto entre o rótulo e os dois pontos, ex.: SEXO (homem ou mulher):

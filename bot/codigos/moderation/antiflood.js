@@ -135,7 +135,7 @@ export const CONFIG = {
         'errou placar falta faltam rep repassar dmregras ' +
         // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
-        'namoromulheres nm namoro nr ncomandos nc ' +
+        'namoromulheres nm namoro nr ncomandos nc listpart ficha ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri = casais, ndstatus/nds = ADM)
         'ndesafio nd cumpri ndstatus nds')
             .split(' ').map(c => '#' + c),
