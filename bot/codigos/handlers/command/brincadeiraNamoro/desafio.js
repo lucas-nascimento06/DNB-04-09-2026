@@ -201,7 +201,8 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     );
     const blocoCasais =
         `💑 *CASAIS DO DESAFIO*\n${linhas.join('\n')}\n\n` +
-        `📸 Cada um do casal envia sua *foto ou vídeo com texto* e termina com *#cumpri*`;
+        `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*, conforme explicado no desafio postado pelo ADM.\n
+        ✅ No final da postagem, coloque *#cumpri* para confirmar que realizou o desafio!`;
 
     // reposta
     if (img) {
