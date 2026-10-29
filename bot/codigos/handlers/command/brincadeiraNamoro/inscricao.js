@@ -2,16 +2,16 @@
 // #entrar | #ne -> inscrição com foto + ficha (Nome / Sexo / Cidade / Signo)
 // (mesma lógica de antes + logs [inscricao] em cada etapa para diagnóstico)
 
-import { CONFIG } from './config.js';
-import { parseInscricao, nomeSigno } from './utils.js';
+import { CONFIG, NOMES_SIGNOS, normalizarSigno } from './config.js';
+import { parseInscricao } from './utils.js';
 import { obterDCs, baixarFotoBase64, salvarParticipante } from './dados.js';
 import { atualizarListaFixada } from './listas.js';
 
 const EXEMPLO =
-    '👤 NOME: Maria\n' +
-    '🚻 SEXO (masculino ou feminino): feminino\n' +
+    '👤 NOME: Emily\n' +
+    '🚻 SEXO (masculino/feminino ou M/F): F\n' +
     '📍 CIDADE: Fortaleza\n' +
-    '♌ SIGNO: leão\n' +
+    '♌ SIGNO: leão/leonina\n' +
     '#entrar';
 
 export async function tratarEntrar(sock, message, from, jid, userId, img, texto) {
@@ -35,10 +35,14 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
         return reply('📸 Para se inscrever, envie uma *foto* ou *vídeo* e coloque a ficha e o *#entrar* na *descrição*.');
     }
 
-    const { nome: nomeFicha, sexo, sexoTexto, cidade, signo } = parseInscricao(texto);
-    log(`ficha lida: nome=${nomeFicha} sexo=${sexo} (texto="${sexoTexto}") cidade=${cidade} signo=${signo}`);
+    const { nome: nomeFicha, sexo, sexoTexto, cidade, signo: signoTexto } = parseInscricao(texto);
 
-    // SEXO: aceita masculino(M) / feminino(F). Sem isso, não inscreve.
+    // SIGNO: aceita acento, feminino, gentílico, erro leve de digitação e mais de uma palavra
+    // (capricorniana, germiniano, leão/leonina...) e converte para a chave padrão (ex: 'capricornio')
+    const signo = normalizarSigno(signoTexto);
+    log(`ficha lida: nome=${nomeFicha} sexo=${sexo} (texto="${sexoTexto}") cidade=${cidade} signo=${signo} (texto="${signoTexto}")`);
+
+    // SEXO: aceita masculino/feminino, homem/mulher ou M/F. Sem isso, não inscreve.
     if (!sexo) {
         const escreveu = sexoTexto
             ? `Você escreveu: *${sexoTexto}*\n\n`
@@ -47,9 +51,9 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
             '🚫 *Inscrição não realizada!*\n\n' +
             'Não consegui identificar o seu *sexo*, e sem isso o bot não sabe em qual lista te colocar.\n\n' +
             escreveu +
-            'No campo SEXO escreva por extenso, uma destas opções:\n' +
-            '👨 masculino(M)\n' +
-            '👩 feminino(F)\n\n' +
+            'No campo SEXO escreva uma destas opções:\n' +
+            '👨 masculino ou *M*\n' +
+            '👩 feminino ou *F*\n\n' +
             `Exemplo:\n${EXEMPLO}\n\n` +
             'Corrija e envie a foto novamente. 📸'
         );
@@ -59,8 +63,12 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     if (!cidade) faltando.push('Cidade');
     if (!signo) faltando.push('Signo');
     if (faltando.length) {
+        const escreveuSigno = (!signo && signoTexto)
+            ? `Você escreveu no signo: *${signoTexto}*\n\n`
+            : '';
         return reply(
             `⚠️ Não consegui ler: *${faltando.join(', ')}*.\n\n` +
+            escreveuSigno +
             `Use este formato na descrição da foto:\n${EXEMPLO}`
         );
     }
@@ -99,7 +107,7 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     const lista = sexo === 'homem' ? 'dos *solteiros* 🕺' : 'das *solteiras* 💃';
     await reply(
         `✅ Inscrição confirmada!\n\n` +
-        `👤 Nome: *${nome}*\n⚧ Sexo: *${sexo === 'homem' ? 'masculino' : 'feminino'}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${nomeSigno(signo)}*\n\n` +
+        `👤 Nome: *${nome}*\n⚧ Sexo: *${sexo === 'homem' ? 'masculino' : 'feminino'}*\n📍 Cidade: *${cidade}*\n♈ Signo: *${NOMES_SIGNOS[signo]}*\n\n` +
         `Você foi adicionado(a) na lista ${lista}. Boa sorte! 💘`
     );
 
