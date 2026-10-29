@@ -1,10 +1,14 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/utils.js
 // Helpers da Brincadeira do Namoro
 
-import { SIGNOS, NOMES_SIGNOS } from './config.js';
+import { NOMES_SIGNOS } from './config.js';
 
 // reaproveita os helpers do desafio musical
 export { extractDigits, getNumeroReal } from '../desafioMusical/utils.js';
+
+// a normalização do signo (acento, feminino, gentílico, erro de digitação, "leão/leonina")
+// fica num lugar só: config.js. Reexportado aqui para não quebrar quem importa daqui.
+export { normalizarSigno } from './config.js';
 
 export const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 // igual ao semAcento, mas GARANTE o mesmo tamanho do texto original (letra por letra).
@@ -62,14 +66,10 @@ export function normalizarSexo(valor) {
     return null;
 }
 
-export function normalizarSigno(valor) {
-    const v = semAcento(String(valor || '').toLowerCase()).replace(/[^a-z]/g, '');
-    return SIGNOS.find((s) => v.includes(s)) || null;
-}
-
 // Lê "NOME:", "SEXO (masculino ou feminino):", "CIDADE:", "SIGNO:" da legenda da foto/vídeo.
 // Aceita negrito (*NOME:*), emojis e qualquer maiúscula/minúscula.
 // Devolve também sexoTexto (o que a pessoa escreveu) para avisar quando for inválido.
+// O signo sai como TEXTO CRU: quem converte para a chave padrão é o normalizarSigno do config.js.
 export function parseInscricao(legenda) {
     const limpo = legenda
         .replace(/#(entrar|ne)(?=\s|$)/gi, '')
@@ -101,6 +101,6 @@ export function parseInscricao(legenda) {
         sexoTexto,
         sexo: normalizarSexo(sexoTexto),
         cidade: pega('cidade'),
-        signo: normalizarSigno(pega('signo')),
+        signo: pega('signo'), // texto cru (ex: "leão/leonina"); o config.js normaliza
     };
 }
