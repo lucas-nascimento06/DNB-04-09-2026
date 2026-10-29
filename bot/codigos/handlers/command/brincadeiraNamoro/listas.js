@@ -1,7 +1,7 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/listas.js
 // Lista de participantes (solteiras, solteiros e casais).
 //  - mostrarLista: resposta aos comandos #inscritos, #ni, #nh, #nm, #casais, #nca
-//  - mostrarListPart: resposta ao #listpart (mesma lista, com o cabeçalho "Damas da Night")
+//  - mostrarListPart: resposta ao #listpart (modelo fixo e vazio da lista, só para guardar/copiar)
 //  - mostrarListaAtualizada: resposta ao #dlista (ADM) - lista atualizada do grupo principal,
 //    pode ser pedida de dentro do grupo de moderação
 //  - atualizarListaFixada: a cada mudança, envia a lista nova no(s) grupo(s) de
@@ -100,10 +100,30 @@ export async function mostrarLista(sock, message, from) {
     return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
 }
 
-// resposta ao #listpart: mesma lista, com o cabeçalho "Damas da Night"
+// resposta ao #listpart: modelo FIXO e vazio da lista (não lê o banco, não marca ninguém).
+// Serve só para guardar o modelo no bot e copiar quando precisar.
+export function textoListPart() {
+    return `${CABECALHO_LISTPART}
+
+╭───────────────╮
+💃 *SOLTEIRAS* 💃
+╰───────────────╯
+1.
+
+╭───────────────╮
+🕺 *SOLTEIROS* 🕺
+╰───────────────╯
+1.
+
+╭───────────────╮
+💑 *CASAIS FORMADOS*💑
+╰───────────────╯
+
+1.`;
+}
+
 export async function mostrarListPart(sock, message, from) {
-    const { texto, mentions } = await montarLista(from, true, CABECALHO_LISTPART);
-    return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
+    return sock.sendMessage(from, { text: textoListPart() }, { quoted: message });
 }
 
 // resposta ao #dlista: lista atualizada na hora (dados do grupo principal),
