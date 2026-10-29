@@ -57,8 +57,8 @@ export const temComando = (texto, cmd) => new RegExp(`(^|\\s)#${cmd}(\\s|$)`, 'i
 // Qualquer outra coisa: o bot não inscreve e pede para corrigir.
 export function normalizarSexo(valor) {
     const v = semAcento(String(valor || '').toLowerCase()).replace(/[^a-z]/g, '');
-    if (v === 'm' || v === 'homem' || v === 'masculino') return 'homem';
-    if (v === 'f' || v === 'mulher' || v === 'feminino') return 'mulher';
+    if (v === 'm' || v === 'homem' || v === 'masculino' || v === 'masculinom') return 'homem';
+    if (v === 'f' || v === 'mulher' || v === 'feminino' || v === 'femininof') return 'mulher';
     return null;
 }
 
@@ -74,9 +74,11 @@ export function parseInscricao(legenda) {
     const limpo = legenda
         .replace(/#(entrar|ne)(?=\s|$)/gi, '')
         .replace(/[*_~]/g, '')
-        // aceita também o modelo "SEXO : (masculino ou feminino): feminino"
-        // (só mexe na linha do SEXO; o formato antigo continua funcionando igual)
-        .replace(/(sexo[^:\n]*):[ \t]*\([^)\n]*\)[ \t]*:?/gi, '$1:');
+        // tira o texto-guia da linha do SEXO, aceitando os modelos:
+        //   "SEXO : masculino(M) ou feminino(F): M"   (ficha atual)
+        //   "SEXO : (masculino ou feminino): M"       (ficha antiga)
+        // (só mexe na linha do SEXO; "SEXO (masculino ou feminino): M" continua funcionando)
+        .replace(/(sexo[^:\n]*):[ \t]*(?:\([^)\n]*\)|masculino[ \t]*\(m\)[^:\n]*?feminino[ \t]*\(f\))[ \t]*:?/gi, '$1:');
     const sem = semAcentoMesmoTamanho(limpo);
 
     // "extra" permite texto entre o rótulo e os dois pontos, ex.: SEXO (homem ou mulher):

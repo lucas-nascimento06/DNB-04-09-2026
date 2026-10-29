@@ -166,7 +166,7 @@ export function textoFicha() {
 ╭───────────────────╮
 📸 *FOTO OU VÍDEO*: envie junto com a ficha
 👤 *NOME*:  
-🚻 *SEXO* : (masculino ou feminino): 
+🚻 *SEXO* : masculino(M) ou feminino(F): 
 📍 *CIDADE*:  
 ♌ *SIGNO*:  
 ╰───────────────────╯
