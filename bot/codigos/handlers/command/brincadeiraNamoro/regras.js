@@ -5,9 +5,9 @@
 import { CONFIG } from './config.js';
 
 const CABECALHO =
-`╔═════ஜ۩۞۩ஜ════╗
-👏🍻 *DﾑMﾑS 💃🔥 Dﾑ NIGӇԵ*💃🎶🍾🍸
-╚═════ஜ۩۞۩ஜ════╝`;
+`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
+  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
+╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝`;
 
 // Atenção: o bot lê as linhas NOME, SEXO, CIDADE e SIGNO. Não troque esses nomes.
 const FICHA =
