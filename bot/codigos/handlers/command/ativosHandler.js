@@ -15,7 +15,7 @@ function labelDias(dias) {
   return `${dias} dias sem falar`;
 }
 
-// ─── #ativos ──────────────────────────────────────────
+// ─── #ativos ───────────────────────────────────────
 export async function ativosHandler(client, message, admList = []) {
   const grupoId = message.key.remoteJid;
 
