@@ -281,7 +281,9 @@ export async function milionariosHandler(sock, message) {
         });
 
         const texto =
-`╭━━━ 💰 *DAMAS RICH CLUB* 💰 ━━━╮
+`𓆩 ♛ 💎 𝐃𝐀𝐌𝐀𝐒 𝐑𝐈𝐂𝐇 𝐂𝐋𝐔𝐁 💎 ♛ 𓆪
+　　　 💵 𝑳𝒖𝒙𝒐 • 𝑷𝒐𝒅𝒆𝒓 • 𝑹𝒊𝒒𝒖𝒆𝒛𝒂 💰
+　　　　　💸 🤑 💲 ✨
 
 👑 *RANKING DOS MILIONÁRIOS* 👑
 
