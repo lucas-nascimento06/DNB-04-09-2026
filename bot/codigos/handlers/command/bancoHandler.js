@@ -144,7 +144,7 @@ export async function saldoHandler(sock, message) {
 
         await sock.sendMessage(from, {
             text:
-                `🏦 *BANCO DAMAS*\n\n` +
+                `🏦 💸⃤ *BANCO DAMAS* 💲💸\n\n` +
                 `💰 Seu saldo: *${fmtDC(saldo)} DCs*\n\n` +
                 `📄 *#extrato* — suas últimas movimentações\n` +
                 `🔑 *#pix* — sua chave PIX`
@@ -266,7 +266,7 @@ export async function milionariosHandler(sock, message) {
 
         if (!lista.length) {
             await sock.sendMessage(from, {
-                text: '🏦 *BANCO DAMAS*\n\n📭 Ainda não há milionários por aqui.'
+                text: '💸⃤ *BANCO DAMAS* 💲💸\n\n📭 Ainda não há milionários por aqui.'
             }, { quoted: message });
             return;
         }
@@ -278,10 +278,9 @@ export async function milionariosHandler(sock, message) {
         });
 
         const texto =
-`╭━━━ 💰 ˗ˋˏ *DAMAS RICH CLUB* ˎˊ˗ 💰 ━━━╮
+`╭━━━ 💰 *DAMAS RICH CLUB* 💰 ━━━╮
 
-
-💸⃤  👑 *RANKING DOS MILIONÁRIOS* 👑 💸⃤
+👑 *RANKING DOS MILIONÁRIOS* 👑
 
 ${linhas.join('\n')}
 
