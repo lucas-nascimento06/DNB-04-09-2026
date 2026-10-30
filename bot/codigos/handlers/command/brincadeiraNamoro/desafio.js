@@ -235,7 +235,7 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
         if (!buffer) return reply('⚠️ Não consegui baixar a mídia. Envie de novo.');
     }
 
-    // marca APENAS as pessoas dos casais (nunca o grupo todo)
+    // marca APENAS as pessoas dos casais e o ADM que postou (nunca o grupo todo)
     const mentions = [];
     const contato = (j, id) => {
         if (j) { mentions.push(j); return `@${j.split('@')[0]}`; }
@@ -244,11 +244,18 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     const linhas = casais.map((c, i) =>
         `${i + 1}. ${contato(c.jid_a, c.user_a)} 💞 ${contato(c.jid_b, c.user_b)}`
     );
+
+    // ADM que postou o desafio (marcado de verdade)
+    const tagAdm = contato(jid, userId);
+
     const titulo = `🎯 *DESAFIO Nº ${numero}* 🎯`;
     const blocoCasais =
         `💑 *CASAIS DO DESAFIO ${numero}*\n${linhas.join('\n')}\n\n` +
-        `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*, conforme explicado no desafio postado pelo ADM.\n\n` +
-        `✅ No final da postagem, coloque *#cumpri* para confirmar que realizou o desafio ${numero}!`;
+        `*Atenção, integrantes!* Observem e leiam com atenção o *Desafio ${numero}* postado pelo ADM ${tagAdm}.\n\n` +
+        `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*. *É OBRIGATÓRIO!* Não aceitaremos participações apenas com texto.\n\n` +
+        `🤖 *Fiquem atentos ao comando do bot!* Sigam exatamente as instruções citadas aqui para que a participação seja validada. Qualquer dúvida, chamem um ADM!\n\n` +
+        `✨ *Capriche nos desafios!* Queremos ver montagens e colagens lindas, feitas com carinho e criatividade!\n\n` +
+        `✅ No final da postagem, coloquem *#cumpri* para confirmar que realizaram o desafio ${numero}!`;
 
     // guarda o desafio ativo (antes de repostar, para o número já estar valendo)
     const anterior = await desafioAtivo(from);

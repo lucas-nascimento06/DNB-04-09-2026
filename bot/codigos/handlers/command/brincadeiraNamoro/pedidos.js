@@ -1,7 +1,7 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/pedidos.js
 // #pedido | #np -> pedido de namoro | #aceito | #na -> aceita e forma o casal
 
-import { extractDigits } from './utils.js';
+import { extractDigits, lerMensagem } from './utils.js';
 import {
     buscarParticipante, buscarParticipantePorJidOuId, emCasal,
     limparPedidosExpirados, criarPedido, pedidosRecebidos, removerPedido, formarCasal,
@@ -22,8 +22,35 @@ const LINHA = '────۶ৎ────≽^• ˕ • ྀི≼⋆ ˚｡⋆
 
 const RODAPE = '🌹 𝓞 𝓪𝓶𝓸𝓻 𝓮𝓼𝓽𝓪́ 𝓷𝓸 𝓪𝓻 🌹';
 
+// texto da declaração sem o comando e sem as marcações (@), para saber se tem texto de verdade
+const declaracaoSemComando = (texto) =>
+    String(texto || '')
+        .replace(/(^|\s)#(pedido|np)(?=\s|$)/gi, ' ')
+        .replace(/@\d+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
 export async function tratarPedido(sock, message, from, jid, userId, texto, ctx) {
     const reply = (t, mentions = []) => sock.sendMessage(from, { text: t, mentions }, { quoted: message });
+
+    // ---------- FOTO/VÍDEO + TEXTO OBRIGATÓRIOS ----------
+    const { img } = lerMensagem(message);
+
+    if (!img) {
+        return reply(
+            `🚫 *PEDIDO NÃO REALIZADO!* 🚫\n\n` +
+            `⚠️ É *OBRIGATÓRIO* enviar uma *foto ou vídeo* junto com a sua declaração. Pedidos apenas com texto *não são aceitos*.\n\n` +
+            `📸 Envie a *foto ou vídeo*, escreva sua declaração na descrição, marque a pessoa com *@* e termine com *#pedido*.`
+        );
+    }
+
+    if (!declaracaoSemComando(texto)) {
+        return reply(
+            `🚫 *PEDIDO NÃO REALIZADO!* 🚫\n\n` +
+            `⚠️ Você enviou a mídia, mas faltou o *texto da declaração*.\n\n` +
+            `✍️ Escreva sua declaração na descrição da foto/vídeo, marque a pessoa com *@* e termine com *#pedido*.`
+        );
+    }
 
     await limparPedidosExpirados(from);
 
