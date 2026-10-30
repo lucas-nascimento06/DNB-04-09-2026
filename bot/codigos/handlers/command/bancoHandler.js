@@ -226,6 +226,7 @@ export async function extratoHandler(sock, message) {
 
 // ---------------------------------------------------------------
 // #milionarios  →  top 5 maiores saldos (do grupo onde foi pedido)
+// Formato: DAMAS RICH CLUB
 // ---------------------------------------------------------------
 export async function milionariosHandler(sock, message) {
     const from = message.key.remoteJid;
@@ -270,13 +271,22 @@ export async function milionariosHandler(sock, message) {
             return;
         }
 
-        let texto = `🏆 *RANKING DOS MILIONÁRIOS*\n\n`;
         const mentions = [];
-        lista.forEach((r, i) => {
-            texto += `${MEDALHAS[i]} @${r.user_id} — *${fmtDC(r.saldo)} DCs*\n`;
+        const linhas = lista.map((r, i) => {
             mentions.push(`${r.user_id}@s.whatsapp.net`);
+            return `${MEDALHAS[i]} @${r.user_id} ━━ ${fmtDC(r.saldo)} DCs`;
         });
-        texto += `\n🏦 Banco Damas`;
+
+        const texto =
+`╭━━━ 💰 ˗ˋˏ DAMAS RICH CLUB ˎˊ˗ 💰 ━━━╮
+
+👑 RANKING DOS MILIONÁRIOS 👑
+💸⃤  🜲 RANKING DOS MILIONÁRIOS 🜲  💸⃤
+
+${linhas.join('\n')}
+
+╰━━━ 🏦 BANCO DAMAS 🏦 ━━━╯
+💸 Riqueza em movimento 💸`;
 
         await sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
     } catch (err) {
