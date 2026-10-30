@@ -167,11 +167,12 @@ export async function pixHandler(sock, message) {
         );
         const saldo = Number(saldoRes.rows[0]?.saldo || 0);
 
+        // ✨ Chave em destaque (negrito funciona na mensagem com botão)
         const textoBanco =
             `💸⃤ *BANCO DAMAS* 💲💸\n\n` +
-            (criouAgora ? `Sua chave PIX foi gerada!\n\n` : `Sua chave PIX:\n\n`) +
-            `🔑 ${chave}\n\n` +
-            `💰 Saldo: ${saldo.toLocaleString('pt-BR')} DCs\n\n` +
+            (criouAgora ? `✨ *Sua chave PIX foi gerada!*\n\n` : `💠 *Sua chave PIX:*\n\n`) +
+            `🔑 *${chave}*\n\n` +
+            `💰 *Saldo:* ${saldo.toLocaleString('pt-BR')} DCs\n\n` +
             `📲 Para receber, passe essa chave.\n` +
             `Para enviar: *#e CHAVE VALOR* ou responda uma mensagem com *#e VALOR*`;
 
