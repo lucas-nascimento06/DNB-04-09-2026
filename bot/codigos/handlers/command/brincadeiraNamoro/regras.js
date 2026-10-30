@@ -17,14 +17,14 @@ const FICHA =
 💞 *BRINCADEIRA DO NAMORO* 💞
 
 ╭───────────────────╮
-📸 *FOTO OU VIDEO:* envie junto com a ficha
-👤 *NOME:*
-🚻 *SEXO (masculino(M) ou feminino(F)):*
-📍 *CIDADE:*
-♌ *SIGNO:*
+📸 *FOTO OU VIDEO* : envie junto com a ficha
+👤 *NOME* :
+🚻 *SEXO (masculino(M) ou feminino(F))* :
+📍 *CIDADE* :
+♌ *SIGNO* :
 ╰───────────────────╯
 
-*#entrar*`;
+#entrar`;
 
 export function textoRegras() {
     return `${FICHA}

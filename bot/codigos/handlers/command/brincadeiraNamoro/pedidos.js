@@ -14,7 +14,7 @@ const tag = (jid, userId) => `@${jid ? jid.split('@')[0] : userId}`;
 // ===================== DECORAÇÃO DO PEDIDO =====================
 const CABECALHO =
 `╭━━━ঌ🌹໒━━━╮
-💑 DAMAS DA NIGHT 💑
+💑 *DAMAS DA NIGHT* 💑
 ♡ _o coração pediu, o amor chegou_ ♡
 ╰━━━ঌ🍃໒━━━╯`;
 

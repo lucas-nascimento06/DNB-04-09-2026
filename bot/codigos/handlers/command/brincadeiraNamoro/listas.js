@@ -31,21 +31,21 @@ _${FRASE_RODAPE}_`;
 
 const CABECALHO =
 `╭══• ೋ•✧๑💑๑✧•ೋ •══╮
-💘 BRINCADEIRA DO NAMORO 💘
+💘 *BRINCADEIRA DO NAMORO* 💘
 ╰══• ೋ•✧๑💕๑✧•ೋ •══╯
 
 💘 ━━━━ ♡ ━━━━ 💘
-📝 LISTA DOS PARTICIPANTES
+📝 *LISTA DOS PARTICIPANTES*
 💘 ━━━━ ♡ ━━━━ 💘`;
 
 // cabeçalho do comando #listpart
 const CABECALHO_LISTPART =
 `╭══• ೋ•✧๑💑๑✧•ೋ •══╮
-💘 BRINCADEIRA DO NAMORO 💘
+💘 *BRINCADEIRA DO NAMORO* 💘
 ╰══• ೋ•✧๑💕๑✧•ೋ •══╯
 
 💘 ━━━━ ♡ ━━━━ 💘
-📝 LISTA DOS PARTICIPANTES
+📝 *LISTA DOS PARTICIPANTES*
 💘 ━━━━ ♡ ━━━━ 💘`;
 
 // numeração com coração e dois dígitos: "❤️ 01. Fulana ..."
