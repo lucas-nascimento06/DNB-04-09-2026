@@ -7,10 +7,8 @@ import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 
 const MEDALHAS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
 
-const esperar = (ms) => new Promise(r => setTimeout(r, ms));
-
 /**
- * Envia texto com botão "Copiar" (um por chave PIX).
+ * Envia texto com botões "Copiar" (um por chave PIX).
  * Se o envio interativo falhar, manda o texto normal.
  */
 async function enviarComBotoesCopiar(sock, from, quoted, texto, mentions, chaves) {
@@ -18,7 +16,7 @@ async function enviarComBotoesCopiar(sock, from, quoted, texto, mentions, chaves
         const buttons = chaves.map(({ n, chave }) => ({
             name: 'cta_copy',
             buttonParamsJson: JSON.stringify({
-                display_text: '📋 Copiar chave',
+                display_text: chaves.length > 1 ? `📋 Copiar chave ${n}` : '📋 Copiar chave',
                 id: `copiar_pix_${n}`,
                 copy_code: chave
             })
@@ -144,7 +142,7 @@ export async function saldoHandler(sock, message) {
 
         await sock.sendMessage(from, {
             text:
-                `🏦 💸⃤ *BANCO DAMAS* 💲💸\n\n` +
+                `💸⃤ *BANCO DAMAS* 💲💸\n\n` +
                 `💰 Seu saldo: *${fmtDC(saldo)} DCs*\n\n` +
                 `📄 *#extrato* — suas últimas movimentações\n` +
                 `🔑 *#pix* — sua chave PIX`
@@ -157,6 +155,7 @@ export async function saldoHandler(sock, message) {
 
 // ---------------------------------------------------------------
 // #extrato  →  últimas 10 transferências PIX (enviadas e recebidas)
+// Tudo em UMA mensagem (cabeçalho + movimentações + botões copiar)
 // ---------------------------------------------------------------
 export async function extratoHandler(sock, message) {
     const from = message.key.remoteJid;
@@ -184,7 +183,7 @@ export async function extratoHandler(sock, message) {
             [userId]
         );
 
-        const cabecalho = `🏦 *BANCO DAMAS — EXTRATO*\n\n💰 Saldo atual: *${fmtDC(saldo)} DCs*`;
+        const cabecalho = `💸⃤  *BANCO DAMAS — EXTRATO* 💰\n\n💰 Saldo atual: *${fmtDC(saldo)} DCs*`;
 
         if (!res.rows.length) {
             await sock.sendMessage(from, {
@@ -193,30 +192,34 @@ export async function extratoHandler(sock, message) {
             return;
         }
 
-        await sock.sendMessage(from, {
-            text: `${cabecalho}\n\n📄 *Últimas ${res.rows.length} movimentações:*`
-        }, { quoted: message });
-
-        // Uma mensagem por movimentação, com o botão "Copiar chave" logo abaixo
-        for (let i = 0; i < res.rows.length; i++) {
-            const r = res.rows[i];
+        const mentions = [];
+        const chaves = [];
+        const blocos = res.rows.map((r, i) => {
             const n = i + 1;
             const entrou = r.para_user === userId;
             const outro = entrou ? r.de_user : r.para_user;
             const chaveOutro = entrou ? r.chave_de : r.chave_para;
-            const mentions = [`${outro}@s.whatsapp.net`];
 
-            let texto = `*${n}.* ` + (entrou ? `🟢 ➕ *${fmtDC(r.valor)} DCs*\n` : `🔴 ➖ *${fmtDC(r.valor)} DCs*\n`);
-            texto += entrou ? `⠀⠀⠀ 👤 de @${outro}\n` : `⠀⠀⠀ 👤 para @${outro}\n`;
-            if (chaveOutro) texto += `⠀⠀⠀ 🔑 pix : ${chaveOutro}\n`;
-            texto += `⠀⠀⠀ 🕒 ${fmtData(r.criado_em)}`;
+            const jid = `${outro}@s.whatsapp.net`;
+            if (!mentions.includes(jid)) mentions.push(jid);
+            if (chaveOutro) chaves.push({ n, chave: chaveOutro });
 
-            await esperar(400); // mantém a ordem das mensagens
-            if (chaveOutro) {
-                await enviarComBotoesCopiar(sock, from, null, texto, mentions, [{ n, chave: chaveOutro }]);
-            } else {
-                await sock.sendMessage(from, { text: texto, mentions });
-            }
+            let bloco = `*${n}.* ` + (entrou ? `🟢 ➕ *${fmtDC(r.valor)} DCs*\n` : `🔴 ➖ *${fmtDC(r.valor)} DCs*\n`);
+            bloco += entrou ? `⠀⠀⠀ 👤 de @${outro}\n` : `⠀⠀⠀ 👤 para @${outro}\n`;
+            if (chaveOutro) bloco += `⠀⠀⠀ 🔑 pix : ${chaveOutro}\n`;
+            bloco += `⠀⠀⠀ 🕒 ${fmtData(r.criado_em)}`;
+            return bloco;
+        });
+
+        const texto =
+            `${cabecalho}\n\n` +
+            `📄 *Últimas ${res.rows.length} movimentações:*\n\n` +
+            blocos.join('\n\n');
+
+        if (chaves.length) {
+            await enviarComBotoesCopiar(sock, from, message, texto, mentions, chaves);
+        } else {
+            await sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
         }
     } catch (err) {
         console.error('[extratoHandler] Erro:', err.message);
