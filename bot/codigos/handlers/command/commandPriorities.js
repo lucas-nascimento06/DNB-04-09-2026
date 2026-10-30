@@ -14,6 +14,10 @@ import { handlePromoverRebaixar } from './promoverHandler.js'; // 👈 NOVO
 import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 Banco Damas
 import { saldoHandler, extratoHandler, milionariosHandler } from './bancoHandler.js'; // 🏦 NOVO: saldo / extrato / ranking
 
+// 🏦 #e / #enviar em QUALQUER posição da mensagem (início, meio ou fim).
+// O lookahead (?=\s|$) evita pegar #extrato, #enviado, etc.
+const REGEX_ENVIAR = /(^|\s)#(?:enviar|e)(?=\s|$)/i;
+
 export async function processCommandPriorities(
     sock, message, from, userId, content,
     OWNER_NUMBERS, autoTag, pool
@@ -68,6 +72,12 @@ export async function processCommandPriorities(
 
     // 🏦 PRIORIDADE 9.6: BANCO DAMAS
     //    #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
+    //
+    //    Formatos aceitos para enviar:
+    //      #e CHAVE 100
+    //      CHAVE <enter> #e 100
+    //      @pessoa #e 100
+    //      (responder msg) #e 100
     if (!handled) {
         // Primeira palavra, sem acento
         const comando = lowerContent
@@ -78,9 +88,6 @@ export async function processCommandPriorities(
         if (comando === '#pix') {
             await pixHandler(sock, message);
             handled = true;
-        } else if (comando === '#enviar' || comando === '#e') {
-            await enviarPixHandler(sock, message, content);
-            handled = true;
         } else if (comando === '#saldo' || comando === '#s') {
             await saldoHandler(sock, message);
             handled = true;
@@ -89,6 +96,10 @@ export async function processCommandPriorities(
             handled = true;
         } else if (comando === '#ricos' || comando === '#ranking') {
             await milionariosHandler(sock, message);
+            handled = true;
+        } else if (REGEX_ENVIAR.test(lowerContent)) {
+            // #e / #enviar em qualquer posição (inclusive depois da chave)
+            await enviarPixHandler(sock, message, content);
             handled = true;
         }
     }
