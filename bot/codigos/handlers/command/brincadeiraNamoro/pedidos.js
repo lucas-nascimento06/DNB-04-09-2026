@@ -12,17 +12,15 @@ import { atualizarListaFixada } from './listas.js';
 const tag = (jid, userId) => `@${jid ? jid.split('@')[0] : userId}`;
 
 // ===================== DECORAÇÃO DO PEDIDO =====================
-const ENFEITE_TOPO =
-`⏜ᷤ•´¯•𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀🍃𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀•´¯•ᷤ⏜
-ۣۣۣۣۣۣۣۣۣ̅─ۣۣۣۣۣۣۣۣ͞─‌ۣۣۣۣۣۣۣ͞─‌ۣۣۣۣۣۣ͞─‌ۣۣۣۣۣ͞─‌ۣۣۣۣ͞─‌ۣۣۣ͞─‌ۣۣ͞─‌ۣ͞─‌ᷤ͜͡🌹🍃•̖´᷽ᷤ🌹᷽ᷤ\`̗•
-█✧⃝💑🅓𝕒𝕞𝕒𝕤 𝕕𝕒 🅝𝕚𝕘𝕙𝕥✧⃝💑 █
-❶⓿ 🅐🅝🅞🅢`;
+const CABECALHO =
+`╭━━━ঌ🌹໒━━━╮
+💑 DAMAS DA NIGHT 💑
+♡ _o coração pediu, o amor chegou_ ♡
+╰━━━ঌ🍃໒━━━╯`;
 
-const ENFEITE_BASE =
-`̖´᷽ᷤ🌹᷽ᷤ\`̗•🍃́🌹ᷤ͜͡─‌ۜ͟─‌ۜۜ͟─‌ۜۜۜ͟─‌ۜۜۜۜ͟─‌ۜۜۜۜۜ͟─‌ۜۜۜۜۜۜ͟─‌ۜۜۜۜۜۜۜ͟─‌ۜۜۜۜۜۜۜۜ͟─‌̲ۜۜۜۜۜۜۜۜۜ
-█🅓𝕒𝕞𝕒𝕤 𝕕𝕒 🅝𝕚𝕘𝕙𝕥✧⃝💑
-❶⓿ 🅐🅝🅞🅢
-⏝•̖ᷤ⌣̗ᷤ•𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀🍃𐅁⃘⃪︨︡ᷤᷤ🌹⃘⃪︧︠ᷤᷤ𐅀•̖ᷤ⌣̗ᷤ•⏝`;
+const LINHA = '────۶ৎ────≽^• ˕ • ྀི≼⋆ ˚｡⋆୨♡୧⋆ ˚｡⋆';
+
+const RODAPE = '🌹 𝓞 𝓪𝓶𝓸𝓻 𝓮𝓼𝓽𝓪́ 𝓷𝓸 𝓪𝓻 🌹';
 
 export async function tratarPedido(sock, message, from, jid, userId, texto, ctx) {
     const reply = (t, mentions = []) => sock.sendMessage(from, { text: t, mentions }, { quoted: message });
@@ -45,14 +43,17 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
     await criarPedido(from, userId, alvo.userId, texto);
 
     const alvoMarca = alvo.jid || alvoJid;
-    const pronome = eu.sexo === 'mulher' ? 'ela' : 'ele';
+    const pronome = eu.sexo === 'mulher' ? 'ELA' : 'ELE';
     return reply(
-        `${ENFEITE_TOPO}\n\n` +
-        `💌✨ *PEDIDO DE NAMORO* 💍\n\n` +
-        `${tag(alvoMarca, alvo.userId)}, ${eu.nome} quer conquistar seu coração! 🥹❤️\n\n` +
-        `🌹💕 *Você aceita namorar com ${pronome}?* 💕🌹\n\n` +
-        `💖 Responda *#aceito* para dizer SIM! 💍👩‍❤️‍👨\n\n` +
-        `${ENFEITE_BASE}`,
+        `${CABECALHO}\n` +
+        `${LINHA}\n\n` +
+        `💌 *UM CORAÇÃO ESTÁ SE DECLARANDO!* 💌\n\n` +
+        `🌹 ${tag(alvoMarca, alvo.userId)} 🌹\n\n` +
+        `*${eu.nome}* quer conquistar seu coração e está fazendo uma declaração especial! ❤️\n` +
+        `💍💕 *VOCÊ ACEITA NAMORAR COM ${pronome}?* 💕💍\n\n` +
+        `╰┈➤ *Digite* \`\`\`#aceito\`\`\` *para dizer SIM!* 💖\n\n` +
+        `${LINHA}\n` +
+        `${RODAPE}`,
         [alvoMarca]
     );
 }

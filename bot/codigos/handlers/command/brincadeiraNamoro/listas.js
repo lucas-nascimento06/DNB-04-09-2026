@@ -15,24 +15,41 @@ const MARCAR_NO_DLISTA = true;         // true = #dlista mostra os @ ; false = u
 const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 const ESPERA_LISTA_MS = 3000;          // várias mudanças seguidas geram UMA lista só, 3s depois da última
 
+// corações que ficam antes do número de cada seção
+const CORACAO_SOLTEIRAS = '❤️';
+const CORACAO_SOLTEIROS = '💙';
+const CORACAO_CASAIS = '💘';
+
+// frase do rodapé (troque quando quiser)
+const FRASE_RODAPE = 'Onde tem Damas da Night, tem amor no ar. 💘';
+
+// rodapé em itálico (no WhatsApp, _texto_ = itálico)
+const RODAPE =
+`💘 ━━━━ ♡ ━━━━ 💘
+_Brincadeira do Namoro • Damas da Night_
+_${FRASE_RODAPE}_`;
+
 const CABECALHO =
-`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
-  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
-╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
+`╭══• ೋ•✧๑💑๑✧•ೋ •══╮
+💘 BRINCADEIRA DO NAMORO 💘
+╰══• ೋ•✧๑💕๑✧•ೋ •══╯
 
-
-♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
-💜⃟⃨⃜ ̶💃 ͆͢ 📝*LISTA DOS PARTICIPANTES*💃⃟̶⃨⃜💜`;
+💘 ━━━━ ♡ ━━━━ 💘
+📝 LISTA DOS PARTICIPANTES
+💘 ━━━━ ♡ ━━━━ 💘`;
 
 // cabeçalho do comando #listpart
 const CABECALHO_LISTPART =
-`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
-  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
-╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
+`╭══• ೋ•✧๑💑๑✧•ೋ •══╮
+💘 BRINCADEIRA DO NAMORO 💘
+╰══• ೋ•✧๑💕๑✧•ೋ •══╯
 
+💘 ━━━━ ♡ ━━━━ 💘
+📝 LISTA DOS PARTICIPANTES
+💘 ━━━━ ♡ ━━━━ 💘`;
 
-♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
-💜⃟⃨⃜ ̶💃 ͆͢ 📝*LISTA DOS PARTICIPANTES*💃⃟̶⃨⃜💜`;
+// numeração com coração e dois dígitos: "❤️ 01. Fulana ..."
+const numero = (i) => String(i + 1).padStart(2, '0');
 
 // monta a lista com os dados do grupo "grupoDados" (onde as pessoas se inscreveram).
 // marcar=true usa @ (menção); marcar=false usa wa.me (sem notificar ninguém)
@@ -56,9 +73,11 @@ async function montarLista(grupoDados, marcar, cabecalho = CABECALHO) {
         return `@${userId}`;
     };
 
-    // numeração; se vazio, mostra "1." como no modelo
-    const numerar = (linhas) =>
-        linhas.length ? linhas.map((l, i) => `${i + 1}. ${l}`).join('\n') : '1.';
+    // numeração com coração; se vazio, mostra "❤️ 01." como no modelo
+    const numerar = (linhas, coracao) =>
+        linhas.length
+            ? linhas.map((l, i) => `${coracao} ${numero(i)}. ${l}`).join('\n')
+            : `${coracao} 01.`;
 
     const solteiras = mulheres
         .filter((p) => !p.emCasal)
@@ -80,17 +99,19 @@ async function montarLista(grupoDados, marcar, cabecalho = CABECALHO) {
 ╭───────────────╮
 💃 *SOLTEIRAS* 💃
 ╰───────────────╯
-${numerar(solteiras)}
+${numerar(solteiras, CORACAO_SOLTEIRAS)}
 
 ╭───────────────╮
 🕺 *SOLTEIROS* 🕺
 ╰───────────────╯
-${numerar(solteiros)}
+${numerar(solteiros, CORACAO_SOLTEIROS)}
 
 ╭───────────────╮
 💑 *CASAIS FORMADOS*💑
 ╰───────────────╯
-${numerar(formados)}`;
+${numerar(formados, CORACAO_CASAIS)}
+
+${RODAPE}`;
 
     return { texto, mentions };
 }
@@ -109,18 +130,19 @@ export function textoListPart() {
 ╭───────────────╮
 💃 *SOLTEIRAS* 💃
 ╰───────────────╯
-1.
+${CORACAO_SOLTEIRAS} 01.
 
 ╭───────────────╮
 🕺 *SOLTEIROS* 🕺
 ╰───────────────╯
-1.
+${CORACAO_SOLTEIROS} 01.
 
 ╭───────────────╮
 💑 *CASAIS FORMADOS*💑
 ╰───────────────╯
+${CORACAO_CASAIS} 01.
 
-1.`;
+${RODAPE}`;
 }
 
 export async function mostrarListPart(sock, message, from) {

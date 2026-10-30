@@ -5,9 +5,9 @@
 import { CONFIG } from './config.js';
 
 const CABECALHO =
-`╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
-  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
-╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝`;
+`╔═════ஜ۩۞۩ஜ════╗
+👏🍻 *DﾑMﾑS 💃🔥 Dﾑ NIGӇԵ*💃🎶🍾🍸
+╚═════ஜ۩۞۩ஜ════╝`;
 
 // Atenção: o bot lê as linhas NOME, SEXO, CIDADE e SIGNO. Não troque esses nomes.
 const FICHA =
@@ -148,28 +148,9 @@ export async function mostrarRegrasCurto(sock, from, message) {
 }
 
 // ===================== FICHA (comando #ficha) =====================
-// Ficha de inscrição no modelo "Damas da Night", pronta para copiar e preencher.
+// Usa a mesma FICHA (e o mesmo CABECALHO) das regras, para o título ser sempre igual.
 export function textoFicha() {
-    return `╔═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎🏹♡๑ஓ═══╗
-  👏🍻 *DﾑMﾑS* 💃🔥 *Dﾑ* *NIGӇԵ*💃🎶🍾🍸
-╚═══ஓ๑♡•⋆⃘ٰٰٰٰٰٖٖٖٖٖٜ۬ ⃘ٰٰٰ︨ٖٖٖٜ︡۬⋆𝅦𝆉⃝꯭⃭݊̎👼🏻๑ஓ═══╝
-
-
-💘✨ *FICHA DE INSCRIÇÃO* ✨💘
-
-
-♚ࠟࠟࠟࠟࠟ͢. ⃢💑*BRINCADEIRA DO NAMORO*⃝!⃢💑⃝♚
-💜⃟⃨⃜ ̶💃͆͢🅓α֟፝֟֠֩֯͝м︭αѕ 🅓͢α 🅝︧︨ιgнт͢͡💃⃟̶⃨⃜💜
-
-╭───────────────────╮
-📸 *FOTO OU VÍDEO*: envie junto com a ficha
-👤 *NOME*:  
-🚻 *SEXO (masculino(M) ou feminino(F))*: 
-📍 *CIDADE*:  
-♌ *SIGNO*:  
-╰───────────────────╯
-
-#entrar`;
+    return FICHA;
 }
 
 export async function mostrarFicha(sock, from, message) {
