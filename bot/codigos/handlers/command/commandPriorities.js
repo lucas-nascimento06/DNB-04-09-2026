@@ -11,7 +11,8 @@ import {
     handleAjudaDcCommand
 } from './commandHandlers.js';
 import { handlePromoverRebaixar } from './promoverHandler.js'; // 👈 NOVO
-import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 NOVO: Banco Damas
+import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 Banco Damas
+import { saldoHandler, extratoHandler, milionariosHandler } from './bancoHandler.js'; // 🏦 NOVO: saldo / extrato / ranking
 
 export async function processCommandPriorities(
     sock, message, from, userId, content,
@@ -65,14 +66,29 @@ export async function processCommandPriorities(
     // 📜 PRIORIDADE 9.5: #LCMD — lista de comandos do DC
     if (!handled) handled = await handleAjudaDcCommand(sock, message, content);
 
-    // 🏦 PRIORIDADE 9.6: #PIX / #ENVIAR — Banco Damas
+    // 🏦 PRIORIDADE 9.6: BANCO DAMAS
+    //    #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #milionarios (#m / #ranking)
     if (!handled) {
-        const comando = lowerContent.split(/\s+/)[0];
+        // Primeira palavra, sem acento (aceita "#milionários")
+        const comando = lowerContent
+            .split(/\s+/)[0]
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
         if (comando === '#pix') {
             await pixHandler(sock, message);
             handled = true;
-        } else if (comando === '#enviar') {
+        } else if (comando === '#enviar' || comando === '#e') {
             await enviarPixHandler(sock, message, content);
+            handled = true;
+        } else if (comando === '#saldo' || comando === '#s') {
+            await saldoHandler(sock, message);
+            handled = true;
+        } else if (comando === '#extrato' || comando === '#x') {
+            await extratoHandler(sock, message);
+            handled = true;
+        } else if (comando === '#milionarios' || comando === '#ranking' || comando === '#m') {
+            await milionariosHandler(sock, message);
             handled = true;
         }
     }
