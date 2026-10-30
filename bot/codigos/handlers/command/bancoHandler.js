@@ -278,10 +278,10 @@ export async function milionariosHandler(sock, message) {
         });
 
         const texto =
-`╭━━━ 💰 ˗ˋˏ DAMAS RICH CLUB ˎˊ˗ 💰 ━━━╮
+`╭━━━ 💰 ˗ˋˏ *DAMAS RICH CLUB* ˎˊ˗ 💰 ━━━╮
 
-👑 RANKING DOS MILIONÁRIOS 👑
-💸⃤  🜲 RANKING DOS MILIONÁRIOS 🜲  💸⃤
+
+💸⃤  👑 *RANKING DOS MILIONÁRIOS* 👑 💸⃤
 
 ${linhas.join('\n')}
 
