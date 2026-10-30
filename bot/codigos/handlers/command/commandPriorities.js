@@ -11,6 +11,7 @@ import {
     handleAjudaDcCommand
 } from './commandHandlers.js';
 import { handlePromoverRebaixar } from './promoverHandler.js'; // 👈 NOVO
+import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 NOVO: Banco Damas
 
 export async function processCommandPriorities(
     sock, message, from, userId, content,
@@ -63,6 +64,18 @@ export async function processCommandPriorities(
 
     // 📜 PRIORIDADE 9.5: #LCMD — lista de comandos do DC
     if (!handled) handled = await handleAjudaDcCommand(sock, message, content);
+
+    // 🏦 PRIORIDADE 9.6: #PIX / #ENVIAR — Banco Damas
+    if (!handled) {
+        const comando = lowerContent.split(/\s+/)[0];
+        if (comando === '#pix') {
+            await pixHandler(sock, message);
+            handled = true;
+        } else if (comando === '#enviar') {
+            await enviarPixHandler(sock, message, content);
+            handled = true;
+        }
+    }
 
     // 👑 PRIORIDADE 10: PROMOVER / REBAIXAR
     if (!handled) handled = await handlePromoverRebaixar(sock, message, from, userId);
