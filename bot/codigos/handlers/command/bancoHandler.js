@@ -6,17 +6,21 @@ import { flushDC } from '../../features/dcTracker.js';
 import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 
 const MEDALHAS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+const MAX_BOTOES_COPIAR = 5;
 
 /**
- * Envia texto com botões "Copiar" (um por chave PIX).
+ * Envia texto com botões "Copiar" (um por chave PIX única).
+ * Cada item de `chaves` é { n, chave, outro }.
  * Se o envio interativo falhar, manda o texto normal.
  */
 async function enviarComBotoesCopiar(sock, from, quoted, texto, mentions, chaves) {
     try {
-        const buttons = chaves.map(({ n, chave }) => ({
+        const buttons = chaves.map(({ n, chave, outro }) => ({
             name: 'cta_copy',
             buttonParamsJson: JSON.stringify({
-                display_text: chaves.length > 1 ? `📋 Copiar chave ${n}` : '📋 Copiar chave',
+                display_text: chaves.length > 1
+                    ? `📋 Copiar pix de ${String(outro).slice(-4)}`
+                    : '📋 Copiar chave',
                 id: `copiar_pix_${n}`,
                 copy_code: chave
             })
@@ -156,6 +160,8 @@ export async function saldoHandler(sock, message) {
 // ---------------------------------------------------------------
 // #extrato  →  últimas 10 transferências PIX (enviadas e recebidas)
 // Tudo em UMA mensagem (cabeçalho + movimentações + botões copiar)
+// - A chave PIX aparece escrita só na 1ª vez que cada pessoa surge
+// - Os botões "Copiar" são deduplicados por chave
 // ---------------------------------------------------------------
 export async function extratoHandler(sock, message) {
     const from = message.key.remoteJid;
@@ -193,7 +199,9 @@ export async function extratoHandler(sock, message) {
         }
 
         const mentions = [];
-        const chaves = [];
+        const chavesUnicas = new Map();   // chave -> { chave, outro }
+        const chavesMostradas = new Set(); // chaves já escritas no texto
+
         const blocos = res.rows.map((r, i) => {
             const n = i + 1;
             const entrou = r.para_user === userId;
@@ -202,14 +210,28 @@ export async function extratoHandler(sock, message) {
 
             const jid = `${outro}@s.whatsapp.net`;
             if (!mentions.includes(jid)) mentions.push(jid);
-            if (chaveOutro) chaves.push({ n, chave: chaveOutro });
+
+            // guarda só a primeira ocorrência de cada chave (para os botões)
+            if (chaveOutro && !chavesUnicas.has(chaveOutro)) {
+                chavesUnicas.set(chaveOutro, { chave: chaveOutro, outro });
+            }
 
             let bloco = `*${n}.* ` + (entrou ? `🟢 ➕ *${fmtDC(r.valor)} DCs*\n` : `🔴 ➖ *${fmtDC(r.valor)} DCs*\n`);
             bloco += entrou ? `⠀⠀⠀ 👤 de @${outro}\n` : `⠀⠀⠀ 👤 para @${outro}\n`;
-            if (chaveOutro) bloco += `⠀⠀⠀ 🔑 pix : ${chaveOutro}\n`;
+
+            // escreve a chave só na primeira vez que ela aparece
+            if (chaveOutro && !chavesMostradas.has(chaveOutro)) {
+                bloco += `⠀⠀⠀ 🔑 pix : ${chaveOutro}\n`;
+                chavesMostradas.add(chaveOutro);
+            }
+
             bloco += `⠀⠀⠀ 🕒 ${fmtData(r.criado_em)}`;
             return bloco;
         });
+
+        const chaves = [...chavesUnicas.values()]
+            .slice(0, MAX_BOTOES_COPIAR)
+            .map((c, idx) => ({ n: idx + 1, chave: c.chave, outro: c.outro }));
 
         const texto =
             `${cabecalho}\n\n` +
