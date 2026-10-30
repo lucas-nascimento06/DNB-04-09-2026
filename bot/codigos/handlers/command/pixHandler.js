@@ -1,23 +1,33 @@
 // ARQUIVO: bot/codigos/handlers/command/pixHandler.js
 
+import { randomInt } from 'crypto';
 import pool from '../../../../db.js';
 import { flushDC } from '../../features/dcTracker.js';
 import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 import { garantirTabelaExtrato, registrarExtrato } from './bancoHandler.js'; // 🏦 extrato
 
 // ---------------------------------------------------------------
-// Palavras para gerar as chaves (emoji, palavra)
+// Geração de chave aleatória (letras + números)
+// Formato: DC-K7M2-X9PQ
+// Sem 0/O e 1/I/L para ninguém confundir ao digitar.
 // ---------------------------------------------------------------
-const PALAVRAS = [
-    ['🏦', 'BANQUEIRO-DO-PIX-DC'],
-    ['💅', 'DIVA-DO-GRUPO-DC'],
-    ['🧙', 'BRUXA-DO-PIX-DC'],
-    ['🍕', 'PIZZA-NO-PIX-DC'],
-    ['🕵️', 'DETETIVE-DO-DC']
-];
+const ALFABETO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-// Chave: palavras com hífen terminando em 3 dígitos (ex: DIVA-DO-GRUPO-DC-537)
-const REGEX_CHAVE = /[A-ZÀ-Ú0-9]+(?:-[A-ZÀ-Ú0-9]+)*-\d{3}/i;
+function blocoAleatorio(tamanho) {
+    let s = '';
+    for (let i = 0; i < tamanho; i++) {
+        s += ALFABETO[randomInt(ALFABETO.length)];
+    }
+    return s;
+}
+
+function gerarChave() {
+    return { emoji: '🔑', chave: `DC-${blocoAleatorio(4)}-${blocoAleatorio(4)}` };
+}
+
+// Reconhece o formato novo (DC-XXXX-XXXX) e também as chaves antigas
+// (palavras com hífen terminando em 3 dígitos), para quem já tem chave.
+const REGEX_CHAVE = /\bDC-[A-Z0-9]{4}-[A-Z0-9]{4}\b|[A-ZÀ-Ú0-9]+(?:-[A-ZÀ-Ú0-9]+)*-\d{3}/i;
 
 // ---------------------------------------------------------------
 // Criação automática da tabela (roda só uma vez)
@@ -50,15 +60,19 @@ function getNumeroReal(message) {
     return message.key.remoteJid;
 }
 
-// Tira emoji/espaços e deixa só LETRAS, NÚMEROS e hífen
+// Tira emoji/espaços e deixa só LETRAS, NÚMEROS e hífen (em maiúsculo)
 function normalizarChave(texto) {
     return texto.toUpperCase().replace(/[^A-ZÀ-Ú0-9-]/g, '');
 }
 
-function gerarChave() {
-    const [emoji, palavra] = PALAVRAS[Math.floor(Math.random() * PALAVRAS.length)];
-    const numero = Math.floor(100 + Math.random() * 900); // 100–999
-    return { emoji, chave: `${palavra}-${numero}` };
+// Busca o dono de uma chave (ignora maiúscula/minúscula, para
+// funcionar também com chaves antigas salvas com letras minúsculas).
+async function buscarDonoDaChave(chave) {
+    const res = await pool.query(
+        `SELECT user_id FROM damas_pix_keys WHERE UPPER(chave) = $1`,
+        [normalizarChave(chave)]
+    );
+    return res.rows[0]?.user_id || null;
 }
 
 // Busca a chave da pessoa; se não tiver, gera uma nova.
@@ -250,7 +264,7 @@ export async function enviarPixHandler(sock, message, content) {
         texto = texto.replace(/@\S+/g, ' ');
 
         const matchChave = texto.match(REGEX_CHAVE);
-        let chave = matchChave ? normalizarChave(matchChave[0]) : null;
+        const chave = matchChave ? normalizarChave(matchChave[0]) : null;
         if (matchChave) texto = texto.replace(matchChave[0], ' ');
 
         // --- 2) Valor = último número que sobrou ---
@@ -272,17 +286,13 @@ export async function enviarPixHandler(sock, message, content) {
 
         // 3a) chave digitada/colada na mensagem
         if (chave) {
-            const dest = await pool.query(
-                `SELECT user_id FROM damas_pix_keys WHERE chave = $1`,
-                [chave]
-            );
-            if (!dest.rows[0]) {
+            destinatarioId = await buscarDonoDaChave(chave);
+            if (!destinatarioId) {
                 await sock.sendMessage(from, {
                     text: '❌ Chave PIX não encontrada.'
                 }, { quoted: message });
                 return;
             }
-            destinatarioId = dest.rows[0].user_id;
         }
 
         // 3b) pessoa marcada com @
@@ -305,11 +315,7 @@ export async function enviarPixHandler(sock, message, content) {
             const citado = textoDaMensagemCitada(message);
             const mc = citado.match(REGEX_CHAVE);
             if (mc) {
-                const dest = await pool.query(
-                    `SELECT user_id FROM damas_pix_keys WHERE chave = $1`,
-                    [normalizarChave(mc[0])]
-                );
-                if (dest.rows[0]) destinatarioId = dest.rows[0].user_id;
+                destinatarioId = await buscarDonoDaChave(mc[0]);
             }
         }
 
