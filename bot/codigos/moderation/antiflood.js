@@ -136,6 +136,9 @@ export const CONFIG = {
         // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
         'namoromulheres nm namoro nr ncomandos nc listpart ficha ' +
+        // Banco Damas (pixHandler.js / bancoHandler.js)
+        // #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
+        'pix enviar e saldo extrato x ricos ranking ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri = casais, ndstatus/nds = ADM, vd/dlista = ADM)
         'ndesafio nd cumpri ndstatus nds vd dlista')
             .split(' ').map(c => '#' + c),

@@ -67,9 +67,9 @@ export async function processCommandPriorities(
     if (!handled) handled = await handleAjudaDcCommand(sock, message, content);
 
     // 🏦 PRIORIDADE 9.6: BANCO DAMAS
-    //    #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #milionarios (#m / #ranking)
+    //    #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
     if (!handled) {
-        // Primeira palavra, sem acento (aceita "#milionários")
+        // Primeira palavra, sem acento
         const comando = lowerContent
             .split(/\s+/)[0]
             .normalize('NFD')
@@ -87,7 +87,7 @@ export async function processCommandPriorities(
         } else if (comando === '#extrato' || comando === '#x') {
             await extratoHandler(sock, message);
             handled = true;
-        } else if (comando === '#milionarios' || comando === '#ranking' || comando === '#m') {
+        } else if (comando === '#ricos' || comando === '#ranking') {
             await milionariosHandler(sock, message);
             handled = true;
         }
