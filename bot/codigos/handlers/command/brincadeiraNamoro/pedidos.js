@@ -87,14 +87,30 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
         [alvoMarca]
     );
 
-    // cópia do pedido para a salinha de moderação: mesma foto/vídeo e mesmo texto do membro
+    // cópia do pedido para a salinha de moderação: registro (quem pediu -> quem recebeu)
+    // + mesma foto/vídeo e mesmo texto do membro, tudo na mesma mensagem
     try {
         const buffer = await baixarMidia(message);
         if (buffer) {
-            const mencionados = [...new Set([alvoMarca, ...(ctx.mentionedJid || [])])];
+            const jidDe = eu.jid || jid;
+
+            const registro =
+                `📝 *REGISTRO DE PEDIDO DE NAMORO*\n` +
+                `De ${tag(jidDe, userId)} para ${tag(alvoMarca, alvo.userId)}\n\n` +
+                `━━━━━━━━━━━━━━━━━━\n\n`;
+
+            // texto do membro sem o comando #pedido/#np
+            const textoPedido = texto
+                .replace(/(^|\s)#(pedido|np)(?=\s|$)/gi, ' ')
+                .replace(/[ \t]+\n/g, '\n')
+                .trim();
+
+            // quem pediu + quem recebeu + qualquer @ digitado na declaração (sem repetir)
+            const mencionados = [...new Set([jidDe, alvoMarca, ...(ctx.mentionedJid || [])].filter(Boolean))];
+
             await sock.sendMessage(
                 GRUPO_MODERACAO,
-                montarMidia(img, buffer, texto, mencionados)
+                montarMidia(img, buffer, registro + textoPedido, mencionados)
             );
         } else {
             console.error('[brincadeiraNamoro] pedido: não consegui baixar a mídia para a moderação');

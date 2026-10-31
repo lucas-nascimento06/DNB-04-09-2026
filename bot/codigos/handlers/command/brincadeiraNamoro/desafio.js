@@ -257,7 +257,7 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
         `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*. *É OBRIGATÓRIO!* Não aceitaremos participações apenas com texto.\n\n` +
         `🤖 *Fiquem atentos ao comando do bot!* Sigam exatamente as instruções citadas aqui para que a participação seja validada. Qualquer dúvida, chamem um ADM!\n\n` +
         `✨ *Capriche nos desafios!* Queremos ver montagens e colagens lindas, feitas com carinho e criatividade!\n\n` +
-        `✅ No final da postagem, coloquem *#cumpri* para confirmar que realizaram o desafio ${numero}!`;
+        `✅ No final da postagem, coloquem *#c* para confirmar que realizaram o desafio ${numero}!`;
 
     // guarda o desafio ativo (antes de repostar, para o número já estar valendo)
     const anterior = await desafioAtivo(from);
