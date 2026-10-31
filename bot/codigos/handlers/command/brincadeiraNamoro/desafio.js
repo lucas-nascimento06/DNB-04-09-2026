@@ -1,13 +1,19 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/desafio.js
 // Desafio do namoro (1 a CONFIG.LIMITE_DESAFIOS desafios, numerados):
-//  - #ndesafio | #nd  (ADM)  -> posta o desafio N (foto/vídeo + texto) marcando SÓ os casais formados
+//  - #ndesafio | #nd  (ADM)  -> posta o desafio N (poster) e, em resposta a ele, os casais + as regras
 //  - #cumpri | #cumprir | #c -> cada pessoa do casal envia foto/vídeo + texto + #cumpri (vale para o desafio ativo)
 //  - #ndstatus | #nds (ADM)  -> reenvia a lista de status do desafio ativo no grupo de moderação
 //  - #vd (ADM)               -> status do desafio ativo | #vd 2 -> status do desafio 2 | #vd todos -> resumo geral
 //
 // As listas de status dos desafios ANTIGOS não são apagadas: ficam no grupo de moderação como histórico
 // (desafixadas e marcadas como encerradas). Só a do desafio ativo fica fixada e é atualizada.
+//
+// Imagens dos desafios: pasta ./imagens/ (desafio1.jpg, desafio2.jpg ... desafio6.jpg).
+// Se o ADM mandar foto/vídeo próprio, a mídia dele tem prioridade.
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool from '../../../../../db.js';
 import { GRUPO_MODERACAO, GRUPO_PRINCIPAL, CONFIG } from './config.js';
 import { extractDigits } from './utils.js';
@@ -18,6 +24,23 @@ const EXIGIR_TEXTO_NO_CUMPRI = false;    // true = #cumpri só vale se tiver tex
 const LIMITE_LEGENDA = 800;              // máximo de caracteres do texto do #cumpri repassado à moderação
 const FIXAR_STATUS = true;               // true = a lista do desafio ativo fica fixada no grupo de moderação
 const DURACAO_FIXO = 7 * 24 * 60 * 60;   // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
+const NUMERO_NO_RODAPE = false;          // true = acrescenta "_🎯 Desafio N_" pequeno em itálico no fim do poster
+
+// pasta com as imagens dos desafios: desafio1.jpg, desafio2.jpg ...
+const PASTA_IMAGENS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'imagens');
+
+// devolve o buffer da imagem do desafio N (jpg, jpeg ou png) ou null se não existir
+function imagemDoDesafio(numero) {
+    try {
+        for (const ext of ['jpg', 'jpeg', 'png']) {
+            const arq = path.join(PASTA_IMAGENS, `desafio${numero}.${ext}`);
+            if (fs.existsSync(arq)) return fs.readFileSync(arq);
+        }
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao ler imagem do desafio:', e.message);
+    }
+    return null;
+}
 
 // ===================== TABELAS =====================
 let tabelasProntas = false;
@@ -250,14 +273,22 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     // ADM que postou o desafio (marcado de verdade)
     const tagAdm = contato(jid, userId);
 
-    const titulo = `🎯 *DESAFIO Nº ${numero}* 🎯`;
+    // MENSAGEM 2: casais + aviso (em resposta ao poster; é a única que marca pessoas)
     const blocoCasais =
         `💑 *CASAIS DO DESAFIO ${numero}*\n${linhas.join('\n')}\n\n` +
-        `*Atenção, integrantes!* Observem e leiam com atenção o *Desafio ${numero}* postado pelo ADM ${tagAdm}.\n\n` +
+        `*Atenção, integrantes!* Observem e leiam com atenção o *Desafio ${numero}* postado pelo ADM ${tagAdm}. 👆`;
+
+    // MENSAGEM 3: regras (em resposta ao poster; não marca ninguém)
+    const blocoRegras =
+        `📋 *COMO CUMPRIR O DESAFIO ${numero}*\n\n` +
         `📸 Cada pessoa do casal deve enviar uma *foto ou vídeo acompanhado do texto*. *É OBRIGATÓRIO!* Não aceitaremos participações apenas com texto.\n\n` +
-        `🤖 *Fiquem atentos ao comando do bot!* Sigam exatamente as instruções citadas aqui para que a participação seja validada. Qualquer dúvida, chamem um ADM!\n\n` +
+        `🤖 *Fiquem atentos ao comando do bot!* Sigam exatamente as instruções para que a participação seja validada. Qualquer dúvida, chamem um ADM!\n\n` +
         `✨ *Capriche nos desafios!* Queremos ver montagens e colagens lindas, feitas com carinho e criatividade!\n\n` +
         `✅ No final da postagem, coloquem *#c* para confirmar que realizaram o desafio ${numero}!`;
+
+    // legenda do poster: texto do ADM (+ número pequeno em itálico, se ativado)
+    const rodape = NUMERO_NO_RODAPE ? `_🎯 Desafio ${numero}_` : '';
+    const legenda = [conteudo, rodape].filter(Boolean).join('\n\n');
 
     // guarda o desafio ativo (antes de repostar, para o número já estar valendo)
     const anterior = await desafioAtivo(from);
@@ -266,14 +297,28 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
         img ? (String(img.mimetype || '').startsWith('video') ? 'video' : 'image') : null
     );
 
-    // reposta
+    // 1) POSTER DO DESAFIO (sem as orientações)
+    let principal;
     if (img) {
-        const legenda = conteudo ? `${titulo}\n\n${conteudo}` : titulo;
-        const principal = await sock.sendMessage(from, montarMidia(img, buffer, legenda, []));
-        await sock.sendMessage(from, { text: blocoCasais, mentions }, principal ? { quoted: principal } : {});
+        // o ADM mandou mídia própria: ela tem prioridade
+        principal = await sock.sendMessage(from, montarMidia(img, buffer, legenda, []));
     } else {
-        await sock.sendMessage(from, { text: `${titulo}\n\n${conteudo}\n\n${blocoCasais}`, mentions });
+        // sem mídia: usa a imagem da pasta; se não existir, manda só texto
+        const padrao = imagemDoDesafio(numero);
+        if (!padrao) {
+            console.log(`[namoro] imagem do desafio ${numero} não encontrada em ${PASTA_IMAGENS} (enviando só texto)`);
+        }
+        principal = padrao
+            ? await sock.sendMessage(from, { image: padrao, caption: legenda })
+            : await sock.sendMessage(from, { text: legenda });
     }
+
+    // 2) CASAIS + aviso (em resposta ao poster)
+    const citar = principal ? { quoted: principal } : {};
+    await sock.sendMessage(from, { text: blocoCasais, mentions }, citar);
+
+    // 3) REGRAS (também em resposta ao poster, sem marcar ninguém)
+    await sock.sendMessage(from, { text: blocoRegras }, citar);
 
     // apaga a mensagem original do ADM
     if (APAGAR_ORIGINAL) {
