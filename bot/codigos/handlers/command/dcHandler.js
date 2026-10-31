@@ -36,7 +36,7 @@ export async function dcHandler(sock, message) {
 
         const texto = `💰 *CARTEIRA VIRTUAL DO DﾑMﾑS* 💲💸
 🪙 Você possui *${saldoFormatado} DCs* — Damas Coins
-━━━━━━━━━━━━━━━━━━
+━━━━━━━ ⛂⛃ ˗ˋˏ$ˎˊ⛃⛂ ━━━━━━━
 🏦 Moeda oficial do *Grupo DﾑMﾑS*
 
 🎴 *Com seus DCs você pode:*
