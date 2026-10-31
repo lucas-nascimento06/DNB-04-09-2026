@@ -3,7 +3,7 @@
 
 import { extractDigits, lerMensagem } from './utils.js';
 import { GRUPO_MODERACAO } from './config.js';
-import { baixarMidia, montarMidia } from './desafio.js';
+import { baixarMidia, montarMidia, enviarMidiaComThumb } from './desafio.js';
 import {
     buscarParticipante, buscarParticipantePorJidOuId, emCasal,
     limparPedidosExpirados, criarPedido, pedidosRecebidos, removerPedido, formarCasal,
@@ -112,7 +112,9 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
             // quem pediu + quem recebeu + qualquer @ digitado na declaração (sem repetir)
             const mencionados = [...new Set([jidDe, alvoMarca, ...(ctx.mentionedJid || [])].filter(Boolean))];
 
-            await sock.sendMessage(
+            // foto e vídeo levam miniatura nítida (jpegThumbnail), igual à música
+            await enviarMidiaComThumb(
+                sock,
                 GRUPO_MODERACAO,
                 montarMidia(img, buffer, registro + textoPedido, mencionados)
             );

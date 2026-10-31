@@ -12,8 +12,10 @@
 // Se o ADM mandar foto/vídeo próprio, a mídia dele tem prioridade.
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Jimp } from 'jimp';
 import pool from '../../../../../db.js';
 import { GRUPO_MODERACAO, GRUPO_PRINCIPAL, CONFIG } from './config.js';
 import { extractDigits } from './utils.js';
@@ -24,22 +26,92 @@ const EXIGIR_TEXTO_NO_CUMPRI = false;    // true = #cumpri só vale se tiver tex
 const LIMITE_LEGENDA = 800;              // máximo de caracteres do texto do #cumpri repassado à moderação
 const FIXAR_STATUS = true;               // true = a lista do desafio ativo fica fixada no grupo de moderação
 const DURACAO_FIXO = 7 * 24 * 60 * 60;   // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
+const THUMB_FOTO = true;                 // true = foto leva jpegThumbnail (Jimp), como na música. Se ficar embaçada: false
+const THUMB_VIDEO = true;                // true = vídeo leva miniatura nítida do 1º quadro (ffmpeg + Jimp). Sem ffmpeg: sai sem miniatura
+const TAMANHO_THUMB = 256;               // tamanho máximo (px) da miniatura
 const NUMERO_NO_RODAPE = false;          // true = acrescenta "_🎯 Desafio N_" pequeno em itálico no fim do poster
 
 // pasta com as imagens dos desafios: desafio1.jpg, desafio2.jpg ...
 const PASTA_IMAGENS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'imagens');
 
-// devolve o buffer da imagem do desafio N (jpg, jpeg ou png) ou null se não existir
+// devolve o buffer da imagem do desafio N ou null se não existir.
+// Mesmo modelo da música: lista a pasta e compara com regex /i, então funciona igual no PC (Windows)
+// e no Termux (Linux, que diferencia maiúscula de minúscula): aceita desafio1.jpg, Desafio1.JPG,
+// desafio01.png, desafio1.jpeg, desafio1.webp...
 function imagemDoDesafio(numero) {
     try {
-        for (const ext of ['jpg', 'jpeg', 'png']) {
-            const arq = path.join(PASTA_IMAGENS, `desafio${numero}.${ext}`);
-            if (fs.existsSync(arq)) return fs.readFileSync(arq);
-        }
+        const arquivo = fs.readdirSync(PASTA_IMAGENS).find((f) => {
+            const m = f.match(/^desafio\s*0*(\d+)\.(jpe?g|png|webp)$/i);
+            return m && Number(m[1]) === numero;
+        });
+        if (arquivo) return fs.readFileSync(path.join(PASTA_IMAGENS, arquivo));
     } catch (e) {
         console.error('[brincadeiraNamoro] erro ao ler imagem do desafio:', e.message);
     }
     return null;
+}
+
+// miniatura (jpegThumbnail) gerada com o Jimp, igual ao musicaHandler.js
+async function gerarThumbnail(buffer, size = 256) {
+    try {
+        const image = await Jimp.read(buffer);
+        image.scaleToFit({ w: size, h: size });
+        return await image.getBuffer('image/jpeg');
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao gerar thumbnail:', e.message);
+        return null;
+    }
+}
+
+// miniatura de VÍDEO: pega o 1º quadro com o ffmpeg (fluent-ffmpeg) e reduz com o Jimp.
+// Se o ffmpeg não existir ou falhar, devolve null e o vídeo segue sem miniatura (não quebra nada).
+async function gerarThumbnailVideo(buffer, size = 256) {
+    const base = path.join(os.tmpdir(), `namoro_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    const entrada = `${base}.mp4`;
+    const saida = `${base}.jpg`;
+    try {
+        const { default: ffmpeg } = await import('fluent-ffmpeg');
+        fs.writeFileSync(entrada, buffer);
+        await Promise.race([
+            new Promise((resolve, reject) => {
+                ffmpeg(entrada)
+                    .outputOptions(['-frames:v', '1'])
+                    .output(saida)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('ffmpeg demorou mais de 15s')), 15000)),
+        ]);
+        return await gerarThumbnail(fs.readFileSync(saida), size);
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao gerar thumbnail do vídeo:', e.message);
+        return null;
+    } finally {
+        for (const f of [entrada, saida]) {
+            try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignora */ }
+        }
+    }
+}
+
+// envia a mídia já montada pelo montarMidia.
+//  - Foto: jpegThumbnail gerado com o Jimp (igual à música), se THUMB_FOTO = true.
+//  - Vídeo: miniatura do 1º quadro (ffmpeg + Jimp) se THUMB_VIDEO = true. Sem ela, o Baileys manda uma
+//    miniatura minúscula e o vídeo aparece embaçado.
+// Se o envio falhar com miniatura, tenta de novo sem ela.
+// (exportado para o pedidos.js reaproveitar)
+export async function enviarMidiaComThumb(sock, jid, msg, opcoes = {}) {
+    let thumb = null;
+    if (msg.image && THUMB_FOTO) thumb = await gerarThumbnail(msg.image, TAMANHO_THUMB);
+    else if (msg.video && THUMB_VIDEO) thumb = await gerarThumbnailVideo(msg.video, TAMANHO_THUMB);
+
+    if (!thumb) return sock.sendMessage(jid, msg, opcoes);
+    try {
+        return await sock.sendMessage(jid, { ...msg, jpegThumbnail: thumb }, opcoes);
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao enviar com thumbnail, tentando sem:', e.message);
+        return await sock.sendMessage(jid, msg, opcoes);
+    }
 }
 
 // ===================== TABELAS =====================
@@ -300,8 +372,9 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     // 1) POSTER DO DESAFIO (sem as orientações)
     let principal;
     if (img) {
-        // o ADM mandou mídia própria: ela tem prioridade
-        principal = await sock.sendMessage(from, montarMidia(img, buffer, legenda, []));
+        // o ADM mandou mídia própria: ela tem prioridade (foto leva thumbnail; vídeo segue como antes)
+        const msgMidia = montarMidia(img, buffer, legenda, []);
+        principal = await enviarMidiaComThumb(sock, from, msgMidia);
     } else {
         // sem mídia: usa a imagem da pasta; se não existir, manda só texto
         const padrao = imagemDoDesafio(numero);
@@ -309,7 +382,7 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
             console.log(`[namoro] imagem do desafio ${numero} não encontrada em ${PASTA_IMAGENS} (enviando só texto)`);
         }
         principal = padrao
-            ? await sock.sendMessage(from, { image: padrao, caption: legenda })
+            ? await enviarMidiaComThumb(sock, from, { image: padrao, caption: legenda })
             : await sock.sendMessage(from, { text: legenda });
     }
 
@@ -397,7 +470,8 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
         legenda += `\n\n📝 ${conteudo.length > LIMITE_LEGENDA ? conteudo.slice(0, LIMITE_LEGENDA) + '…' : conteudo}`;
     }
     try {
-        await sock.sendMessage(
+        await enviarMidiaComThumb(
+            sock,
             GRUPO_MODERACAO,
             montarMidia(img, buffer, legenda, [jidEu, jidParceiro].filter(Boolean))
         );
