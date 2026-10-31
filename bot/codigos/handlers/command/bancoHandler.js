@@ -313,9 +313,8 @@ export async function milionariosHandler(sock, message) {
 ${linhas.join('\n')}
 
 ╰━━━ 🏦 BANCO DAMAS 🏦 ━━━╯
-
-💸 Riqueza em movimento 💸\n
-☘︎ ܁˖ 𝟕𝟕𝟕 ˗ˋˏ💰ˎˊ˗`;
+💸 Riqueza em movimento 💸
+\u200E☘️ ܁˖ 𝟕𝟕𝟕 ˗ˋˏ💰ˎˊ˗`;
 
         await sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
     } catch (err) {
