@@ -41,13 +41,14 @@ export async function dcHandler(sock, message) {
 
 🎴 *Com seus DCs você pode:*
 🔨 Participar dos leilões
-🎼 Pedir músicas — *30 DCs por música*
+🎼 Pedir músicas — *50 DCs por música*
 💸 Transferir para amigos
 🎁 Enviar DCs durante os leilões
 🎤 Participar do Desafio Musical
-💘 Participar da brincadeira do Namoro
-
-🤑 Junte seus DCs e torne-se o Tio Patinhas do DﾑMﾑS!`;
+💘 Participar da brincadeira do Namoro\n
+━━━━━━━ ⛂⛃ ˗ˋˏ$ˎˊ⛃⛂ ━━━━━━━
+💎 _*Damas Coins®* — a 1ª moeda virtual de grupo do WhatsApp_
+✨ _Criada e mantida pelo Grupo *DﾑMﾑS Dﾑ NIGӇԵ* desde 2026_`;
 
         await sock.sendMessage(from, {
             text: texto

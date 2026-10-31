@@ -2,6 +2,8 @@
 // #pedido | #np -> pedido de namoro | #aceito | #na -> aceita e forma o casal
 
 import { extractDigits, lerMensagem } from './utils.js';
+import { GRUPO_MODERACAO } from './config.js';
+import { baixarMidia, montarMidia } from './desafio.js';
 import {
     buscarParticipante, buscarParticipantePorJidOuId, emCasal,
     limparPedidosExpirados, criarPedido, pedidosRecebidos, removerPedido, formarCasal,
@@ -71,7 +73,8 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
 
     const alvoMarca = alvo.jid || alvoJid;
     const pronome = eu.sexo === 'mulher' ? 'ELA' : 'ELE';
-    return reply(
+
+    const resposta = await reply(
         `${CABECALHO}\n` +
         `${LINHA}\n\n` +
         `💌 *UM CORAÇÃO ESTÁ SE DECLARANDO!* 💌\n\n` +
@@ -83,6 +86,24 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
         `${RODAPE}`,
         [alvoMarca]
     );
+
+    // cópia do pedido para a salinha de moderação: mesma foto/vídeo e mesmo texto do membro
+    try {
+        const buffer = await baixarMidia(message);
+        if (buffer) {
+            const mencionados = [...new Set([alvoMarca, ...(ctx.mentionedJid || [])])];
+            await sock.sendMessage(
+                GRUPO_MODERACAO,
+                montarMidia(img, buffer, texto, mencionados)
+            );
+        } else {
+            console.error('[brincadeiraNamoro] pedido: não consegui baixar a mídia para a moderação');
+        }
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao enviar pedido para a moderação:', e.message);
+    }
+
+    return resposta;
 }
 
 export async function tratarAceito(sock, message, from, jid, userId, ctx) {

@@ -170,7 +170,8 @@ const limparComando = (texto, cmds) =>
         .replace(/[ \t]+\n/g, '\n')
         .trim();
 
-async function baixarMidia(message) {
+// (exportado para o pedidos.js reaproveitar)
+export async function baixarMidia(message) {
     try {
         let baileys;
         try { baileys = await import('@whiskeysockets/baileys'); }
@@ -183,7 +184,8 @@ async function baixarMidia(message) {
     }
 }
 
-function montarMidia(img, buffer, caption, mentions = []) {
+// (exportado para o pedidos.js reaproveitar)
+export function montarMidia(img, buffer, caption, mentions = []) {
     const ehVideo = String(img.mimetype || '').startsWith('video');
     return ehVideo
         ? { video: buffer, caption, mentions, mimetype: img.mimetype, gifPlayback: !!img.gifPlayback }

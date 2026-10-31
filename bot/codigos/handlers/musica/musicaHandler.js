@@ -17,7 +17,7 @@ const filaMusicas = [];
 // ============================================
 // 🪙 CUSTO EM DC PARA LIBERAR UMA MÚSICA (JUKEBOX)
 // ============================================
-const CUSTO_MUSICA = 30;
+const CUSTO_MUSICA = 50;
 
 // ============================================
 // 🖼️ FOTOS LOCAIS DO POSTER (pasta bot/codigos/foto-musicas)

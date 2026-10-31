@@ -172,6 +172,8 @@ export async function pixHandler(sock, message) {
         await garantirTabela();
 
         const userId = extractDigits(getNumeroReal(message));
+        const mencaoJid = `${userId}@s.whatsapp.net`; // 👤 quem será mencionado como titular
+
         const { chave, criouAgora } = await gerarOuBuscarChave(userId);
 
         await flushDC();
@@ -181,14 +183,22 @@ export async function pixHandler(sock, message) {
         );
         const saldo = Number(saldoRes.rows[0]?.saldo || 0);
 
-        // ✨ Chave em destaque (negrito funciona na mensagem com botão)
+        // ✨ Layout do Banco Damas (com titular mencionado)
         const textoBanco =
             `💸⃤ *BANCO DAMAS* 💲💸\n\n` +
-            (criouAgora ? `✨ *Sua chave PIX foi gerada!*\n\n` : `💠 *Sua chave PIX:*\n\n`) +
-            `🔑 *${chave}*\n\n` +
-            `💰 *Saldo:* ${saldo.toLocaleString('pt-BR')} DCs\n\n` +
-            `📲 Para receber, passe essa chave.\n` +
-            `Para enviar: *#e CHAVE VALOR* ou responda uma mensagem com *#e VALOR*`;
+            (criouAgora
+                ? `✨ *CHAVE PIX GERADA COM SUCESSO!*\n\n`
+                : `💠 *SUA CHAVE PIX*\n\n`) +
+            `👤 *Titular da chave:* @${userId}\n` +
+            `🔑 *Chave PIX:* \`${chave}\`\n` +
+            `💰 *Saldo disponível:* ${saldo.toLocaleString('pt-BR')} DCs\n\n` +
+            `━━━━━━━━━━━━━━━━━━\n\n` +
+            `📲 *Para receber DCs:* compartilhe sua chave com quem vai transferir.\n\n` +
+            `💸 *Para enviar DCs:*\n` +
+            `\`#e CHAVE VALOR\`\n` +
+            `Ou responda à mensagem da pessoa com:\n` +
+            `\`#e VALOR\`\n\n` +
+            `🏦 *BANCO DAMAS* — Seu dinheiro, suas regras! 💲`;
 
         // Tenta mandar com botão "Copiar chave"
         try {
@@ -198,6 +208,7 @@ export async function pixHandler(sock, message) {
                         messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                         interactiveMessage: proto.Message.InteractiveMessage.create({
                             body: proto.Message.InteractiveMessage.Body.create({ text: textoBanco }),
+                            contextInfo: { mentionedJid: [mencaoJid] }, // 👈 menção do titular
                             nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
                                 buttons: [{
                                     name: 'cta_copy',
@@ -227,8 +238,8 @@ export async function pixHandler(sock, message) {
             });
         } catch (e) {
             console.error('[pixHandler] Botão copiar falhou, usando texto:', e.message);
-            // Se o botão falhar, manda do jeito antigo
-            await sock.sendMessage(from, { text: textoBanco }, { quoted: message });
+            // Se o botão falhar, manda do jeito antigo (com menção)
+            await sock.sendMessage(from, { text: textoBanco, mentions: [mencaoJid] }, { quoted: message });
             await sock.sendMessage(from, { text: chave });
         }
     } catch (err) {
