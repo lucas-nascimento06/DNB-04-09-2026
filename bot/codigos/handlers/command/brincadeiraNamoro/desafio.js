@@ -1,7 +1,7 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/desafio.js
 // Desafio do namoro (1 a CONFIG.LIMITE_DESAFIOS desafios, numerados):
 //  - #ndesafio | #nd  (ADM)  -> posta o desafio N (foto/vídeo + texto) marcando SÓ os casais formados
-//  - #cumpri                 -> cada pessoa do casal envia foto/vídeo + texto + #cumpri (vale para o desafio ativo)
+//  - #cumpri | #cumprir | #c -> cada pessoa do casal envia foto/vídeo + texto + #cumpri (vale para o desafio ativo)
 //  - #ndstatus | #nds (ADM)  -> reenvia a lista de status do desafio ativo no grupo de moderação
 //  - #vd (ADM)               -> status do desafio ativo | #vd 2 -> status do desafio 2 | #vd todos -> resumo geral
 //
@@ -287,7 +287,7 @@ export async function tratarDesafio(sock, message, from, jid, userId, img, texto
     console.log(`[namoro] desafio ${numero} postado (id ${desafioId})`);
 }
 
-// ===================== #cumpri =====================
+// ===================== #cumpri | #cumprir | #c =====================
 export async function tratarCumpri(sock, message, from, jid, userId, img, texto) {
     const reply = (t, mentions = []) => sock.sendMessage(from, { text: t, mentions }, { quoted: message });
 
@@ -306,7 +306,8 @@ export async function tratarCumpri(sock, message, from, jid, userId, img, texto)
         return reply(`📸 Envie uma *foto* ou *vídeo* com um texto e termine a descrição com *#cumpri* (desafio ${desafio.numero}).`);
     }
 
-    const conteudo = limparComando(texto, ['cumpri']);
+    // tira #cumprir, #cumpri ou #c do texto
+    const conteudo = limparComando(texto, ['cumprir', 'cumpri', 'c']);
     if (EXIGIR_TEXTO_NO_CUMPRI && !conteudo) {
         return reply('✍️ Escreva um texto junto da foto/vídeo e termine com *#cumpri*.');
     }

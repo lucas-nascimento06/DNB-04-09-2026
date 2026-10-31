@@ -135,12 +135,12 @@ export const CONFIG = {
         'errou placar falta faltam rep repassar dmregras ' +
         // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
-        'namoromulheres nm namoro nr ncomandos nc listpart ficha ' +
+        'namoromulheres nm namoro nr ncomandos nc listpart lp ficha ' +
         // Banco Damas (pixHandler.js / bancoHandler.js)
         // #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
         'pix enviar e saldo extrato x ricos ranking ' +
-        // Desafio do Namoro (ndesafio/nd = ADM, cumpri = casais, ndstatus/nds = ADM, vd/dlista = ADM)
-        'ndesafio nd cumpri ndstatus nds vd dlista')
+        // Desafio do Namoro (ndesafio/nd = ADM, cumpri/cumprir/c = casais, ndstatus/nds = ADM, vd = ADM, dlista/dl = ADM)
+        'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],

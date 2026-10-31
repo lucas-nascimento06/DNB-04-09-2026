@@ -7,17 +7,17 @@
 //   #aceito  | #na            -> aceita o pedido recebido e forma o casal
 //   #inscritos | #ni          -> lista completa (solteiras, solteiros e casais)
 //   #casais | #nca | #namorohomens | #nh | #namoromulheres | #nm -> mesma lista (antigos)
-//   #listpart                 -> mesma lista, com o cabeçalho "Damas da Night"
+//   #listpart | #lp           -> modelo fixo e vazio da lista, com o cabeçalho "Damas da Night"
 //   #ficha                    -> envia a ficha de inscrição pronta para copiar
 //   #namoro  | #nr            -> regras da brincadeira (#namoro completa, #nr resumida)
 //   #ncomandos | #nc          -> lista de comandos (#ncomandos detalhada, #nc resumida)
 //
 // Desafio (numerado de 1 a CONFIG.LIMITE_DESAFIOS):
 //   #ndesafio | #nd (ADM)     -> (foto/vídeo + texto) posta o desafio marcando só os casais
-//   #cumpri                   -> (foto/vídeo + texto) cumpre o desafio ativo; vai para a moderação
+//   #cumpri | #cumprir | #c   -> (foto/vídeo + texto) cumpre o desafio ativo; vai para a moderação
 //   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
 //   #vd (ADM)                 -> tabela do desafio ativo | #vd 2 -> desafio 2 | #vd todos -> resumo geral
-//   #dlista (ADM)             -> mostra a lista de participantes e casais atualizada (use no grupo de moderação)
+//   #dlista | #dl (ADM)       -> mostra a lista de participantes e casais atualizada (use no grupo de moderação)
 //
 // Módulos (pasta ./brincadeiraNamoro/):
 //   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js, desafio.js
@@ -48,6 +48,15 @@ const COMANDOS_LISTA = [
     '#namorohomens', '#nh',
     '#namoromulheres', '#nm',
 ];
+
+// apelidos dos comandos (cada um tem versão completa e curta)
+const CMD_DLISTA = ['#dlista', '#dl'];
+const CMD_LISTPART = ['#listpart', '#lp'];
+const CUMPRI_CMDS = ['cumprir', 'cumpri', 'c']; // #cumpri | #cumprir | #c
+
+// #cumpri / #cumprir / #c como palavra inteira (evita pegar #casais, #comando etc.)
+const temCumpri = (texto) =>
+    new RegExp(`(^|\\s)#(${CUMPRI_CMDS.join('|')})(?=\\s|$)`, 'i').test(String(texto || ''));
 
 // ===================== PROTEÇÃO CONTRA DUPLICIDADE / SIMULTANEIDADE =====================
 const emAndamento = new Set();     // evita a mesma pessoa ser processada 2x ao mesmo tempo
@@ -136,9 +145,9 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     }
     const lower = texto.toLowerCase();
 
-    // #vd (também "#vd 2" e "#vd todos") e #dlista funcionam no grupo de moderação;
+    // #vd (também "#vd 2" e "#vd todos") e #dlista/#dl funcionam no grupo de moderação;
     // todos os outros comandos continuam restritos aos grupos permitidos, como antes
-    const ehVd = /^#(vd(\s+(\d{1,2}|todos))?|dlista)$/.test(lower) &&
+    const ehVd = /^#(vd(\s+(\d{1,2}|todos))?|dlista|dl)$/.test(lower) &&
         (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
     if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) {
         if (/#(entrar|ne)(\s|$)/i.test(texto)) {
@@ -149,8 +158,8 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
 
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
-        /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumpri)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd(\s+(\d{1,2}|todos))?|dlista|listpart|ficha)$/.test(lower);
+        /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumprir|cumpri|c)(\s|$)/i.test(texto) ||
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd(\s+(\d{1,2}|todos))?|dlista|dl|listpart|lp|ficha)$/.test(lower);
     if (!ehComando) {
         // parece comando mas não casou com o filtro? avisa no log para diagnóstico
         if (/#\s*(entrar|ne|pedido|np|aceito|na)/i.test(texto)) {
@@ -170,7 +179,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         if (lower === '#ncomandos') { await mostrarComandos(sock, from, message); return true; }
         if (lower === '#nc') { await mostrarComandosCurto(sock, from, message); return true; }
         if (lower === '#ficha') { await mostrarFicha(sock, from, message); return true; }
-        if (lower === '#listpart') { await mostrarListPart(sock, message, from); return true; }
+        if (CMD_LISTPART.includes(lower)) { await mostrarListPart(sock, message, from); return true; }
         if (COMANDOS_LISTA.includes(lower)) { await mostrarLista(sock, message, from); return true; }
 
         // ações de participantes
@@ -189,7 +198,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
 
         // desafio
         if (/^#vd(\s|$)/.test(lower)) { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers, lower); return true; }
-        if (lower === '#dlista') {
+        if (CMD_DLISTA.includes(lower)) {
             if (!(await ehAdmin(sock, from, jid, userId, ownerNumbers))) {
                 await sock.sendMessage(from, { text: '🚫 Só ADM pode usar este comando.' }, { quoted: message });
                 return true;
@@ -199,7 +208,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
         }
         if (lower === '#ndstatus' || lower === '#nds') { await tratarStatusDesafio(sock, message, from, jid, userId, ownerNumbers); return true; }
         if (temComando(texto, 'ndesafio') || temComando(texto, 'nd')) { await tratarDesafio(sock, message, from, jid, userId, img, texto, ownerNumbers); return true; }
-        if (temComando(texto, 'cumpri')) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
+        if (temCumpri(texto)) { await tratarCumpri(sock, message, from, jid, userId, img, texto); return true; }
 
         // inscrição: roda em segundo plano para não segurar as mensagens das outras pessoas
         if (temComando(texto, 'entrar') || temComando(texto, 'ne')) {

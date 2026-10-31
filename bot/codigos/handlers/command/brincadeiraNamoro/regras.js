@@ -17,11 +17,18 @@ const FICHA =
 💞 *BRINCADEIRA DO NAMORO* 💞
 
 ╭───────────────────╮
-📸 *FOTO OU VIDEO* : envie junto com a ficha
-👤 *NOME* :
-🚻 *SEXO (masculino(M) ou feminino(F))* :
-📍 *CIDADE* :
-♌ *SIGNO* :
+
+📸 𝗙𝗢𝗧𝗢 𝗢𝗨 𝗩𝗜𝗗𝗘𝗢: 𝗲𝗻𝘃𝗶𝗲 𝗷𝘂𝗻𝘁𝗼 𝗰𝗼𝗺 𝗮 𝗳𝗶𝗰𝗵𝗮 (𝗼𝗯𝗿𝗶𝗴𝗮𝘁𝗼𝗿𝗶𝗼)
+
+👤 𝗡𝗢𝗠𝗘:
+
+🚻 𝗦𝗘𝗫𝗢: 
+𝗢𝗕𝗦: 𝗶𝗻𝗳𝗼𝗿𝗺𝗲 𝗮𝗽𝗲𝗻𝗮𝘀 𝗮 𝗹𝗲𝘁𝗿𝗮 (𝗠) 𝗼𝘂 (𝗙).
+
+📍 𝗖𝗜𝗗𝗔𝗗𝗘:
+
+♌ 𝗦𝗜𝗚𝗡𝗢 :
+
 ╰───────────────────╯
 
 #entrar`;

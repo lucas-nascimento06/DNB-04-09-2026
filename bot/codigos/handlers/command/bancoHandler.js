@@ -1,11 +1,12 @@
 // ARQUIVO: bot/codigos/handlers/command/bancoHandler.js
-// 🏦 Banco Damas — #saldo, #extrato e #milionarios (top 5)
+// 🏦 Banco Damas — #saldo, #extrato e #milionarios (top 7)
 
 import pool from '../../../../db.js';
 import { flushDC } from '../../features/dcTracker.js';
 import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 
-const MEDALHAS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+const MEDALHAS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣'];
+const TOP_MILIONARIOS = 7;
 const MAX_BOTOES_COPIAR = 5;
 
 /**
@@ -250,7 +251,7 @@ export async function extratoHandler(sock, message) {
 }
 
 // ---------------------------------------------------------------
-// #milionarios  →  top 5 maiores saldos (do grupo onde foi pedido)
+// #milionarios  →  top 7 maiores saldos (do grupo onde foi pedido)
 // Formato: DAMAS RICH CLUB
 // ---------------------------------------------------------------
 export async function milionariosHandler(sock, message) {
@@ -287,7 +288,7 @@ export async function milionariosHandler(sock, message) {
                 console.warn('[milionariosHandler] Nenhuma carteira bateu com os membros do grupo; usando ranking geral.');
             }
         }
-        lista = lista.slice(0, 5);
+        lista = lista.slice(0, TOP_MILIONARIOS);
 
         if (!lista.length) {
             await sock.sendMessage(from, {
@@ -312,7 +313,9 @@ export async function milionariosHandler(sock, message) {
 ${linhas.join('\n')}
 
 ╰━━━ 🏦 BANCO DAMAS 🏦 ━━━╯
-💸 Riqueza em movimento 💸`;
+
+💸 Riqueza em movimento 💸\n
+☘︎ ܁˖ 𝟕𝟕𝟕 ˗ˋˏ💰ˎˊ˗`;
 
         await sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
     } catch (err) {

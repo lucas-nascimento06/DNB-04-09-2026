@@ -1,9 +1,9 @@
 // bot/codigos/handlers/command/brincadeiraNamoro/listas.js
 // Lista de participantes (solteiras, solteiros e casais).
 //  - mostrarLista: resposta aos comandos #inscritos, #ni, #nh, #nm, #casais, #nca
-//  - mostrarListPart: resposta ao #listpart (modelo fixo e vazio da lista, só para guardar/copiar)
-//  - mostrarListaAtualizada: resposta ao #dlista (ADM) - lista atualizada do grupo principal,
-//    pode ser pedida de dentro do grupo de moderação
+//  - mostrarListPart: resposta ao #listpart / #lp (modelo fixo e vazio da lista, só para guardar/copiar)
+//  - mostrarListaAtualizada: resposta ao #dlista / #dl (ADM) - envia a lista atualizada do grupo principal
+//    no grupo onde o comando foi digitado, FIXA a nova e REMOVE a antiga (pode ser pedida do grupo de moderação)
 //  - atualizarListaFixada: a cada mudança, envia a lista nova no(s) grupo(s) de
 //    GRUPOS_LISTA_FIXADA (moderação), apaga a antiga e fixa a nova
 
@@ -11,7 +11,6 @@ import { listarCasais, listarParticipantes, obterListaFixada, salvarListaFixada 
 import { GRUPOS_LISTA_FIXADA, GRUPO_PRINCIPAL } from './config.js';
 
 const MARCAR_NA_FIXADA = true;         // true = marca todos com @ (notifica o grupo inteiro)
-const MARCAR_NO_DLISTA = true;         // true = #dlista mostra os @ ; false = usa wa.me (sem notificar ninguém)
 const DURACAO_FIXO = 7 * 24 * 60 * 60; // segundos (86400 = 24h | 604800 = 7 dias | 2592000 = 30 dias)
 const ESPERA_LISTA_MS = 3000;          // várias mudanças seguidas geram UMA lista só, 3s depois da última
 
@@ -122,7 +121,7 @@ export async function mostrarLista(sock, message, from) {
     return sock.sendMessage(from, { text: texto, mentions }, { quoted: message });
 }
 
-// resposta ao #listpart: modelo FIXO e vazio da lista (não lê o banco, não marca ninguém).
+// resposta ao #listpart / #lp: modelo FIXO e vazio da lista (não lê o banco, não marca ninguém).
 // Serve só para guardar o modelo no bot e copiar quando precisar.
 export function textoListPart() {
     return `${CABECALHO_LISTPART}
@@ -149,29 +148,28 @@ export async function mostrarListPart(sock, message, from) {
     return sock.sendMessage(from, { text: textoListPart() }, { quoted: message });
 }
 
-// resposta ao #dlista: lista atualizada na hora (dados do grupo principal),
-// enviada no grupo onde o comando foi digitado (ex.: moderação)
-export async function mostrarListaAtualizada(sock, message, from) {
-    const { texto, mentions } = await montarLista(GRUPO_PRINCIPAL, MARCAR_NO_DLISTA);
-
-    const hora = new Date().toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Fortaleza',
-    });
-    const corpo = `${texto}\n\n🕒 _Consultado às ${hora}_`;
-
-    return sock.sendMessage(
-        from,
-        MARCAR_NO_DLISTA ? { text: corpo, mentions } : { text: corpo },
-        { quoted: message }
-    );
-}
-
 // ===================== LISTA FIXADA AUTOMÁTICA =====================
 // fila por grupo de destino: duas atualizações seguidas não geram duas listas ao mesmo tempo
 const filas = new Map();
 
 // agendamento por grupo de dados: várias inscrições/pedidos em sequência viram UMA atualização
 const agendados = new Map();
+
+// coloca uma tarefa na fila do destino (uma de cada vez por grupo)
+function enfileirar(destino, fn) {
+    const anterior = filas.get(destino) || Promise.resolve();
+    const atual = anterior
+        .then(fn)
+        .catch((e) => console.error(`[brincadeiraNamoro] erro ao atualizar lista fixada em ${destino}:`, e.message));
+    filas.set(destino, atual);
+    return atual;
+}
+
+// resposta ao #dlista / #dl: na hora (sem esperar os 3s), envia a lista atualizada do grupo principal
+// no grupo onde o comando foi digitado, apaga a lista desatualizada e FIXA a nova.
+export function mostrarListaAtualizada(sock, message, from) {
+    return enfileirar(from, () => atualizar(sock, GRUPO_PRINCIPAL, from));
+}
 
 // grupoDados = grupo onde a pessoa se inscreveu (de onde vêm os dados)
 // a lista é enviada e fixada em cada grupo de GRUPOS_LISTA_FIXADA.
@@ -181,11 +179,7 @@ export function atualizarListaFixada(sock, grupoDados) {
     agendados.set(grupoDados, setTimeout(() => {
         agendados.delete(grupoDados);
         for (const destino of GRUPOS_LISTA_FIXADA) {
-            const anterior = filas.get(destino) || Promise.resolve();
-            const atual = anterior
-                .then(() => atualizar(sock, grupoDados, destino))
-                .catch((e) => console.error(`[brincadeiraNamoro] erro ao atualizar lista fixada em ${destino}:`, e.message));
-            filas.set(destino, atual);
+            enfileirar(destino, () => atualizar(sock, grupoDados, destino));
         }
     }, ESPERA_LISTA_MS));
     return Promise.resolve();
