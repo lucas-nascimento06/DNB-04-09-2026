@@ -81,7 +81,8 @@ export async function tratarEntrar(sock, message, from, jid, userId, img, texto)
     if (dcs < CONFIG.DC_MINIMO) {
         const faltam = CONFIG.DC_MINIMO - dcs;
         return reply(
-            `🚫💰 *INSCRIÇÃO NÃO REALIZADA!* 💰🚫\n\n` +
+            `🚨 *INSCRIÇÃO NÃO REALIZADA!* 🚨\n\n` +
+            `❌❌🔐❌❌🙅‍♂️❌❌🔐❌❌\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `⚠️ *DCs INSUFICIENTES* ⚠️\n` +
             `━━━━━━━━━━━━━━━━━━\n\n` +
