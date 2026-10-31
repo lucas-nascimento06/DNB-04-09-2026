@@ -22,6 +22,17 @@ export const semAcentoMesmoTamanho = (s) =>
 export const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export const nomeSigno = (s) => NOMES_SIGNOS[s] || capitalizar(s);
 
+// Converte letras "decoradas" para letras normais.
+// A ficha do bot (regras.js) usa o alfabeto matemático unicode (𝗡𝗢𝗠𝗘, 𝗦𝗘𝗫𝗢, 𝗖𝗜𝗗𝗔𝗗𝗘, 𝗦𝗜𝗚𝗡𝗢).
+// Quando a pessoa copia a ficha, esses rótulos NÃO são "SEXO" de verdade e o parser não os achava.
+// NFKC transforma 𝗦𝗘𝗫𝗢 -> SEXO, 𝗠 -> M, "：" (dois pontos largo) -> ":", espaço especial -> espaço.
+// Também remove caracteres invisíveis (zero-width) que atrapalham a leitura.
+export function normalizarTextoFicha(texto) {
+    return String(texto || '')
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
+}
+
 // remove wrappers (efêmera, view once...) da mensagem do Baileys
 export function desembrulhar(message) {
     let m = message?.message || {};
@@ -60,18 +71,18 @@ export const temComando = (texto, cmd) => new RegExp(`(^|\\s)#${cmd}(\\s|$)`, 'i
 // entendidos, mas o bot só pede masculino (M) ou feminino (F).)
 // Qualquer outra coisa: o bot não inscreve e pede para corrigir.
 export function normalizarSexo(valor) {
-    const v = semAcento(String(valor || '').toLowerCase()).replace(/[^a-z]/g, '');
+    const v = semAcento(normalizarTextoFicha(valor).toLowerCase()).replace(/[^a-z]/g, '');
     if (v === 'm' || v === 'homem' || v === 'masculino' || v === 'masculinom') return 'homem';
     if (v === 'f' || v === 'mulher' || v === 'feminino' || v === 'femininof') return 'mulher';
     return null;
 }
 
 // Lê "NOME:", "SEXO (masculino ou feminino):", "CIDADE:", "SIGNO:" da legenda da foto/vídeo.
-// Aceita negrito (*NOME:*), emojis e qualquer maiúscula/minúscula.
+// Aceita negrito (*NOME:*), letras decoradas (𝗡𝗢𝗠𝗘), emojis e qualquer maiúscula/minúscula.
 // Devolve também sexoTexto (o que a pessoa escreveu) para avisar quando for inválido.
 // O signo sai como TEXTO CRU: quem converte para a chave padrão é o normalizarSigno do config.js.
 export function parseInscricao(legenda) {
-    const limpo = legenda
+    const limpo = normalizarTextoFicha(legenda)   // <<< CORREÇÃO: letras decoradas -> letras normais
         .replace(/#(entrar|ne)(?=\s|$)/gi, '')
         .replace(/[*_~]/g, '')
         // tira o texto-guia da linha do SEXO, aceitando os modelos:
