@@ -95,9 +95,13 @@ export async function tratarPedido(sock, message, from, jid, userId, texto, ctx)
             const jidDe = eu.jid || jid;
 
             const registro =
-                `📝 *REGISTRO DE PEDIDO DE NAMORO*\n` +
-                `De ${tag(jidDe, userId)} para ${tag(alvoMarca, alvo.userId)}\n\n` +
-                `━━━━━━━━━━━━━━━━━━\n\n`;
+                `╭━━━ঌ💌໒━━━╮\n` +
+                `📝 *REGISTRO DE PEDIDO* 📝\n` +
+                `╰━━━ঌ💌໒━━━╯\n\n` +
+                `💘 *De:* ${tag(jidDe, userId)}\n` +
+                `🌹 *Para:* ${tag(alvoMarca, alvo.userId)}\n\n` +
+                `${LINHA}\n\n` +
+                `💬 *Declaração:*\n`;
 
             // texto do membro sem o comando #pedido/#np
             const textoPedido = texto
@@ -155,6 +159,29 @@ export async function tratarAceito(sock, message, from, jid, userId, ctx) {
         `Estão oficialmente registrados como casal! 🎉`,
         mentions
     );
+
+    // registro do pedido ACEITO na salinha de moderação (quem aceitou + quem pediu)
+    try {
+        const hora = new Date().toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+            timeZone: 'America/Fortaleza',
+        });
+        await sock.sendMessage(GRUPO_MODERACAO, {
+            text:
+                `╭━━━ঌ💍໒━━━╮\n` +
+                `🎉 *REGISTRO DE PEDIDO ACEITO* 🎉\n` +
+                `╰━━━ঌ💍໒━━━╯\n\n` +
+                `💖 *Aceitou:* ${tag(jidEu, userId)}\n` +
+                `💌 *Pedido de:* ${tag(pA?.jid, pedido.de)}\n\n` +
+                `${LINHA}\n\n` +
+                `💑 *NOVO CASAL FORMADO!* 💑\n` +
+                `❤️ *${pA?.nome || pedido.de}* 💞 *${eu.nome}* ❤️\n\n` +
+                `🕒 _${hora}_`,
+            mentions,
+        });
+    } catch (e) {
+        console.error('[brincadeiraNamoro] erro ao enviar registro de aceite para a moderação:', e.message);
+    }
 
     // casal formado: atualiza a lista fixada (sai das solteiras/solteiros, entra em casais)
     await atualizarListaFixada(sock, from);
