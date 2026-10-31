@@ -414,8 +414,8 @@ export async function enviarPixHandler(sock, message, content) {
 
         await sock.sendMessage(from, {
             text: `💸 *TRANSFERÊNCIA REALIZADA!*\n\n` +
-                  `👤 Destinatário: @${destinatarioId}\n` +
-                  `💰 Valor: ${valor.toLocaleString('pt-BR')} DCs\n\n` +
+                  `👤 *Destinatário:* @${destinatarioId}\n` +
+                  `💰 *Valor:* ${valor.toLocaleString('pt-BR')} DCs\n\n` +
                   `✅ Operação concluída!\n\n` +
                   `🏦 Banco Damas agradece!`,
             mentions: [`${destinatarioId}@s.whatsapp.net`]
