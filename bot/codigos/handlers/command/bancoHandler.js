@@ -120,7 +120,7 @@ export async function garantirTabelaExtrato() {
 
 /**
  * Registra uma transferência no extrato.
- * Chamar DENTRO da transação do #enviar, passando o `client` da transação,
+ * Chamar DENTRO da transação do #pix (envio), passando o `client` da transação,
  * para que o extrato só seja gravado se o COMMIT acontecer.
  */
 export async function registrarExtrato(client, de, para, valor) {
@@ -150,7 +150,7 @@ export async function saldoHandler(sock, message) {
                 `💸⃤ *BANCO DAMAS* 💲💸\n\n` +
                 `💰 Seu saldo: *${fmtDC(saldo)} DCs*\n\n` +
                 `📄 *#extrato* — suas últimas movimentações\n` +
-                `🔑 *#pix* — sua chave PIX`
+                `🔑 *#gpix* — sua chave PIX`
         }, { quoted: message });
     } catch (err) {
         console.error('[saldoHandler] Erro:', err.message);

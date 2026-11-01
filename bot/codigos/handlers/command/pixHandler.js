@@ -75,6 +75,15 @@ async function buscarDonoDaChave(chave) {
     return res.rows[0]?.user_id || null;
 }
 
+// Só consulta: a pessoa tem chave PIX? (NÃO cria nada)
+async function temChave(userId) {
+    const res = await pool.query(
+        `SELECT 1 FROM damas_pix_keys WHERE user_id = $1`,
+        [userId]
+    );
+    return res.rows.length > 0;
+}
+
 // Busca a chave da pessoa; se não tiver, gera uma nova.
 async function gerarOuBuscarChave(userId) {
     const existente = await pool.query(
@@ -127,6 +136,20 @@ async function resolverNumeroReal(sock, groupId, jid) {
 }
 
 // ---------------------------------------------------------------
+// Aviso: destinatário ainda não gerou a chave PIX
+// ---------------------------------------------------------------
+async function avisarSemChave(sock, from, message, remetenteId, destinatarioId, valor) {
+    await sock.sendMessage(from, {
+        text: `📢 @${destinatarioId}, @${remetenteId} quer enviar um pix de *${valor.toLocaleString('pt-BR')} DCs* para você!\n\n` +
+              `🔑 Dê um *#gpix* no grupo para gerar sua chave e receber DCs (moedinhas) dos seus amigos.`,
+        mentions: [
+            `${destinatarioId}@s.whatsapp.net`,
+            `${remetenteId}@s.whatsapp.net`
+        ]
+    }, { quoted: message });
+}
+
+// ---------------------------------------------------------------
 // Leitura da mensagem respondida (reply)
 // ---------------------------------------------------------------
 function getContextInfo(message) {
@@ -164,7 +187,7 @@ function textoDaMensagemCitada(message) {
 }
 
 // ---------------------------------------------------------------
-// #pix  →  gera (ou mostra) a chave PIX da pessoa
+// #gpix  →  gera (ou mostra) a chave PIX da pessoa
 // ---------------------------------------------------------------
 export async function pixHandler(sock, message) {
     const from = message.key.remoteJid;
@@ -195,9 +218,9 @@ export async function pixHandler(sock, message) {
             `━━━━━━━━━━━━━━━━━━\n\n` +
             `📲 *Para receber DCs:* compartilhe sua chave com quem vai transferir.\n\n` +
             `💸 *Para enviar DCs:*\n` +
-            `\`#e CHAVE VALOR\`\n` +
+            `\`#pix CHAVE VALOR\`\n` +
             `Ou responda à mensagem da pessoa com:\n` +
-            `\`#e VALOR\`\n\n` +
+            `\`#pix VALOR\`\n\n` +
             `🏦 *BANCO DAMAS* — Seu dinheiro, suas regras! 💲`;
 
         // Tenta mandar com botão "Copiar chave"
@@ -251,14 +274,17 @@ export async function pixHandler(sock, message) {
 }
 
 // ---------------------------------------------------------------
-// #e / #enviar  →  transfere DCs
+// #pix  →  transfere DCs
 //
 // Formas de usar:
-//   #e CHAVE 100                    (tudo em uma linha)
-//   CHAVE <enter> #e 100            (chave colada + comando no fim)
-//   #e @pessoa 100                  (marcando a pessoa)
-//   (responder a #pix do bot)  #e 100
-//   (responder msg de alguém)  #e 100
+//   #pix CHAVE 100                  (tudo em uma linha)
+//   CHAVE <enter> #pix 100          (chave colada + comando no fim)
+//   #pix @pessoa 100                (marcando a pessoa)
+//   (responder o #gpix do bot)  #pix 100
+//   (responder msg de alguém)   #pix 100
+//
+// Se a pessoa marcada/respondida ainda não gerou a chave, o bot
+// avisa para ela dar #gpix e NÃO faz a transferência.
 // ---------------------------------------------------------------
 export async function enviarPixHandler(sock, message, content) {
     const from = message.key.remoteJid;
@@ -271,7 +297,7 @@ export async function enviarPixHandler(sock, message, content) {
         const ctx = getContextInfo(message);
 
         // --- 1) Limpa o texto: tira o comando, as @menções e acha a chave ---
-        let texto = (content || '').replace(/#(?:enviar|e)\b/gi, ' ');
+        let texto = (content || '').replace(/#pix\b/gi, ' ');
         texto = texto.replace(/@\S+/g, ' ');
 
         const matchChave = texto.match(REGEX_CHAVE);
@@ -285,9 +311,9 @@ export async function enviarPixHandler(sock, message, content) {
         if (!Number.isFinite(valor) || valor <= 0) {
             await sock.sendMessage(from, {
                 text: '⚠️ Informe o valor.\n\n' +
-                      '*#e CHAVE 100*\n' +
-                      '*#e @pessoa 100*\n' +
-                      'ou responda uma mensagem com *#e 100*'
+                      '*#pix CHAVE 100*\n' +
+                      '*#pix @pessoa 100*\n' +
+                      'ou responda uma mensagem com *#pix 100*'
             }, { quoted: message });
             return;
         }
@@ -313,15 +339,19 @@ export async function enviarPixHandler(sock, message, content) {
                 destinatarioId = await resolverNumeroReal(sock, from, mentionedJid);
                 if (!destinatarioId) {
                     await sock.sendMessage(from, {
-                        text: '❌ Não consegui identificar essa pessoa. Peça para ela mandar *#pix* e use a chave.'
+                        text: '❌ Não consegui identificar essa pessoa. Peça para ela mandar *#gpix* e use a chave.'
                     }, { quoted: message });
                     return;
                 }
-                await gerarOuBuscarChave(destinatarioId); // garante que ela tenha chave
+                // 📢 pessoa marcada ainda sem chave → avisa e não transfere
+                if (destinatarioId !== remetenteId && !(await temChave(destinatarioId))) {
+                    await avisarSemChave(sock, from, message, remetenteId, destinatarioId, valor);
+                    return;
+                }
             }
         }
 
-        // 3c) chave dentro da mensagem respondida (ex: o #pix do bot)
+        // 3c) chave dentro da mensagem respondida (ex: o #gpix do bot)
         if (!destinatarioId) {
             const citado = textoDaMensagemCitada(message);
             const mc = citado.match(REGEX_CHAVE);
@@ -339,8 +369,10 @@ export async function enviarPixHandler(sock, message, content) {
 
             if (!botIds.includes(autorDigits)) {
                 destinatarioId = await resolverNumeroReal(sock, from, ctx.participant);
-                if (destinatarioId) {
-                    await gerarOuBuscarChave(destinatarioId); // gera a chave na hora se não tiver
+                // 📢 autor respondido ainda sem chave → avisa e não transfere
+                if (destinatarioId && destinatarioId !== remetenteId && !(await temChave(destinatarioId))) {
+                    await avisarSemChave(sock, from, message, remetenteId, destinatarioId, valor);
+                    return;
                 }
             }
         }
@@ -348,9 +380,9 @@ export async function enviarPixHandler(sock, message, content) {
         if (!destinatarioId) {
             await sock.sendMessage(from, {
                 text: '⚠️ Não achei para quem enviar.\n\n' +
-                      'Use: *#e CHAVE 100*\n' +
-                      'ou marque a pessoa: *#e @pessoa 100*\n' +
-                      'ou responda a mensagem dela com *#e 100*'
+                      'Use: *#pix CHAVE 100*\n' +
+                      'ou marque a pessoa: *#pix @pessoa 100*\n' +
+                      'ou responda a mensagem dela com *#pix 100*'
             }, { quoted: message });
             return;
         }

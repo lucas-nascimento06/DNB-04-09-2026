@@ -14,9 +14,9 @@ import { handlePromoverRebaixar } from './promoverHandler.js'; // 👈 NOVO
 import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 Banco Damas
 import { saldoHandler, extratoHandler, milionariosHandler } from './bancoHandler.js'; // 🏦 NOVO: saldo / extrato / ranking
 
-// 🏦 #e / #enviar em QUALQUER posição da mensagem (início, meio ou fim).
-// O lookahead (?=\s|$) evita pegar #extrato, #enviado, etc.
-const REGEX_ENVIAR = /(^|\s)#(?:enviar|e)(?=\s|$)/i;
+// 🏦 #pix (enviar) em QUALQUER posição da mensagem (início, meio ou fim).
+// O lookahead (?=\s|$) evita pegar #pixel, #pixx etc. e não casa com #gpix.
+const REGEX_PIX_ENVIAR = /(^|\s)#pix(?=\s|$)/i;
 
 export async function processCommandPriorities(
     sock, message, from, userId, content,
@@ -71,13 +71,13 @@ export async function processCommandPriorities(
     if (!handled) handled = await handleAjudaDcCommand(sock, message, content);
 
     // 🏦 PRIORIDADE 9.6: BANCO DAMAS
-    //    #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#r | #ranking)
+    //    #gpix (gera chave) | #pix (envia) | #saldo (#s) | #extrato (#x) | #ricos (#r | #ranking)
     //
     //    Formatos aceitos para enviar:
-    //      #e CHAVE 100
-    //      CHAVE <enter> #e 100
-    //      @pessoa #e 100
-    //      (responder msg) #e 100
+    //      #pix CHAVE 100
+    //      CHAVE <enter> #pix 100
+    //      @pessoa #pix 100
+    //      (responder msg do #gpix / da pessoa) #pix 100
     if (!handled) {
         // Primeira palavra, sem acento
         const comando = lowerContent
@@ -85,8 +85,8 @@ export async function processCommandPriorities(
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '');
 
-        if (comando === '#pix') {
-            await pixHandler(sock, message);
+        if (comando === '#gpix') {
+            await pixHandler(sock, message); // gera/mostra a chave
             handled = true;
         } else if (comando === '#saldo' || comando === '#s') {
             await saldoHandler(sock, message);
@@ -97,8 +97,8 @@ export async function processCommandPriorities(
         } else if (comando === '#ricos' || comando === '#r' || comando === '#ranking') {
             await milionariosHandler(sock, message);
             handled = true;
-        } else if (REGEX_ENVIAR.test(lowerContent)) {
-            // #e / #enviar em qualquer posição (inclusive depois da chave)
+        } else if (REGEX_PIX_ENVIAR.test(lowerContent)) {
+            // #pix em qualquer posição (inclusive depois da chave)
             await enviarPixHandler(sock, message, content);
             handled = true;
         }

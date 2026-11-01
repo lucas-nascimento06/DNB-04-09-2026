@@ -45,6 +45,23 @@ export async function handleAjudaDcCommand(sock, message, content) {
         `Reseta TODOS os leilões de TODOS os grupos.\n` +
         `_Quem pode usar: restrito ao dono/dev_\n\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
+        `🏦 *BANCO DAMAS — PIX*\n\n` +
+        `🔑 *#gpix*\n` +
+        `Gera a sua chave PIX (ou mostra a que você já tem). Quem ainda não gerou não consegue receber DCs.\n` +
+        `_Quem pode usar: qualquer um_\n\n` +
+        `💸 *#pix <valor>*\n` +
+        `Envia DCs para outra pessoa. Formas de usar: *#pix CHAVE 100*, *#pix @pessoa 100*, ou responda a mensagem da pessoa (ou o #gpix dela) com *#pix 100*.\n` +
+        `_Quem pode usar: qualquer um_\n\n` +
+        `💰 *#saldo* (ou *#s*)\n` +
+        `Mostra o seu saldo no Banco Damas.\n` +
+        `_Quem pode usar: qualquer um_\n\n` +
+        `📄 *#extrato* (ou *#x*)\n` +
+        `Mostra as suas últimas 10 transferências PIX, enviadas e recebidas.\n` +
+        `_Quem pode usar: qualquer um_\n\n` +
+        `👑 *#ricos* (ou *#r* / *#ranking*)\n` +
+        `Mostra o ranking dos 7 maiores saldos do grupo.\n` +
+        `_Quem pode usar: qualquer um_\n\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
         `💬 Cada mensagem sua no grupo rende *1 DC*, mas pode levar alguns segundos pra aparecer no saldo (é gravado a cada 30s).`;
     try {
         await sock.sendMessage(from, { text: texto }, { quoted: message });

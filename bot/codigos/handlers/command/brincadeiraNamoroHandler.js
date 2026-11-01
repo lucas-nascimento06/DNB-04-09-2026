@@ -18,9 +18,10 @@
 //   #ndstatus | #nds (ADM)    -> reenvia a lista de status no grupo de moderação
 //   #vd (ADM)                 -> tabela do desafio ativo | #vd 2 -> desafio 2 | #vd todos -> resumo geral
 //   #dlista | #dl (ADM)       -> mostra a lista de participantes e casais atualizada (use no grupo de moderação)
+//   #bnz (ADM)                -> LIMPA e ZERA toda a brincadeira (todas as tabelas) de uma vez, sem confirmação
 //
 // Módulos (pasta ./brincadeiraNamoro/):
-//   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js, desafio.js
+//   config.js, utils.js, dados.js, inscricao.js, pedidos.js, listas.js, regras.js, desafio.js, limpeza.js
 
 import { CONFIG, GRUPOS_PERMITIDOS, GRUPO_MODERACAO } from './brincadeiraNamoro/config.js';
 import { extractDigits, getNumeroReal, lerMensagem, temComando } from './brincadeiraNamoro/utils.js';
@@ -29,6 +30,7 @@ import { tratarEntrar } from './brincadeiraNamoro/inscricao.js';
 import { tratarPedido, tratarAceito } from './brincadeiraNamoro/pedidos.js';
 import { mostrarLista, mostrarListaAtualizada, mostrarListPart } from './brincadeiraNamoro/listas.js';
 import { tratarDesafio, tratarCumpri, tratarStatusDesafio, tratarVerDesafio, ehAdmin } from './brincadeiraNamoro/desafio.js';
+import { tratarLimpeza } from './brincadeiraNamoro/limpeza.js';
 import {
     mostrarRegras, mostrarComandos,
     mostrarComandosCurto, mostrarRegrasCurto,
@@ -145,9 +147,9 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     }
     const lower = texto.toLowerCase();
 
-    // #vd (também "#vd 2" e "#vd todos") e #dlista/#dl funcionam no grupo de moderação;
+    // #vd (também "#vd 2" e "#vd todos"), #dlista/#dl e #bnz funcionam no grupo de moderação;
     // todos os outros comandos continuam restritos aos grupos permitidos, como antes
-    const ehVd = /^#(vd(\s+(\d{1,2}|todos))?|dlista|dl)$/.test(lower) &&
+    const ehVd = /^#(vd(\s+(\d{1,2}|todos))?|dlista|dl|bnz)$/.test(lower) &&
         (from === GRUPO_MODERACAO || GRUPOS_PERMITIDOS.includes(from));
     if (!ehVd && CONFIG.SOMENTE_GRUPOS_PERMITIDOS && !GRUPOS_PERMITIDOS.includes(from)) {
         if (/#(entrar|ne)(\s|$)/i.test(texto)) {
@@ -159,7 +161,7 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
     // filtro rápido: só continua se for comando da brincadeira
     const ehComando =
         /(^|\s)#(entrar|ne|pedido|np|aceito|na|ndesafio|nd|cumprir|cumpri|c)(\s|$)/i.test(texto) ||
-        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd(\s+(\d{1,2}|todos))?|dlista|dl|listpart|lp|ficha)$/.test(lower);
+        /^#(inscritos|ni|casais|nca|namorohomens|nh|namoromulheres|nm|namoro|nr|ncomandos|nc|ndstatus|nds|vd(\s+(\d{1,2}|todos))?|dlista|dl|listpart|lp|ficha|bnz)$/.test(lower);
     if (!ehComando) {
         // parece comando mas não casou com o filtro? avisa no log para diagnóstico
         if (/#\s*(entrar|ne|pedido|np|aceito|na)/i.test(texto)) {
@@ -195,6 +197,9 @@ export async function handleBrincadeiraNamoro(sock, message, content, from, owne
             ).catch(() => {});
             return true;
         }
+
+        // limpeza total da brincadeira (ADM)
+        if (lower === '#bnz') { await tratarLimpeza(sock, message, from, jid, userId, ownerNumbers); return true; }
 
         // desafio
         if (/^#vd(\s|$)/.test(lower)) { await tratarVerDesafio(sock, message, from, jid, userId, ownerNumbers, lower); return true; }

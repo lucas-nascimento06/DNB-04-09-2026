@@ -140,7 +140,8 @@ export const CONFIG = {
         // #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
         'pix enviar e saldo extrato x ricos ranking ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri/cumprir/c = casais, ndstatus/nds = ADM, vd = ADM, dlista/dl = ADM)
-        'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl')
+        // bnz = ADM, limpa e zera toda a brincadeira do namoro
+        'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl bnz')
             .split(' ').map(c => '#' + c),
         '!gado', '!bebado',
     ],
