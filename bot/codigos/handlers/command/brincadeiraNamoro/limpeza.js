@@ -43,13 +43,11 @@ async function apagarMensagensFixadas(sock, existentes) {
         console.error('[brincadeiraNamoro] bnz: erro ao ler mensagens fixadas:', e.message);
     }
 
-    let apagadas = 0;
     for (const { destino, msg_id } of alvos) {
         const key = { remoteJid: destino, fromMe: true, id: msg_id };
         try { await sock.sendMessage(destino, { pin: key, type: 2 }); } catch { /* ignora */ }
-        try { await sock.sendMessage(destino, { delete: key }); apagadas++; } catch { /* ignora */ }
+        try { await sock.sendMessage(destino, { delete: key }); } catch { /* ignora */ }
     }
-    return apagadas;
 }
 
 export async function tratarLimpeza(sock, message, from, jid, userId, ownerNumbers) {
@@ -62,32 +60,16 @@ export async function tratarLimpeza(sock, message, from, jid, userId, ownerNumbe
     try {
         const existentes = await tabelasExistentes();
 
-        // conta o que existia antes de apagar (para mostrar no aviso)
-        const linhas = [];
-        let total = 0;
-        for (const t of existentes) {
-            const r = await pool.query(`SELECT COUNT(*)::int AS n FROM ${t}`);
-            total += r.rows[0].n;
-            linhas.push(`• ${t.replace('damas_namoro_', '')}: ${r.rows[0].n}`);
-        }
-
-        const apagadas = await apagarMensagensFixadas(sock, existentes);
+        await apagarMensagensFixadas(sock, existentes);
 
         if (existentes.length) {
             await pool.query(`TRUNCATE TABLE ${existentes.join(', ')} RESTART IDENTITY`);
         }
 
         console.log(`[namoro] BNZ: ${existentes.length} tabelas zeradas por ${userId}`);
-        return reply(
-            `🧹 *BRINCADEIRA LIMPA E ZERADA!* 🧹\n\n` +
-            `✅ ${existentes.length} tabelas limpas\n` +
-            `📦 ${total} registros apagados\n` +
-            `🗑️ ${apagadas} mensagens fixadas removidas\n\n` +
-            `*O que tinha em cada tabela:*\n${linhas.join('\n')}\n\n` +
-            `Tudo zerado! Pode começar uma nova brincadeira do zero. 💘`
-        );
+        return reply('🧹 Tabelas limpas! Tudo pronto para a nossa brincadeira. 💘');
     } catch (e) {
         console.error('[brincadeiraNamoro] erro na limpeza:', e);
-        return reply('❌ Erro ao limpar as tabelas. Veja o log do bot.');
+        return reply('❌ Erro ao limpar as tabelas. Tente novamente.');
     }
 }
