@@ -210,6 +210,18 @@ export async function listarParticipantes(grupo, sexo) {
     return r.rows.map(mapParticipante);
 }
 
+// troca o sexo (e portanto a lista) de uma participante. Retorna true se achou a pessoa.
+// (usado pelo #manda @pessoa solteiras | solteiros)
+export async function alterarSexo(grupo, userId, sexo) {
+    const r = await pool.query(
+        `UPDATE damas_namoro_participantes
+         SET sexo = $3, atualizado_em = NOW()
+         WHERE grupo = $1 AND user_id = $2`,
+        [grupo, userId, sexo]
+    );
+    return r.rowCount > 0;
+}
+
 // ===================== PEDIDOS =====================
 export async function limparPedidosExpirados(grupo) {
     await pool.query(

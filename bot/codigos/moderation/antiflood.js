@@ -134,8 +134,9 @@ export const CONFIG = {
         'postarconfissoes pote pronto recusar romancenoar leil dadis dadoss dadus dasos ' +
         'errou placar falta faltam rep repassar dmregras ' +
         // Brincadeira do Namoro (brincadeiraNamoroHandler.js)
+        // manda = ADM, move a pessoa entre solteiras/solteiros (#manda @pessoa solteiras | solteiros)
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
-        'namoromulheres nm namoro nr ncomandos nc listpart lp ficha ' +
+        'namoromulheres nm namoro nr ncomandos nc listpart lp ficha manda ' +
         // Banco Damas (pixHandler.js / bancoHandler.js)
         // #gpix (gera chave) | #pix (envia) | #saldo (#s) | #ricos (#r | #ranking)
         'gpix pix saldo ricos ranking ' +
