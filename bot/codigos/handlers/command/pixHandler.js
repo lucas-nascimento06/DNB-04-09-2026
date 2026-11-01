@@ -3,8 +3,6 @@
 import { randomInt } from 'crypto';
 import pool from '../../../../db.js';
 import { flushDC } from '../../features/dcTracker.js';
-import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
-import { garantirTabelaExtrato, registrarExtrato } from './bancoHandler.js'; // 🏦 extrato
 
 // ---------------------------------------------------------------
 // Geração de chave aleatória (letras + números)
@@ -206,7 +204,7 @@ export async function pixHandler(sock, message) {
         );
         const saldo = Number(saldoRes.rows[0]?.saldo || 0);
 
-        // ✨ Layout do Banco Damas (com titular mencionado)
+        // ✨ Layout do Banco Damas (limpo, com titular mencionado)
         const textoBanco =
             `💸⃤ *BANCO DAMAS* 💲💸\n\n` +
             (criouAgora
@@ -216,55 +214,12 @@ export async function pixHandler(sock, message) {
             `🔑 *Chave PIX:* \`${chave}\`\n` +
             `💰 *Saldo disponível:* ${saldo.toLocaleString('pt-BR')} DCs\n\n` +
             `━━━━━━━━━━━━━━━━━━\n\n` +
-            `📲 *Para receber DCs:* compartilhe sua chave com quem vai transferir.\n\n` +
             `💸 *Para enviar DCs:*\n` +
-            `\`#pix CHAVE VALOR\`\n` +
-            `Ou responda à mensagem da pessoa com:\n` +
+            `Responda à mensagem da pessoa com:\n` +
             `\`#pix VALOR\`\n\n` +
-            `🏦 *BANCO DAMAS* — Seu dinheiro, suas regras! 💲`;
+            `🏦 *BANCO DAMAS* — Seus DCs, suas regras!`;
 
-        // Tenta mandar com botão "Copiar chave"
-        try {
-            const msg = generateWAMessageFromContent(from, {
-                viewOnceMessage: {
-                    message: {
-                        messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-                        interactiveMessage: proto.Message.InteractiveMessage.create({
-                            body: proto.Message.InteractiveMessage.Body.create({ text: textoBanco }),
-                            contextInfo: { mentionedJid: [mencaoJid] }, // 👈 menção do titular
-                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                                buttons: [{
-                                    name: 'cta_copy',
-                                    buttonParamsJson: JSON.stringify({
-                                        display_text: 'Copiar chave',
-                                        id: 'copiar_pix',
-                                        copy_code: chave
-                                    })
-                                }]
-                            })
-                        })
-                    }
-                }
-            }, { quoted: message });
-
-            await sock.relayMessage(from, msg.message, {
-                messageId: msg.key.id,
-                additionalNodes: [{
-                    tag: 'biz',
-                    attrs: {},
-                    content: [{
-                        tag: 'interactive',
-                        attrs: { type: 'native_flow', v: '1' },
-                        content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }]
-                    }]
-                }]
-            });
-        } catch (e) {
-            console.error('[pixHandler] Botão copiar falhou, usando texto:', e.message);
-            // Se o botão falhar, manda do jeito antigo (com menção)
-            await sock.sendMessage(from, { text: textoBanco, mentions: [mencaoJid] }, { quoted: message });
-            await sock.sendMessage(from, { text: chave });
-        }
+        await sock.sendMessage(from, { text: textoBanco, mentions: [mencaoJid] }, { quoted: message });
     } catch (err) {
         console.error('[pixHandler] Erro:', err.message);
         await sock.sendMessage(from, {
@@ -290,7 +245,6 @@ export async function enviarPixHandler(sock, message, content) {
     const from = message.key.remoteJid;
     try {
         await garantirTabela();
-        await garantirTabelaExtrato();
         await flushDC();
 
         const remetenteId = extractDigits(getNumeroReal(message));
@@ -422,8 +376,6 @@ export async function enviarPixHandler(sock, message, content) {
                      DO UPDATE SET saldo = damas_dc_wallets.saldo + $2, atualizado_em = NOW()`,
                     [destinatarioId, valor]
                 );
-                // 🏦 registra no extrato dentro da mesma transação
-                await registrarExtrato(client, remetenteId, destinatarioId, valor);
                 await client.query('COMMIT');
             }
         } catch (err) {

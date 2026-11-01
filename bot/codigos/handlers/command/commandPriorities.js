@@ -12,7 +12,7 @@ import {
 } from './commandHandlers.js';
 import { handlePromoverRebaixar } from './promoverHandler.js'; // 👈 NOVO
 import { pixHandler, enviarPixHandler } from './pixHandler.js'; // 🏦 Banco Damas
-import { saldoHandler, extratoHandler, milionariosHandler } from './bancoHandler.js'; // 🏦 NOVO: saldo / extrato / ranking
+import { saldoHandler, milionariosHandler } from './bancoHandler.js'; // 🏦 saldo / ranking
 
 // 🏦 #pix (enviar) em QUALQUER posição da mensagem (início, meio ou fim).
 // O lookahead (?=\s|$) evita pegar #pixel, #pixx etc. e não casa com #gpix.
@@ -71,7 +71,7 @@ export async function processCommandPriorities(
     if (!handled) handled = await handleAjudaDcCommand(sock, message, content);
 
     // 🏦 PRIORIDADE 9.6: BANCO DAMAS
-    //    #gpix (gera chave) | #pix (envia) | #saldo (#s) | #extrato (#x) | #ricos (#r | #ranking)
+    //    #gpix (gera chave) | #pix (envia) | #saldo (#s) | #ricos (#r | #ranking)
     //
     //    Formatos aceitos para enviar:
     //      #pix CHAVE 100
@@ -90,9 +90,6 @@ export async function processCommandPriorities(
             handled = true;
         } else if (comando === '#saldo' || comando === '#s') {
             await saldoHandler(sock, message);
-            handled = true;
-        } else if (comando === '#extrato' || comando === '#x') {
-            await extratoHandler(sock, message);
             handled = true;
         } else if (comando === '#ricos' || comando === '#r' || comando === '#ranking') {
             await milionariosHandler(sock, message);
