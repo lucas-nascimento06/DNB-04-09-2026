@@ -27,6 +27,15 @@ async function tabelasExistentes() {
     return existentes;
 }
 
+// verifica se alguma das tabelas tem pelo menos 1 registro
+async function temDados(existentes) {
+    for (const t of existentes) {
+        const r = await pool.query(`SELECT EXISTS (SELECT 1 FROM ${t}) AS tem`);
+        if (r.rows[0].tem) return true;
+    }
+    return false;
+}
+
 // desafixa e apaga as mensagens fixadas (lista e status) antes de zerar o banco
 async function apagarMensagensFixadas(sock, existentes) {
     const alvos = [];
@@ -60,6 +69,11 @@ export async function tratarLimpeza(sock, message, from, jid, userId, ownerNumbe
     try {
         const existentes = await tabelasExistentes();
 
+        // se não tem nada para apagar, só avisa
+        if (!(await temDados(existentes))) {
+            return reply('✨ Já está tudo limpo! Pode começar a nossa brincadeira. 💘');
+        }
+
         await apagarMensagensFixadas(sock, existentes);
 
         if (existentes.length) {
@@ -67,9 +81,9 @@ export async function tratarLimpeza(sock, message, from, jid, userId, ownerNumbe
         }
 
         console.log(`[namoro] BNZ: ${existentes.length} tabelas zeradas por ${userId}`);
-        return reply('🧹 Tabelas limpas! Tudo pronto para a nossa brincadeira. 💘');
+        return reply('🧹 Tudo limpo! Pronto para a nossa brincadeira. 💘');
     } catch (e) {
         console.error('[brincadeiraNamoro] erro na limpeza:', e);
-        return reply('❌ Erro ao limpar as tabelas. Tente novamente.');
+        return reply('❌ Erro ao limpar. Tente novamente.');
     }
 }
