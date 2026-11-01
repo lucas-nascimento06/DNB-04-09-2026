@@ -323,7 +323,7 @@ export async function listarCasais(grupo) {
     return r.rows;
 }
 
-// ===================== LISTA FIXADA =====================
+// ===================== LISTA FIXADA ====================
 export async function obterListaFixada(grupo) {
     const r = await pool.query(
         `SELECT msg_id FROM damas_namoro_lista_fixada WHERE grupo = $1`,
