@@ -137,8 +137,8 @@ export const CONFIG = {
         'entrar ne pedido np aceito na inscritos ni casais nca namorohomens nh ' +
         'namoromulheres nm namoro nr ncomandos nc listpart lp ficha ' +
         // Banco Damas (pixHandler.js / bancoHandler.js)
-        // #pix | #enviar (#e) | #saldo (#s) | #extrato (#x) | #ricos (#ranking)
-        'pix enviar e saldo extrato x ricos ranking ' +
+        // #gpix (gera chave) | #pix (envia) | #saldo (#s) | #extrato (#x) | #ricos (#r | #ranking)
+        'gpix pix saldo extrato x ricos ranking ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri/cumprir/c = casais, ndstatus/nds = ADM, vd = ADM, dlista/dl = ADM)
         // bnz = ADM, limpa e zera toda a brincadeira do namoro
         'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl bnz')
