@@ -406,13 +406,13 @@ export async function handleMessages(sock, message) {
             if (dmHandled) return;
         }
 
-        // 💾 #salva / #s e #contato / #c
+        // 💾 #salva / #s e #contato
         if (lowerContent.startsWith('#salva') || lowerContent.startsWith('#s ')) {
             await handleSalvaContato(sock, message);
             return;
         }
 
-        if (lowerContent === '#contato' || lowerContent === '#contatos' || lowerContent === '#c') {
+        if (lowerContent === '#contato' || lowerContent === '#contatos') {
             await handleListarContatos(sock, message);
             return;
         }

@@ -2,10 +2,10 @@
 // Configurações da Brincadeira do Namoro
 
 // grupo onde a brincadeira acontece (inscrições, pedidos, #aceito, #ni...)
-export const GRUPO_PRINCIPAL = '120363428983518322@g.us';
+export const GRUPO_PRINCIPAL = '120363429758915519@g.us';
 
 // grupo de moderação: recebe a lista atualizada e fixada a cada mudança
-export const GRUPO_MODERACAO = '120363433958507684@g.us';
+export const GRUPO_MODERACAO = '120363430721424911@g.us';
 
 // grupos onde os comandos da brincadeira funcionam
 export const GRUPOS_PERMITIDOS = [GRUPO_PRINCIPAL];
