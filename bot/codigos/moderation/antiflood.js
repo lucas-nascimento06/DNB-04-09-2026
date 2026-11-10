@@ -53,9 +53,9 @@ export const CONFIG = {
     // Mensagens espaçadas passam sempre. Se o lote demora a chegar e escapa, aumente o gapMs (ex.: 5000).
     // (Figurinhas NÃO ficam aqui: são enviadas uma por uma e já são cobertas pelas regras de janela em "rules".)
     sequencias: [
-        // { nome: 'músicas em lote',       tipos: ['audio'],          max: 3, gapMs: 4000 },
-        // { nome: 'fotos em lote',         tipos: ['image'],          max: 3, gapMs: 4000 },
-        // { nome: 'vídeos em lote',        tipos: ['video'],          max: 2, gapMs: 4000 },
+        { nome: 'músicas em lote',       tipos: ['audio'],          max: 3, gapMs: 4000 },
+        { nome: 'fotos em lote',         tipos: ['image'],          max: 3, gapMs: 4000 },
+        { nome: 'vídeos em lote',        tipos: ['video'],          max: 2, gapMs: 4000 },
         { nome: 'textos em lote',        tipos: ['text'],           max: 8, gapMs: 4000 },
     ],
 
