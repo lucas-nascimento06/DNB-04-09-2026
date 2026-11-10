@@ -1,17 +1,16 @@
 import pool from '../../../../db.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 📊 DADOS DOS RECADOS — v2.8 (Com Soft Delete + Estatísticas Corretas)
+// 📊 DADOS DOS RECADOS — v2.9 (Layout dividido em seções)
 //
 // Uso: #dados (exclusivo para administradores do grupo)
 //
-// 🔧 v2.8: agora mostra estatísticas CORRETAS com soft delete
-//   • Pessoas que já receberam recado  → destinatários únicos com status 'enviado' E removido=FALSE
-//   • Pessoas que ainda faltam receber → destinatários únicos com status 'pendente' E removido=FALSE
-//   • Total de recados enviados        → quantidade de recados com status 'enviado' E removido=FALSE
-//   • Total de recados PENDENTES       → quantidade de recados com status 'pendente' E removido=FALSE
-//   • Recados removidos por moderação  → quantidade com removido=TRUE
-//   • Último recado                    → data/hora do último recado (ativo ou removido)
+// • Pessoas que já receberam recado  → destinatários únicos com status 'enviado' E removido=FALSE
+// • Pessoas que ainda faltam receber → destinatários únicos com status 'pendente' E removido=FALSE
+// • Total de recados enviados        → quantidade de recados com status 'enviado' E removido=FALSE
+// • Total de recados PENDENTES       → quantidade de recados com status 'pendente' E removido=FALSE
+// • Recados removidos por moderação  → quantidade com removido=TRUE
+// • Último recado                    → data/hora do último recado (ativo ou removido)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function garantirColunaRemovido() {
@@ -29,24 +28,24 @@ async function garantirColunaRemovido() {
 
 async function buscarEstatisticas() {
     await garantirColunaRemovido();
-    
+
     const { rows } = await pool.query(
         `SELECT
             -- Pessoas que receberam (status='enviado' E não removido)
             COUNT(DISTINCT numero_destinatario) FILTER (WHERE status = 'enviado' AND removido = FALSE)  AS pessoas_receberam,
-            
+
             -- Pessoas aguardando (status='pendente' E não removido)
             COUNT(DISTINCT numero_destinatario) FILTER (WHERE status = 'pendente' AND removido = FALSE) AS pessoas_aguardando,
-            
+
             -- Total enviados (status='enviado' E não removido)
             COUNT(*) FILTER (WHERE status = 'enviado' AND removido = FALSE)                             AS total_enviados,
-            
+
             -- Total PENDENTES (status='pendente' E não removido)
             COUNT(*) FILTER (WHERE status = 'pendente' AND removido = FALSE)                            AS total_pendentes,
-            
+
             -- Total removidos por moderação (removido=TRUE)
             COUNT(*) FILTER (WHERE removido = TRUE)                                                      AS total_removidos,
-            
+
             -- Último recado (pode ser ativo ou removido)
             TO_CHAR(
                 MAX(created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo',
@@ -65,22 +64,45 @@ function montarPoster(stats) {
     const totalRemovidos = stats.total_removidos ?? 0;
     const ultimoRecado = stats.ultimo_recado ?? 'N/A';
 
+    const div = '💘 ━━━━ ♡ ━━━━ 💘';
+    const topo = '╭══• ೋ•✧๑💑๑✧•ೋ •══╮';
+    const base = '╰══• ೋ•✧๑💕๑✧•ೋ •══╯';
+
     // Linha de removidos só aparece se houver
-    const linhaRemovidos = totalRemovidos > 0 
-        ? `🗑️ Recados removidos por moderação: \`${totalRemovidos}\`\n`
+    const linhaRemovidos = totalRemovidos > 0
+        ? `\n\n🗑️ Removidos por moderação: \`${totalRemovidos}\``
         : '';
 
-    return `💌❤️❥❥═══ *RECADINHO DO CORAÇÃO* ═══❥❥❤️💌
+    return `${topo}
+   💌 *RECADINHO DO CORAÇÃO* 💌
+${base}
 
 📊 *ESTATÍSTICAS DOS RECADOS*
 
-✅ Recados já enviados no grupo Damas da Night: \`${receberam}\` pessoas
-👥 Pessoas que receberão o recado: \`${aguardando}\`
-📬 *Recados pendentes no App Web* - *DN:* \`${totalPendentes}\`
-💬 Total de recados enviados no App Damas da Night: \`${totalEnviados}\`
-${linhaRemovidos}📅 Último recado: \`${ultimoRecado}\`
+${div}
+👥 *PESSOAS*
 
-───────────────
+✅ Já receberam no grupo: \`${receberam}\`
+
+⏳ Ainda vão receber: \`${aguardando}\`
+
+${div}
+💬 *RECADOS*
+
+📬 Pendentes no App Web: \`${totalPendentes}\`
+
+📨 Enviados no App: \`${totalEnviados}\`${linhaRemovidos}
+
+${div}
+📅 *ÚLTIMO RECADO*
+
+\`${ultimoRecado}\`
+
+${div}
+
+💌 Tem alguém especial? Deixe um recadinho! ❤️
+
+🌐 https://www.damasdanight.top/
 
 _© Damas da Night_`;
 }
@@ -221,7 +243,8 @@ export async function reativarRecado(codigo) {
         `UPDATE recados_anonimos 
          SET removido = FALSE, removed_at = NULL
          WHERE UPPER(codigo) = UPPER($1) AND removido = TRUE
-         RETURNING id, codigo, numero_destinatario, status`
+         RETURNING id, codigo, numero_destinatario, status`,
+        [codigo]
     );
     return rows[0] || null;
 }
@@ -235,18 +258,18 @@ export async function estatisticasDetalhadas() {
             COUNT(DISTINCT numero_destinatario) AS pessoas_unicas
          FROM recados_anonimos 
          WHERE status = 'enviado' AND removido = FALSE
-         
+
          UNION ALL
-         
+
          SELECT
             'Pendentes (ativos)' AS tipo,
             COUNT(*),
             COUNT(DISTINCT numero_destinatario)
          FROM recados_anonimos 
          WHERE status = 'pendente' AND removido = FALSE
-         
+
          UNION ALL
-         
+
          SELECT
             'Removidos (total)' AS tipo,
             COUNT(*),
@@ -258,11 +281,12 @@ export async function estatisticasDetalhadas() {
 }
 
 // Deletar PERMANENTEMENTE recados removidos há > 30 dias (cuidado!)
-export async function limparRemovidosAntigos(diasAtrás = 30) {
+export async function limparRemovidosAntigos(diasAtras = 30) {
     const { rowCount } = await pool.query(
         `DELETE FROM recados_anonimos 
          WHERE removido = TRUE 
-           AND removed_at < NOW() - INTERVAL '${diasAtrás} days'`
+           AND removed_at < NOW() - ($1 || ' days')::INTERVAL`,
+        [String(diasAtras)]
     );
     return rowCount;
 }
