@@ -9,6 +9,7 @@ import { expiracaoMs, prazoRespostaMs } from './config.js';
 import { jidParaNumero } from './utils.js';
 
 const validadePerguntaMs = 60 * 60 * 1000; // 1 hora (para reagir com ✅)
+const margemPunicaoMs = 2 * 60 * 1000;     // pergunta vencida há mais que isso não pune mais
 
 // ---------- Tabelas (Neon) ----------
 let tabelaPronta = null;
@@ -318,6 +319,17 @@ async function marcarRespondida(grupoId, msgId) {
 async function punirVencidos() {
   try {
     await garantirTabela();
+
+    // Perguntas muito antigas (ex.: o bot ficou desligado) são descartadas sem punir ninguém
+    await pool.query(
+      `UPDATE chaoucafe_perguntas
+       SET punida = TRUE
+       WHERE respondida = FALSE
+         AND punida = FALSE
+         AND criado_em < NOW() - ($1 * INTERVAL '1 millisecond')`,
+      [prazoRespostaMs + margemPunicaoMs]
+    );
+
     const { rows } = await pool.query(
       `UPDATE chaoucafe_perguntas
        SET punida = TRUE
@@ -484,6 +496,25 @@ async function reabrirBrincadeira(grupoId) {
   }
 }
 
+// Começa uma brincadeira nova: descarta convites, perguntas pendentes e punições da anterior,
+// para que nada de antes dispare mensagens. (Mantém o histórico de perguntas já usadas.)
+async function novaBrincadeira(grupoId) {
+  convites.delete(grupoId);
+  perguntasPendentes.delete(grupoId);
+  silenciados.delete(grupoId);
+
+  try {
+    await garantirTabela();
+    await pool.query('DELETE FROM chaoucafe_convites WHERE grupo_id = $1', [grupoId]);
+    await pool.query('DELETE FROM chaoucafe_perguntas WHERE grupo_id = $1', [grupoId]);
+    await pool.query('DELETE FROM chaoucafe_silenciados WHERE grupo_id = $1', [grupoId]);
+    return true;
+  } catch (err) {
+    console.error('⚠️ [chaoucafe] erro ao zerar a brincadeira anterior:', err.message);
+    return false;
+  }
+}
+
 // ---------- Perguntas usadas (não repete) ----------
 function sortearNaMemoria(grupoId, tipo, lista) {
   if (!lista || lista.length === 0) return '(sem perguntas cadastradas)';
@@ -549,4 +580,5 @@ export {
   brincadeiraEncerrada,
   encerrarBrincadeira,
   reabrirBrincadeira,
+  novaBrincadeira,
 };

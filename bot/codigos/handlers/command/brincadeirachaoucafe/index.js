@@ -202,6 +202,13 @@ async function enviarPoster(sock, msg, donos = []) {
   const grupoId = msg.key.remoteJid;
   const admin = await ehAdmin(sock, msg, donos);
 
+  // ADM abrindo uma brincadeira nova: descarta tudo que sobrou da anterior
+  // (perguntas pendentes, convites e punições), para não disparar mensagens antigas.
+  if (admin) {
+    await dados.novaBrincadeira(grupoId);
+    console.log(`🧹 [chaoucafe] brincadeira anterior zerada em ${grupoId}`);
+  }
+
   // Menção invisível: todos os participantes vão no "mentions", sem aparecer no texto
   let mentions = [];
   if (admin) {

@@ -24,8 +24,8 @@ const config = {
   // Tempo para a pessoa marcada responder o CONVITE (5 minutos)
   expiracaoMs: 5 * 60 * 1000,
 
-  // Tempo para a pessoa convidada responder a PERGUNTA do bot (3 minutos)
-  prazoRespostaMs: 3 * 60 * 1000,
+  // Tempo para a pessoa convidada responder a PERGUNTA do bot (2 minutos)
+  prazoRespostaMs: 2 * 60 * 1000,
 
   // Quanto tempo fica silenciada (mensagens apagadas) se não responder (10 minutos)
   silencioMs: 10 * 60 * 1000,
