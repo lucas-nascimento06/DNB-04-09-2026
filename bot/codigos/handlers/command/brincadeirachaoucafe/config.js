@@ -21,8 +21,17 @@ const config = {
     '120363430900442230@g.us', // GRUPO "Chá ou café" (teste)
   ],
 
-  // Tempo para a pessoa marcada responder (5 minutos)
+  // Tempo para a pessoa marcada responder o CONVITE (5 minutos)
   expiracaoMs: 5 * 60 * 1000,
+
+  // Tempo para a pessoa convidada responder a PERGUNTA do bot (3 minutos)
+  prazoRespostaMs: 3 * 60 * 1000,
+
+  // Quanto tempo fica silenciada (mensagens apagadas) se não responder (10 minutos)
+  silencioMs: 10 * 60 * 1000,
+
+  // De quanto em quanto tempo o bot confere prazos vencidos
+  intervaloVerificacaoMs: 15 * 1000,
 
   // Só funciona em grupos
   somenteGrupos: true,
@@ -36,6 +45,9 @@ export const {
   comandosEncerrar,
   gruposPermitidos,
   expiracaoMs,
+  prazoRespostaMs,
+  silencioMs,
+  intervaloVerificacaoMs,
   somenteGrupos,
 } = config;
 export default config;

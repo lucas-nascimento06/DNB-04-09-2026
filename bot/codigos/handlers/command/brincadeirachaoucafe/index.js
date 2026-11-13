@@ -4,7 +4,10 @@
 //
 // Reações:
 //   #cha  -> 🍵   |   #cafe -> ☕   |   resposta à pergunta do bot -> ✅
+// Punição: quem não responde a pergunta em prazoRespostaMs fica silenciado por silencioMs
+//   (o bot apaga as mensagens da pessoa; o bot precisa ser ADM do grupo).
 // #bcc (ADM/dono): envia o poster marcando todos de forma invisível e fixa no grupo.
+// Convites, perguntas, prazos e silenciados ficam salvos no banco (sobrevivem a reinício do bot).
 // Imagem do poster: mesmo esquema das boas-vindas (Jimp + jpegThumbnail), funciona no Termux.
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -39,6 +42,51 @@ const TODOS = [
   ...cfg.comandosEncerrar,
   'ajudachaoucafe',
 ];
+
+// ---------- Verificador de prazos (punição) ----------
+let sockAtual = null;          // sempre o socket mais recente (muda se o bot reconectar)
+let verificador = null;
+let verificando = false;
+const avisosSilencio = new Map(); // "grupo:numero" -> timestamp do último aviso
+const INTERVALO_AVISO_MS = 60 * 1000;
+
+async function verificarPrazos() {
+  if (verificando || !sockAtual) return;
+  verificando = true;
+  try {
+    const vencidas = await dados.punirVencidos();
+    for (const v of vencidas) {
+      try {
+        if (!cfg.gruposPermitidos.includes(v.grupoId)) continue;
+        if (await dados.brincadeiraEncerrada(v.grupoId)) continue;
+
+        await dados.silenciar(v.grupoId, v.alvoJid, cfg.silencioMs);
+        await sockAtual.sendMessage(v.grupoId, {
+          text: regras.punicao(mencao(v.alvoJid)),
+          mentions: [v.alvoJid],
+        });
+        console.log(
+          `🔇 [chaoucafe] ${jidParaNumero(v.alvoJid)} silenciado(a) em ${v.grupoId} por ${Math.round(cfg.silencioMs / 60000 * 100) / 100} min`
+        );
+      } catch (err) {
+        console.error('⚠️ [chaoucafe] erro ao punir:', err.message);
+      }
+    }
+  } finally {
+    verificando = false;
+  }
+}
+
+function iniciarVerificador(sock) {
+  sockAtual = sock;
+  if (verificador) return;
+  verificador = setInterval(() => {
+    verificarPrazos().catch((err) =>
+      console.error('⚠️ [chaoucafe] erro no verificador:', err.message)
+    );
+  }, cfg.intervaloVerificacaoMs);
+  verificador.unref?.();
+}
 
 // Responde citando a mensagem original e devolve a mensagem enviada (precisamos do ID dela)
 async function responder(sock, msg, texto, mentions = []) {
@@ -230,28 +278,43 @@ async function criarConvite(sock, msg) {
   // Envia o convite primeiro para guardar o ID da mensagem do bot:
   // a resposta (#cha/#cafe) precisa citar exatamente essa mensagem.
   const enviada = await responder(sock, msg, regras.convite(mencao(autor), mencao(alvo)), [alvo, autor]);
-  dados.criarConvite(grupoId, autor, alvo, enviada?.key?.id || null);
+  await dados.criarConvite(grupoId, autor, alvo, enviada?.key?.id || null);
   return true;
 }
 
 // #cha  /  #cafe  (resposta da pessoa marcada, SEMPRE respondendo o convite do bot)
 async function responderEscolha(sock, msg, tipo) {
   const grupoId = msg.key.remoteJid;
+  const citadoId = extrairIdCitado(msg);
 
-  const convite = dados.buscarConvite(grupoId, numerosDoRemetente(msg));
+  const convite = await dados.buscarConvite(grupoId, numerosDoRemetente(msg));
   if (!convite) {
+    // Alguém que NÃO é a pessoa marcada tentou responder o convite de outra pessoa
+    if (citadoId) {
+      const conviteDeOutro = await dados.buscarConvitePorMsgId(grupoId, citadoId);
+      if (conviteDeOutro) {
+        const intruso = remetente(msg);
+        console.log(`[chaoucafe] #${tipo} recusado: convite era de ${jidParaNumero(conviteDeOutro.alvoJid)}`);
+        await responder(
+          sock,
+          msg,
+          regras.conviteDeOutro(mencao(intruso), mencao(conviteDeOutro.alvoJid)),
+          [intruso, conviteDeOutro.alvoJid]
+        );
+        return true;
+      }
+    }
     console.log(`[chaoucafe] #${tipo} ignorado: sem convite pendente para ${numerosDoRemetente(msg).join('/')}`);
     return false;
   }
 
-  const citadoId = extrairIdCitado(msg);
   if (convite.msgId && citadoId !== convite.msgId) {
     console.log(`[chaoucafe] #${tipo} recusado: não respondeu o convite (citou ${citadoId || 'nada'})`);
     await responder(sock, msg, regras.responderAbaixo(mencao(convite.alvoJid)), [convite.alvoJid]);
     return true;
   }
 
-  dados.removerConvite(grupoId, convite);
+  await dados.removerConvite(grupoId, convite);
 
   // 🍵 se mandou #cha, ☕ se mandou #cafe
   await reagir(sock, msg, tipo === 'cha' ? '🍵' : '☕');
@@ -266,8 +329,34 @@ async function responderEscolha(sock, msg, tipo) {
   );
 
   // Guarda o ID da pergunta: quando a pessoa responder ela, a resposta recebe ✅
-  dados.registrarPergunta(grupoId, enviada?.key?.id || null, convite.alvoJid, convite.autorJid);
+  // e o prazo (punição) é cancelado.
+  await dados.registrarPergunta(grupoId, enviada?.key?.id || null, convite.alvoJid, convite.autorJid);
   return true;
+}
+
+// Mensagem de quem está silenciado: apaga e avisa (no máximo 1 aviso por minuto por pessoa)
+async function tratarSilenciado(sock, msg, silenciado) {
+  const grupoId = msg.key.remoteJid;
+
+  try {
+    await sock.sendMessage(grupoId, { delete: msg.key });
+  } catch (err) {
+    console.error('⚠️ [chaoucafe] erro ao apagar mensagem (o bot é ADM do grupo?):', err.message);
+  }
+
+  const chave = `${grupoId}:${jidParaNumero(silenciado.alvoJid)}`;
+  const agora = Date.now();
+  if (agora - (avisosSilencio.get(chave) || 0) >= INTERVALO_AVISO_MS) {
+    avisosSilencio.set(chave, agora);
+    try {
+      await sock.sendMessage(grupoId, {
+        text: regras.silenciado(mencao(silenciado.alvoJid), silenciado.restanteMs),
+        mentions: [silenciado.alvoJid],
+      });
+    } catch (err) {
+      console.error('⚠️ [chaoucafe] erro ao avisar silenciado:', err.message);
+    }
+  }
 }
 
 // donos = OWNER_NUMBERS: também podem encerrar/reabrir mesmo sem ser ADM do grupo
@@ -280,19 +369,52 @@ export async function handle(sock, msg, donos = []) {
 
     const comando = extrairComandos(extrairTexto(msg)).find((c) => TODOS.includes(c));
 
-    if (!comando) {
-      // Não é comando: pode ser a resposta da pessoa à pergunta do bot -> ✅
-      if (cfg.gruposPermitidos.includes(grupoId)) {
-        const citadoId = extrairIdCitado(msg);
-        if (citadoId && dados.buscarPergunta(grupoId, citadoId, numerosDoRemetente(msg))) {
-          await reagir(sock, msg, '✅');
-        }
+    if (!cfg.gruposPermitidos.includes(grupoId)) {
+      if (comando) {
+        console.log(`[chaoucafe] #${comando} IGNORADO: grupo ${grupoId} não está em config.js > gruposPermitidos`);
       }
       return false;
     }
 
-    if (!cfg.gruposPermitidos.includes(grupoId)) {
-      console.log(`[chaoucafe] #${comando} IGNORADO: grupo ${grupoId} não está em config.js > gruposPermitidos`);
+    // Garante o verificador de prazos rodando (usa sempre o socket mais recente)
+    iniciarVerificador(sock);
+
+    const encerrada = await dados.brincadeiraEncerrada(grupoId);
+
+    // Pessoa punida: apaga a mensagem (vale para qualquer mensagem, comando ou não)
+    if (!encerrada) {
+      const silenciado = await dados.buscarSilenciado(grupoId, numerosDoRemetente(msg));
+      if (silenciado) {
+        await tratarSilenciado(sock, msg, silenciado);
+        return true;
+      }
+    }
+
+    if (!comando) {
+      // Não é comando: pode ser resposta à pergunta do bot
+      if (!encerrada) {
+        const citadoId = extrairIdCitado(msg);
+        if (citadoId) {
+          const pergunta = await dados.buscarPergunta(grupoId, citadoId);
+          if (pergunta) {
+            const numeros = numerosDoRemetente(msg);
+            if (numeros.includes(jidParaNumero(pergunta.alvoJid))) {
+              // A pessoa convidada respondeu: ✅ e cancela a punição
+              await dados.marcarRespondida(grupoId, citadoId);
+              await reagir(sock, msg, '✅');
+            } else {
+              // Outra pessoa tentou responder a pergunta
+              const intruso = remetente(msg);
+              await responder(
+                sock,
+                msg,
+                regras.perguntaDeOutro(mencao(intruso), mencao(pergunta.alvoJid)),
+                [intruso, pergunta.alvoJid]
+              );
+            }
+          }
+        }
+      }
       return false;
     }
 
@@ -300,7 +422,7 @@ export async function handle(sock, msg, donos = []) {
 
     if (cfg.comandosEncerrar.includes(comando)) return await encerrar(sock, msg, donos);
 
-    if (await dados.brincadeiraEncerrada(grupoId)) {
+    if (encerrada) {
       if (cfg.comandosPoster.includes(comando) && (await ehAdmin(sock, msg, donos))) {
         await dados.reabrirBrincadeira(grupoId);
         console.log(`[chaoucafe] brincadeira REABERTA em ${grupoId}`);

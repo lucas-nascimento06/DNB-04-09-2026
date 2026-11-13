@@ -1,19 +1,31 @@
 // Textos fixos da brincadeira
-import { expiracaoMs } from './config.js';
+import { expiracaoMs, prazoRespostaMs, silencioMs } from './config.js';
 
-const minutos = Math.round(expiracaoMs / 60000);
+// Formata ms em texto: "20 segundos", "1 minuto", "10 minutos"
+const tempo = (ms) => {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} segundos`;
+  const m = Math.round(s / 60);
+  return m === 1 ? '1 minuto' : `${m} minutos`;
+};
+
+// Título e rodapé usados no convite e na pergunta
+const TITULO = `☕ *BRINCADEIRA : CHÁ OU CAFÉ?* 🍵🔥`;
+const RODAPE = `_@damas da night_`;
 
 export default {
   ajuda:
     `☕🍵 *CHÁ OU CAFÉ*\n\n` +
     `1️⃣ Use *#chaoucafe @pessoa* (ou *#cc @pessoa*) para convidar alguém.\n` +
     `2️⃣ A pessoa marcada *responde a mensagem do convite* com *#cha* ou *#cafe*.\n` +
-    `3️⃣ O bot sorteia uma pergunta da lista escolhida.\n\n` +
-    `⏳ O convite vale por ${minutos} minutos.`,
+    `3️⃣ O bot sorteia uma pergunta da lista escolhida.\n` +
+    `4️⃣ A pessoa precisa *responder a pergunta* em até ${tempo(prazoRespostaMs)}, ` +
+    `senão fica ${tempo(silencioMs)} sem falar no grupo.\n\n` +
+    `⏳ O convite vale por ${tempo(expiracaoMs)}.`,
 
   // Legenda que acompanha o poster (#brincadeirachaoucafe / #bcc)
   poster:
-`🌶️☕ *BRINCADEIRA : CHÁ OU CAFÉ?*🍵🔥
+`🌶️☕ *BRINCADEIRA : CHÁ OU CAFÉ?* 🍵🔥
 
 Hoje a nossa noite vai ter um toque de ousadia, uma pitadinha de malícia e muita descontração! 😏😂
 
@@ -36,7 +48,8 @@ Perguntas descontraídas, curiosidades, situações engraçadas e aquelas respos
 🍵 *Escolheu CHÁ?* A pergunta será mais leve!
 ☕ *Escolheu CAFÉ?* Pode vir com um pouquinho mais de pimenta! 🌶️😏
 
-⏳ O convite vale por ${minutos} minutos.
+⏳ O convite vale por ${tempo(expiracaoMs)}.
+⏰ Depois da pergunta, você tem ${tempo(prazoRespostaMs)} para responder, senão fica ${tempo(silencioMs)} sem falar no grupo.
 ℹ️ Dúvidas? Digite *#ajudachaoucafe*
 
 ⚠️ *ATENÇÃO, DAMAS E CAVALEIROS!*
@@ -63,7 +76,7 @@ _@damas da night_`,
     `🔒☕🍵 *BRINCADEIRA CHÁ OU CAFÉ ENCERRADA!*\n\n` +
     `Os comandos da brincadeira foram desativados neste grupo.\n` +
     (bancoLimpo
-      ? `🧹 O histórico de perguntas foi limpo.\n\n`
+      ? `🧹 O histórico de perguntas foi limpo e as punições foram canceladas.\n\n`
       : `⚠️ Não consegui limpar o histórico no banco (veja o log). A brincadeira foi encerrada mesmo assim.\n\n`) +
     `Para reabrir, um ADM deve usar *#bcc*.`,
 
@@ -80,19 +93,57 @@ _@damas da night_`,
     `↩️ ${alvo}, responda *diretamente a mensagem do convite* com *#cha* ou *#cafe*.\n` +
     `Mensagem solta no grupo não vale! 😉`,
 
+  // Alguém (que não é a pessoa marcada) tentou responder o convite com #cha/#cafe
+  conviteDeOutro: (intruso, alvo) =>
+    `🚫 ${intruso}, esse convite é para ${alvo}!\n` +
+    `Só ${alvo} pode escolher *#cha* ou *#cafe*. 😉`,
+
+  // Alguém (que não é a pessoa convidada) tentou responder a pergunta do bot
+  perguntaDeOutro: (intruso, alvo) =>
+    `🚫 ${intruso}, essa pergunta é para ${alvo}!\n` +
+    `Só ${alvo} pode responder esta mensagem. 😉`,
+
+  // Aviso na hora em que a pessoa é punida por não responder a pergunta
+  punicao: (alvo) =>
+    `⏰🚫 ${alvo} não respondeu a pergunta da brincadeira *Chá ou Café* em ${tempo(prazoRespostaMs)}!\n\n` +
+    `🔇 Você foi punido(a) e ficará *${tempo(silencioMs)}* sem falar no grupo. ` +
+    `Suas mensagens serão apagadas.`,
+
+  // Aviso quando a pessoa silenciada tenta falar
+  silenciado: (alvo, restanteMs) => {
+    const totalSeg = Math.max(1, Math.ceil(restanteMs / 1000));
+    const min = Math.floor(totalSeg / 60);
+    const seg = totalSeg % 60;
+    let texto;
+    if (min === 0) texto = `${seg} s`;
+    else if (seg === 0) texto = `${min} min`;
+    else texto = `${min} min e ${seg} s`;
+    return (
+      `🚫 ${alvo}, você foi punido(a) por não responder a pergunta da brincadeira *Chá ou Café*.\n` +
+      `🔇 Suas mensagens serão apagadas por mais *${texto}*.`
+    );
+  },
+
+  // Convite enviado pelo bot (com título e rodapé)
   convite: (autor, alvo) =>
+    `${TITULO}\n\n` +
     `☕🍵 ${alvo} ${autor} quer te fazer uma pergunta!\n\n` +
     `↩️ *Responda esta mensagem* com *#cha* ou *#cafe* 👇\n` +
-    `⏳ Você tem ${minutos} minutos.`,
+    `⏳ Você tem ${tempo(expiracaoMs)}.\n\n` +
+    `${RODAPE}`,
 
+  // Pergunta enviada pelo bot (com título e rodapé)
   pergunta: (tipo, autor, alvo, texto) => {
     const emoji = tipo === 'cha' ? '🍵' : '☕';
     const nome = tipo === 'cha' ? 'CHÁ' : 'CAFÉ';
     return (
+      `${TITULO}\n\n` +
       `${emoji} *${alvo} escolheu ${nome}!*\n\n` +
       `${autor} pergunta para ${alvo}:\n\n` +
       `❓ ${texto}\n\n` +
-      `↩️ ${alvo}, responda *esta mensagem* com a sua resposta!`
+      `↩️ ${alvo}, responda *esta mensagem* com a sua resposta!\n` +
+      `⏰ Você tem ${tempo(prazoRespostaMs)}, senão fica ${tempo(silencioMs)} sem falar no grupo.\n\n` +
+      `${RODAPE}`
     );
   },
 };
