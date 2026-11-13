@@ -4,6 +4,7 @@
 //
 // Reações:
 //   #cha  -> 🍵   |   #cafe -> ☕   |   resposta à pergunta do bot -> ✅
+// #bcc (ADM/dono): envia o poster marcando todos de forma invisível e fixa no grupo.
 // Imagem do poster: mesmo esquema das boas-vindas (Jimp + jpegThumbnail), funciona no Termux.
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -94,7 +95,7 @@ async function gerarThumbnail(buffer, size = 256) {
 }
 
 // Envia imagem com thumbnail; se falhar, tenta sem; se falhar de novo, manda só o texto
-async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted) {
+async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted, mentions = []) {
   const opcoes = quoted ? { quoted } : {};
 
   let thumb = null;
@@ -104,7 +105,7 @@ async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted)
     console.warn('⚠️ [chaoucafe] não foi possível gerar thumbnail, seguindo sem ele:', thumbErr.message);
   }
 
-  const conteudo = { image: imageBuffer, caption };
+  const conteudo = { image: imageBuffer, caption, mentions };
   if (thumb) conteudo.jpegThumbnail = thumb;
 
   try {
@@ -116,7 +117,7 @@ async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted)
   }
 
   try {
-    const enviada = await sock.sendMessage(jid, { image: imageBuffer, caption }, opcoes);
+    const enviada = await sock.sendMessage(jid, { image: imageBuffer, caption, mentions }, opcoes);
     console.log('✅ [chaoucafe] poster enviado sem thumbnail (2ª tentativa)');
     return enviada;
   } catch (err) {
@@ -124,7 +125,7 @@ async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted)
   }
 
   try {
-    const enviada = await sock.sendMessage(jid, { text: caption }, opcoes);
+    const enviada = await sock.sendMessage(jid, { text: caption, mentions }, opcoes);
     console.log('✅ [chaoucafe] poster enviado como texto (fallback)');
     return enviada;
   } catch (err) {
@@ -133,9 +134,35 @@ async function enviarImagemComThumbnail(sock, jid, imageBuffer, caption, quoted)
   }
 }
 
-// #brincadeirachaoucafe / #bcc -> poster + regras
-async function enviarPoster(sock, msg) {
+// Fixa a mensagem no grupo por 7 dias
+async function fixarMensagem(sock, grupoId, key) {
+  try {
+    await sock.sendMessage(grupoId, {
+      pin: key,
+      type: 1,          // 1 = fixar, 2 = desafixar
+      time: 604800,     // 7 dias (86400 = 24h | 2592000 = 30 dias)
+    });
+    console.log('📌 [chaoucafe] poster fixado no grupo');
+  } catch (err) {
+    console.error('⚠️ [chaoucafe] erro ao fixar o poster:', err.message);
+  }
+}
+
+// #brincadeirachaoucafe / #bcc -> poster + regras (ADM: marca todos de forma invisível e fixa)
+async function enviarPoster(sock, msg, donos = []) {
   const grupoId = msg.key.remoteJid;
+  const admin = await ehAdmin(sock, msg, donos);
+
+  // Menção invisível: todos os participantes vão no "mentions", sem aparecer no texto
+  let mentions = [];
+  if (admin) {
+    try {
+      const meta = await sock.groupMetadata(grupoId);
+      mentions = meta.participants.map((p) => p.id);
+    } catch (err) {
+      console.error('⚠️ [chaoucafe] erro ao obter participantes:', err.message);
+    }
+  }
 
   let imagem = null;
   try {
@@ -144,10 +171,15 @@ async function enviarPoster(sock, msg) {
     console.error(`⚠️ [chaoucafe] erro ao ler o poster (${POSTER_PATH}):`, err.message);
   }
 
+  let enviada = null;
   if (imagem && imagem.length > 0) {
-    await enviarImagemComThumbnail(sock, grupoId, imagem, regras.poster, msg);
+    enviada = await enviarImagemComThumbnail(sock, grupoId, imagem, regras.poster, msg, mentions);
   } else {
-    await responder(sock, msg, regras.poster);
+    enviada = await responder(sock, msg, regras.poster, mentions);
+  }
+
+  if (admin && enviada?.key) {
+    await fixarMensagem(sock, grupoId, enviada.key);
   }
   return true;
 }
@@ -272,13 +304,13 @@ export async function handle(sock, msg, donos = []) {
       if (cfg.comandosPoster.includes(comando) && (await ehAdmin(sock, msg, donos))) {
         await dados.reabrirBrincadeira(grupoId);
         console.log(`[chaoucafe] brincadeira REABERTA em ${grupoId}`);
-        return await enviarPoster(sock, msg);
+        return await enviarPoster(sock, msg, donos);
       }
       await responder(sock, msg, regras.jaEncerrada);
       return true;
     }
 
-    if (cfg.comandosPoster.includes(comando)) return await enviarPoster(sock, msg);
+    if (cfg.comandosPoster.includes(comando)) return await enviarPoster(sock, msg, donos);
     if (cfg.comandosConvite.includes(comando)) return await criarConvite(sock, msg);
     if (cfg.comandosResposta.includes(comando)) return await responderEscolha(sock, msg, comando);
     if (comando === 'ajudachaoucafe') {
