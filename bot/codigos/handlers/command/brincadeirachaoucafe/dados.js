@@ -501,4 +501,52 @@ function sortearNaMemoria(grupoId, tipo, lista) {
 
 // Sorteia uma pergunta ainda não usada no grupo. Quando acaba a lista, recomeça.
 async function sortearPergunta(grupoId, tipo, lista) {
-  if (!lista || lista.length === 0)
+  if (!lista || lista.length === 0) return '(sem perguntas cadastradas)';
+  try {
+    await garantirTabela();
+
+    const { rows } = await pool.query(
+      'SELECT pergunta FROM chaoucafe_usadas WHERE grupo_id = $1 AND tipo = $2',
+      [grupoId, tipo]
+    );
+    const usadas = new Set(rows.map((r) => r.pergunta));
+    let livres = lista.filter((p) => !usadas.has(p));
+
+    if (livres.length === 0) {
+      await pool.query(
+        'DELETE FROM chaoucafe_usadas WHERE grupo_id = $1 AND tipo = $2',
+        [grupoId, tipo]
+      );
+      livres = [...lista];
+    }
+
+    const escolhida = livres[Math.floor(Math.random() * livres.length)];
+    await pool.query(
+      `INSERT INTO chaoucafe_usadas (grupo_id, tipo, pergunta)
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
+      [grupoId, tipo, escolhida]
+    );
+    return escolhida;
+  } catch (err) {
+    console.error('⚠️ [chaoucafe] Erro no banco, usando sorteio em memória:', err.message);
+    return sortearNaMemoria(grupoId, tipo, lista);
+  }
+}
+
+export {
+  criarConvite,
+  buscarConvite,
+  buscarConvitePorMsgId,
+  removerConvite,
+  registrarPergunta,
+  buscarPergunta,
+  marcarRespondida,
+  punirVencidos,
+  silenciar,
+  buscarSilenciado,
+  sortearPergunta,
+  brincadeiraEncerrada,
+  encerrarBrincadeira,
+  reabrirBrincadeira,
+};
