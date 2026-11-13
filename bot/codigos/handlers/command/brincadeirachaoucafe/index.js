@@ -6,6 +6,7 @@
 //   #cha  -> 🍵   |   #cafe -> ☕   |   resposta à pergunta do bot -> ✅
 // Punição: quem não responde a pergunta em prazoRespostaMs fica silenciado por silencioMs
 //   (o bot apaga as mensagens da pessoa; o bot precisa ser ADM do grupo).
+//   Enquanto estiver punida, a pessoa NÃO pode ser convidada (o bot avisa para escolher outra).
 // #bcc (ADM/dono): envia o poster marcando todos de forma invisível e fixa no grupo.
 // Convites, perguntas, prazos e silenciados ficam salvos no banco (sobrevivem a reinício do bot).
 // Imagem do poster: mesmo esquema das boas-vindas (Jimp + jpegThumbnail), funciona no Termux.
@@ -272,6 +273,19 @@ async function criarConvite(sock, msg) {
   const botNumeros = [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidParaNumero);
   if (botNumeros.includes(alvoNum)) {
     await responder(sock, msg, regras.marcouBot);
+    return true;
+  }
+
+  // Pessoa punida (silenciada) não pode receber convite até a punição acabar
+  const punido = await dados.buscarSilenciado(grupoId, [alvoNum]);
+  if (punido) {
+    console.log(`[chaoucafe] convite recusado: ${alvoNum} está punido(a) (faltam ${Math.ceil(punido.restanteMs / 1000)} s)`);
+    await responder(
+      sock,
+      msg,
+      regras.alvoPunido(mencao(autor), mencao(alvo), punido.restanteMs),
+      [autor, alvo]
+    );
     return true;
   }
 
