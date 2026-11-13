@@ -28,7 +28,7 @@ const config = {
   prazoRespostaMs: 2 * 60 * 1000,
 
   // Quanto tempo fica silenciada (mensagens apagadas) se não responder (10 minutos)
-  silencioMs: 10 * 60 * 1000,
+  silencioMs: 15 * 60 * 1000,
 
   // De quanto em quanto tempo o bot confere prazos vencidos
   intervaloVerificacaoMs: 15 * 1000,
