@@ -27,9 +27,9 @@ const CONFIG = {
 let audiosCache = [];
 let ultimaAtualizacao = null;
 
-// ============================================
+// ===========================================
 // CONVERSÃO DE ÁUDIO (COPIADO DO CÓDIGO DE BOAS-VINDAS)
-// ============================================
+// ===========================================
 
 /**
  * Converte áudio para Opus
