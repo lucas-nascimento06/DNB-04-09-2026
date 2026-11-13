@@ -145,6 +145,10 @@ import {
     handleBrincadeiraNamoro
 } from '../command/brincadeiraNamoroHandler.js';
 
+// 🍵☕ IMPORT — brincadeira Chá ou Café (#chaoucafe/#cc, #cha, #cafe, #ajudachaoucafe)
+// ⚠️ Ajuste o caminho se a pasta da brincadeira estiver em outro lugar.
+import chaOuCafe from '../command/brincadeirachaoucafe/index.js';
+
 
 // 🚫 IMPORT — anti-flood (remove quem manda muita mídia/figurinha em sequência)
 import {
@@ -314,7 +318,7 @@ export async function handleMessages(sock, message) {
 
         // ✍️ Grava o texto normalizado DE VOLTA na mensagem, pra que os handlers
         // que releem message.message.* (musicaHandler, dedicatoriaHandler,
-        // recadosAnonimosHandler, dadosHandler...) também enxerguem "#play"
+        // recadosAnonimosHandler, dadosHandler, chaOuCafe...) também enxerguem "#play"
         // e não "# play". Só mexe no texto de conversa/legenda, nada mais.
         if (message.message.conversation) {
             message.message.conversation = normalizarComando(message.message.conversation);
@@ -424,6 +428,19 @@ export async function handleMessages(sock, message) {
         if (from.endsWith('@g.us')) {
             const namoroHandled = await handleBrincadeiraNamoro(sock, message, content, from, OWNER_NUMBERS);
             if (namoroHandled) return;
+        }
+
+        // ============================================
+        // 🍵☕ CHÁ OU CAFÉ (#chaoucafe/#cc @pessoa, #cha, #cafe, #ajudachaoucafe)
+        // Fica logo depois do namoro e ANTES de #golpe, #alerta, #chm e do
+        // processCommandPriorities, senão a mensagem morre no alertaHandler
+        // ("Não é comando #alerta, ignorando") e nunca chega na brincadeira.
+        // handle() devolve true quando tratou a mensagem; #cha/#cafe sem convite
+        // pendente devolve false e o fluxo normal continua.
+        // ============================================
+        if (from.endsWith('@g.us')) {
+            const chaCafeHandled = await chaOuCafe.handle(sock, message, OWNER_NUMBERS);
+            if (chaCafeHandled) return;
         }
 
 

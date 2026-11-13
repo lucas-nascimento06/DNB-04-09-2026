@@ -140,6 +140,10 @@ export const CONFIG = {
         // Banco Damas (pixHandler.js / bancoHandler.js)
         // #gpix (gera chave) | #pix (envia) | #saldo (#s) | #ricos (#r | #ranking)
         'gpix pix saldo ricos ranking ' +
+        // Chá ou Café (brincadeirachaoucafe)
+        // chaoucafe/cc = convite | cha/cafe = resposta | ajudachaoucafe = ajuda
+        // brincadeirachaoucafe/bcc = poster + regras (ADM reabre) | ebcc/encerrabrincadeiracc = ADM encerra
+        'chaoucafe cc cha cafe ajudachaoucafe brincadeirachaoucafe bcc ebcc encerrabrincadeiracc ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri/cumprir/c = casais, ndstatus/nds = ADM, vd = ADM, dlista/dl = ADM)
         // bnz = ADM, limpa e zera toda a brincadeira do namoro
         'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl bnz')
