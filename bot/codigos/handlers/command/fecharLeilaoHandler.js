@@ -78,9 +78,9 @@ export async function handleFecharLeilaoCommand(sock, message, content) {
         return true;
     }
 
-    // ========================================================
+    // =======================================================
     // Fecha e apaga tudo do grupo NA HORA, sem pedir confirmação.
-    // ========================================================
+    // =======================================================
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
