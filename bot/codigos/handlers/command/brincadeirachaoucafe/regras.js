@@ -150,12 +150,12 @@ _© damas da night_`,
     const nome = tipo === 'cha' ? 'CHÁ' : 'CAFÉ';
     return (
       `${TITULO}\n\n` +
-      `${emoji} *${alvo} escolheu ${nome}!*\n\n` +
-      `${autor} pergunta para ${alvo}:\n\n` +
-      `❓ ${texto}\n\n` +
-      `↩️ ${alvo}, *responda diretamente esta mensagem* com a sua resposta!\n` +
-      `❌ Resposta solta no grupo não vale!\n` +
-      `⏰ Você tem ${tempo(prazoRespostaMs)}, senão fica ${tempo(silencioMs)} sem falar no grupo.\n\n` +
+      `${emoji} ${alvo} escolheu *${nome}*! ${autor} pergunta:\n` +
+      `━━━━━━ *PERGUNTA* ━━━━━━\n` +
+      `❓ *${texto}*\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `↩️ Responda *diretamente esta mensagem* em ${tempo(prazoRespostaMs)}.\n` +
+      `🔇 Senão: ${tempo(silencioMs)} sem falar no grupo.\n\n` +
       `${RODAPE}`
     );
   },
