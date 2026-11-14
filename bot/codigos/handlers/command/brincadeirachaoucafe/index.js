@@ -33,7 +33,7 @@ import {
 const POSTER_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   'imagens',
-  'cha-ou-cafe.jpeg'
+  'cha-ou-cafe.jpg'
 );
 
 const TODOS = [
