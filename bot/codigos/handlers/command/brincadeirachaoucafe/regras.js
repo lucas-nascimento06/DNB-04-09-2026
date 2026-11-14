@@ -6,49 +6,41 @@ const RODAPE = `_© damas da night_`;
 
 export default {
   ajuda:
-    `☕🍵 *CHÁ OU CAFÉ*\n\n` +
-    `1️⃣ Use *#chaoucafe @pessoa* (ou *#cc @pessoa*) para convidar alguém.\n` +
-    `2️⃣ A pessoa marcada *responde diretamente a mensagem do convite* com *#cha* ou *#cafe*.\n` +
-    `3️⃣ O bot sorteia uma pergunta da lista escolhida.\n` +
-    `4️⃣ A pessoa *responde diretamente a mensagem da pergunta*.\n\n` +
-    `❌ Resposta solta no grupo não vale!`,
+    `☕🍵 *CHÁ OU CAFÉ — COMO JOGAR*\n\n` +
+    `1️⃣ *Convide:* use *#cc @pessoa* (ou *#chaoucafe @pessoa*).\n` +
+    `2️⃣ *Escolha:* a pessoa marcada responde *diretamente a mensagem do convite* com 🍵 *#cha* ou ☕ *#cafe*.\n` +
+    `3️⃣ *Mistério:* 🔮 quem decide a pergunta é o *bot*! Você escolhe chá ou café, mas só descobre qual será a sua pergunta quando ela aparecer.\n` +
+    `4️⃣ *Responda:* a pessoa responde *diretamente a mensagem da pergunta* e ganha um ✅.\n\n` +
+    `❌ Resposta solta no grupo não vale!\n` +
+    `🚫 Só a pessoa marcada pode escolher e responder.`,
 
   // Legenda que acompanha o poster (#brincadeirachaoucafe / #bcc)
   poster:
 `🌶️☕ *BRINCADEIRA : CHÁ OU CAFÉ?*🍵🔥
 
-Hoje a nossa noite vai ter um toque de ousadia, uma pitadinha de malícia e muita descontração! 😏😂
+Aqui vai ter um toque de ousadia, uma pitadinha de malícia e muita descontração! 😏😂
 
 Mas calma, gente! Aqui a proposta é HOT, mas com suavidade! ❤️‍🔥
+
+🍵 *CHÁ* – *MAIS LEVINHO E TRANQUILO!* 🌸
+Perguntas descontraídas, curiosidades e situações engraçadas.
 
 ☕ *CAFÉ* – *UM POUQUINHO MAIS APIMENTADO!* 🌶️
 Perguntas mais ousadinhas, com uma pitadinha de provocação, mas sempre com respeito e bom senso.
 
-🍵 *CHÁ* – *MAIS LEVINHO E TRANQUILO!* 🌸
-Perguntas descontraídas, curiosidades, situações engraçadas e aquelas respostas que rendem boas risadas!
-
 📌 *COMO VAI FUNCIONAR?*
 
-1️⃣ Marque alguém usando *#cc @pessoa* (ou *#chaoucafe @pessoa*) para convidar.
+1️⃣ *CONVIDE:* marque alguém com *#cc @pessoa* (ou *#chaoucafe @pessoa*).
 
-2️⃣ A pessoa marcada *responde diretamente a mensagem do convite* escolhendo o que deseja tomar: 🍵 *#cha* ou ☕ *#cafe*.
+2️⃣ *ESCOLHA:* a pessoa marcada *responde diretamente a mensagem do convite* com 🍵 *#cha* ou ☕ *#cafe*.
 
-3️⃣ *O bot sorteia a pergunta de acordo com a escolha:*
+3️⃣ *MISTÉRIO:* 🔮 quem decide a pergunta é o *BOT*! Você escolhe chá ou café, mas só descobre qual será a sua pergunta quando ela aparecer... será que vem leve ou pegando fogo? 😏
 
-🍵 *Escolheu CHÁ?* A pergunta será mais leve!
-☕ *Escolheu CAFÉ?* Pode vir com um pouquinho mais de pimenta! 🌶️😏
+4️⃣ *RESPONDA:* a pessoa *responde diretamente a mensagem da pergunta* e ganha um ✅.
 
-4️⃣ A pessoa *responde diretamente a mensagem da pergunta*. Resposta solta no grupo não vale! ❌
-
+❌ Resposta solta no grupo não vale!
+🚫 Só a pessoa marcada pode escolher e responder.
 ℹ️ Dúvidas? Digite *#ajudachaoucafe*
-
-⚠️ *ATENÇÃO, DAMAS E CAVALEIROS!*
-
-O nosso objetivo não é constranger ninguém, ultrapassar limites ou deixar alguém desconfortável. Somos um grupo de amizade, e o que prevalece aqui é o respeito, a educação, a leveza e a diversão!
-
-❤️‍🔥 A ideia é brincar, interagir, soltar a imaginação e arrancar boas gargalhadas!
-
-Então preparem as xícaras, escolham suas doses e venham participar!
 
 🍵 *QUEM VAI DE CHÁ?*
 ☕ *QUEM VAI DE CAFÉ?*
@@ -102,7 +94,10 @@ _© damas da night_`,
   convite: (autor, alvo) =>
     `${TITULO}\n\n` +
     `☕🍵 ${alvo} ${autor} quer te fazer uma pergunta!\n\n` +
+    `━━━━━━ *SUA VEZ* ━━━━━━\n` +
     `↩️ ${alvo}, *responda diretamente esta mensagem* com *#cha* ou *#cafe* 👇\n` +
+    `━━━━━━━━━━━━━━━━━━━\n\n` +
+    `🔮 A pergunta é um mistério: quem decide é o bot!\n` +
     `❌ Resposta solta no grupo não vale!\n\n` +
     `${RODAPE}`,
 
