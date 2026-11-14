@@ -5,9 +5,14 @@
 // Reações:
 //   #cha  -> 🍵   |   #cafe -> ☕   |   resposta à pergunta do bot -> ✅
 // Não há prazo nem punição: convites e perguntas valem até serem respondidos.
-// #bcc: envia o poster (ADM/dono: marca todos de forma invisível e fixa no grupo).
-// #icc (ADM/dono): inicia a brincadeira (zera convites/perguntas anteriores, reabre se estava
+//
+// #icc (ADM/dono): INICIA a brincadeira (zera convites/perguntas anteriores, reabre se estava
 //   encerrada) e apenas avisa que a brincadeira foi iniciada.
+// #bcc (ADM/dono): INICIA a brincadeira (igual ao #icc), envia o poster, marca todos de forma
+//   invisível e fixa no grupo. Se quem mandar não for ADM, só envia o poster (sem iniciar,
+//   sem marcar e sem fixar).
+// #ebcc (ADM/dono): encerra e limpa o banco.
+//
 // Convites e perguntas ficam salvos no banco (sobrevivem a reinício do bot).
 // Imagem do poster: mesmo esquema das boas-vindas (Jimp + jpegThumbnail), funciona no Termux.
 import { readFile } from 'fs/promises';
@@ -149,14 +154,28 @@ async function fixarMensagem(sock, grupoId, key) {
     });
     console.log('📌 [chaoucafe] poster fixado no grupo');
   } catch (err) {
-    console.error('⚠️ [chaoucafe] erro ao fixar o poster:', err.message);
+    console.error('⚠️ [chaoucafe] erro ao fixar o poster (o bot precisa ser ADM do grupo):', err.message);
   }
 }
 
-// #brincadeirachaoucafe / #bcc -> poster + regras (ADM: marca todos de forma invisível e fixa)
+// #brincadeirachaoucafe / #bcc
+//  - ADM/dono: INICIA a brincadeira, envia o poster, marca todos (invisível) e fixa
+//  - demais: só envia o poster
 async function enviarPoster(sock, msg, donos = []) {
   const grupoId = msg.key.remoteJid;
   const admin = await ehAdmin(sock, msg, donos);
+  console.log(`[chaoucafe] #bcc admin=${admin} remetente=${numerosDoRemetente(msg).join('/')}`);
+
+  // ADM: inicia a brincadeira (igual ao #icc): zera o que havia e reabre se estava encerrada
+  if (admin) {
+    try {
+      await dados.novaBrincadeira(grupoId);
+      await dados.reabrirBrincadeira(grupoId);
+      console.log(`[chaoucafe] brincadeira INICIADA pelo #bcc em ${grupoId}`);
+    } catch (err) {
+      console.error('⚠️ [chaoucafe] erro ao iniciar pelo #bcc:', err.message);
+    }
+  }
 
   // Menção invisível: todos os participantes vão no "mentions", sem aparecer no texto
   let mentions = [];
@@ -261,7 +280,7 @@ async function responderEscolha(sock, msg, tipo) {
   const grupoId = msg.key.remoteJid;
   const citadoId = extrairIdCitado(msg);
 
-  const convite = await dados.buscarConvite(grupoId, numerosDoRemetente(msg));
+  const convite = await dados.buscarConvite(grupoId, numerosDoRemetente(msg), citadoId);
   if (!convite) {
     // Alguém que NÃO é a pessoa marcada tentou responder o convite de outra pessoa
     if (citadoId) {
@@ -307,7 +326,7 @@ async function responderEscolha(sock, msg, tipo) {
   return true;
 }
 
-// donos = OWNER_NUMBERS: também podem encerrar/reabrir mesmo sem ser ADM do grupo
+// donos = OWNER_NUMBERS: também podem encerrar/iniciar mesmo sem ser ADM do grupo
 export async function handle(sock, msg, donos = []) {
   try {
     if (!msg?.message || msg.key.fromMe) return false;
@@ -358,12 +377,21 @@ export async function handle(sock, msg, donos = []) {
     if (cfg.comandosEncerrar.includes(comando)) return await encerrar(sock, msg, donos);
     if (cfg.comandosIniciar.includes(comando)) return await iniciar(sock, msg, donos);
 
+    // #bcc: ADM inicia a brincadeira (mesmo se estava encerrada), manda o poster, marca todos e fixa.
+    // Não-ADM só recebe o poster, e só se a brincadeira não estiver encerrada.
+    if (cfg.comandosPoster.includes(comando)) {
+      if (encerrada && !(await ehAdmin(sock, msg, donos))) {
+        await responder(sock, msg, regras.jaEncerrada);
+        return true;
+      }
+      return await enviarPoster(sock, msg, donos);
+    }
+
     if (encerrada) {
       await responder(sock, msg, regras.jaEncerrada);
       return true;
     }
 
-    if (cfg.comandosPoster.includes(comando)) return await enviarPoster(sock, msg, donos);
     if (cfg.comandosConvite.includes(comando)) return await criarConvite(sock, msg);
     if (cfg.comandosResposta.includes(comando)) return await responderEscolha(sock, msg, comando);
     if (comando === 'ajudachaoucafe') {
