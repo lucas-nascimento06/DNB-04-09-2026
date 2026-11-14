@@ -4,11 +4,11 @@
 //
 // Reações:
 //   #cha  -> 🍵   |   #cafe -> ☕   |   resposta à pergunta do bot -> ✅
-// Punição: quem não responde a pergunta em prazoRespostaMs fica silenciado por silencioMs
-//   (o bot apaga as mensagens da pessoa; o bot precisa ser ADM do grupo).
-//   Enquanto estiver punida, a pessoa NÃO pode ser convidada (o bot avisa para escolher outra).
-// #bcc (ADM/dono): envia o poster marcando todos de forma invisível e fixa no grupo.
-// Convites, perguntas, prazos e silenciados ficam salvos no banco (sobrevivem a reinício do bot).
+// Não há prazo nem punição: convites e perguntas valem até serem respondidos.
+// #bcc: envia o poster (ADM/dono: marca todos de forma invisível e fixa no grupo).
+// #icc (ADM/dono): inicia a brincadeira (zera convites/perguntas anteriores, reabre se estava
+//   encerrada) e apenas avisa que a brincadeira foi iniciada.
+// Convites e perguntas ficam salvos no banco (sobrevivem a reinício do bot).
 // Imagem do poster: mesmo esquema das boas-vindas (Jimp + jpegThumbnail), funciona no Termux.
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -40,54 +40,10 @@ const TODOS = [
   ...cfg.comandosConvite,
   ...cfg.comandosResposta,
   ...cfg.comandosPoster,
+  ...cfg.comandosIniciar,
   ...cfg.comandosEncerrar,
   'ajudachaoucafe',
 ];
-
-// ---------- Verificador de prazos (punição) ----------
-let sockAtual = null;          // sempre o socket mais recente (muda se o bot reconectar)
-let verificador = null;
-let verificando = false;
-const avisosSilencio = new Map(); // "grupo:numero" -> timestamp do último aviso
-const INTERVALO_AVISO_MS = 60 * 1000;
-
-async function verificarPrazos() {
-  if (verificando || !sockAtual) return;
-  verificando = true;
-  try {
-    const vencidas = await dados.punirVencidos();
-    for (const v of vencidas) {
-      try {
-        if (!cfg.gruposPermitidos.includes(v.grupoId)) continue;
-        if (await dados.brincadeiraEncerrada(v.grupoId)) continue;
-
-        await dados.silenciar(v.grupoId, v.alvoJid, cfg.silencioMs);
-        await sockAtual.sendMessage(v.grupoId, {
-          text: regras.punicao(mencao(v.alvoJid)),
-          mentions: [v.alvoJid],
-        });
-        console.log(
-          `🔇 [chaoucafe] ${jidParaNumero(v.alvoJid)} silenciado(a) em ${v.grupoId} por ${Math.round(cfg.silencioMs / 60000 * 100) / 100} min`
-        );
-      } catch (err) {
-        console.error('⚠️ [chaoucafe] erro ao punir:', err.message);
-      }
-    }
-  } finally {
-    verificando = false;
-  }
-}
-
-function iniciarVerificador(sock) {
-  sockAtual = sock;
-  if (verificador) return;
-  verificador = setInterval(() => {
-    verificarPrazos().catch((err) =>
-      console.error('⚠️ [chaoucafe] erro no verificador:', err.message)
-    );
-  }, cfg.intervaloVerificacaoMs);
-  verificador.unref?.();
-}
 
 // Responde citando a mensagem original e devolve a mensagem enviada (precisamos do ID dela)
 async function responder(sock, msg, texto, mentions = []) {
@@ -202,13 +158,6 @@ async function enviarPoster(sock, msg, donos = []) {
   const grupoId = msg.key.remoteJid;
   const admin = await ehAdmin(sock, msg, donos);
 
-  // ADM abrindo uma brincadeira nova: descarta tudo que sobrou da anterior
-  // (perguntas pendentes, convites e punições), para não disparar mensagens antigas.
-  if (admin) {
-    await dados.novaBrincadeira(grupoId);
-    console.log(`🧹 [chaoucafe] brincadeira anterior zerada em ${grupoId}`);
-  }
-
   // Menção invisível: todos os participantes vão no "mentions", sem aparecer no texto
   let mentions = [];
   if (admin) {
@@ -241,6 +190,23 @@ async function enviarPoster(sock, msg, donos = []) {
 }
 
 // ---------- Comandos ----------
+
+// #icc / #iniciabrincadeiracc (só ADM): zera a brincadeira anterior, reabre se estava encerrada
+// e apenas avisa que a brincadeira foi iniciada
+async function iniciar(sock, msg, donos) {
+  const grupoId = msg.key.remoteJid;
+
+  if (!(await ehAdmin(sock, msg, donos))) {
+    await responder(sock, msg, regras.soAdminIniciar);
+    return true;
+  }
+
+  await dados.novaBrincadeira(grupoId);
+  await dados.reabrirBrincadeira(grupoId);
+  console.log(`[chaoucafe] brincadeira INICIADA em ${grupoId}`);
+  await responder(sock, msg, regras.iniciadaOk);
+  return true;
+}
 
 // #ebcc / #encerrabrincadeiracc (só ADM)
 async function encerrar(sock, msg, donos) {
@@ -280,19 +246,6 @@ async function criarConvite(sock, msg) {
   const botNumeros = [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidParaNumero);
   if (botNumeros.includes(alvoNum)) {
     await responder(sock, msg, regras.marcouBot);
-    return true;
-  }
-
-  // Pessoa punida (silenciada) não pode receber convite até a punição acabar
-  const punido = await dados.buscarSilenciado(grupoId, [alvoNum]);
-  if (punido) {
-    console.log(`[chaoucafe] convite recusado: ${alvoNum} está punido(a) (faltam ${Math.ceil(punido.restanteMs / 1000)} s)`);
-    await responder(
-      sock,
-      msg,
-      regras.alvoPunido(mencao(autor), mencao(alvo), punido.restanteMs),
-      [autor, alvo]
-    );
     return true;
   }
 
@@ -349,35 +302,9 @@ async function responderEscolha(sock, msg, tipo) {
     [convite.autorJid, convite.alvoJid]
   );
 
-  // Guarda o ID da pergunta: quando a pessoa responder ela, a resposta recebe ✅
-  // e o prazo (punição) é cancelado.
+  // Guarda o ID da pergunta: quando a pessoa responder ela, a resposta recebe ✅.
   await dados.registrarPergunta(grupoId, enviada?.key?.id || null, convite.alvoJid, convite.autorJid);
   return true;
-}
-
-// Mensagem de quem está silenciado: apaga e avisa (no máximo 1 aviso por minuto por pessoa)
-async function tratarSilenciado(sock, msg, silenciado) {
-  const grupoId = msg.key.remoteJid;
-
-  try {
-    await sock.sendMessage(grupoId, { delete: msg.key });
-  } catch (err) {
-    console.error('⚠️ [chaoucafe] erro ao apagar mensagem (o bot é ADM do grupo?):', err.message);
-  }
-
-  const chave = `${grupoId}:${jidParaNumero(silenciado.alvoJid)}`;
-  const agora = Date.now();
-  if (agora - (avisosSilencio.get(chave) || 0) >= INTERVALO_AVISO_MS) {
-    avisosSilencio.set(chave, agora);
-    try {
-      await sock.sendMessage(grupoId, {
-        text: regras.silenciado(mencao(silenciado.alvoJid), silenciado.restanteMs),
-        mentions: [silenciado.alvoJid],
-      });
-    } catch (err) {
-      console.error('⚠️ [chaoucafe] erro ao avisar silenciado:', err.message);
-    }
-  }
 }
 
 // donos = OWNER_NUMBERS: também podem encerrar/reabrir mesmo sem ser ADM do grupo
@@ -397,19 +324,7 @@ export async function handle(sock, msg, donos = []) {
       return false;
     }
 
-    // Garante o verificador de prazos rodando (usa sempre o socket mais recente)
-    iniciarVerificador(sock);
-
     const encerrada = await dados.brincadeiraEncerrada(grupoId);
-
-    // Pessoa punida: apaga a mensagem (vale para qualquer mensagem, comando ou não)
-    if (!encerrada) {
-      const silenciado = await dados.buscarSilenciado(grupoId, numerosDoRemetente(msg));
-      if (silenciado) {
-        await tratarSilenciado(sock, msg, silenciado);
-        return true;
-      }
-    }
 
     if (!comando) {
       // Não é comando: pode ser resposta à pergunta do bot
@@ -420,8 +335,7 @@ export async function handle(sock, msg, donos = []) {
           if (pergunta) {
             const numeros = numerosDoRemetente(msg);
             if (numeros.includes(jidParaNumero(pergunta.alvoJid))) {
-              // A pessoa convidada respondeu: ✅ e cancela a punição
-              await dados.marcarRespondida(grupoId, citadoId);
+              // A pessoa convidada respondeu: ✅
               await reagir(sock, msg, '✅');
             } else {
               // Outra pessoa tentou responder a pergunta
@@ -442,13 +356,9 @@ export async function handle(sock, msg, donos = []) {
     console.log(`[chaoucafe] comando #${comando} recebido em ${grupoId}`);
 
     if (cfg.comandosEncerrar.includes(comando)) return await encerrar(sock, msg, donos);
+    if (cfg.comandosIniciar.includes(comando)) return await iniciar(sock, msg, donos);
 
     if (encerrada) {
-      if (cfg.comandosPoster.includes(comando) && (await ehAdmin(sock, msg, donos))) {
-        await dados.reabrirBrincadeira(grupoId);
-        console.log(`[chaoucafe] brincadeira REABERTA em ${grupoId}`);
-        return await enviarPoster(sock, msg, donos);
-      }
       await responder(sock, msg, regras.jaEncerrada);
       return true;
     }

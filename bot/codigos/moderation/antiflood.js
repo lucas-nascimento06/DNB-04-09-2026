@@ -142,8 +142,9 @@ export const CONFIG = {
         'gpix pix saldo ricos ranking ' +
         // Chá ou Café (brincadeirachaoucafe)
         // chaoucafe/cc = convite | cha/cafe = resposta | ajudachaoucafe = ajuda
-        // brincadeirachaoucafe/bcc = poster + regras (ADM reabre) | ebcc/encerrabrincadeiracc = ADM encerra
-        'chaoucafe cc cha cafe ajudachaoucafe brincadeirachaoucafe bcc ebcc encerrabrincadeiracc ' +
+        // brincadeirachaoucafe/bcc = poster + regras (ADM marca todos e fixa)
+        // icc/iniciabrincadeiracc = ADM inicia a brincadeira | ebcc/encerrabrincadeiracc = ADM encerra
+        'chaoucafe cc cha cafe ajudachaoucafe brincadeirachaoucafe bcc icc iniciabrincadeiracc ebcc encerrabrincadeiracc ' +
         // Desafio do Namoro (ndesafio/nd = ADM, cumpri/cumprir/c = casais, ndstatus/nds = ADM, vd = ADM, dlista/dl = ADM)
         // bnz = ADM, limpa e zera toda a brincadeira do namoro
         'ndesafio nd cumpri cumprir ndstatus nds vd dlista dl bnz')
@@ -889,7 +890,7 @@ export async function antiFlood(sock, msg, ownerNumbers = []) {
             try {
                 await sock.sendMessage(CONFIG.grupoAvisoAdmins, {
                     text:
-                        `🚨 *ANTI-FLOOD*\n\n` +
+                        `🚨 *ALERTA DE SEGURANÇA*\n\n` +
                         `👤 Número: ${telefone}${ehLid ? ' (ID @lid, telefone não disponível)' : ''}\n` +
                         `👥 Grupo: ${meta.subject || groupJid}\n` +
                         `📌 Motivo: ${titulo} - ${resumo}\n` +

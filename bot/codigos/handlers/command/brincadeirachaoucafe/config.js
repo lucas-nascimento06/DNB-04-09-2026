@@ -8,8 +8,11 @@ const config = {
   // Comandos de resposta da pessoa marcada: #cha ou #cafe
   comandosResposta: ['cha', 'cafe'],
 
-  // Comandos que enviam o poster + regras (e REABREM a brincadeira se estiver encerrada, só ADM)
+  // Comandos que só enviam o poster + regras (ADM: marca todos de forma invisível e fixa)
   comandosPoster: ['brincadeirachaoucafe', 'bcc'],
+
+  // Comandos de ADM que INICIAM a brincadeira (zera a anterior e reabre se estiver encerrada)
+  comandosIniciar: ['icc', 'iniciabrincadeiracc'],
 
   // Comandos de ADM que ENCERRAM a brincadeira no grupo e limpam o banco de dados
   comandosEncerrar: ['ebcc', 'encerrabrincadeiracc'],
@@ -21,18 +24,6 @@ const config = {
     '120363430900442230@g.us', // GRUPO "Chá ou café" (teste)
   ],
 
-  // Tempo para a pessoa marcada responder o CONVITE (5 minutos)
-  expiracaoMs: 5 * 60 * 1000,
-
-  // Tempo para a pessoa convidada responder a PERGUNTA do bot (2 minutos)
-  prazoRespostaMs: 2 * 60 * 1000,
-
-  // Quanto tempo fica silenciada (mensagens apagadas) se não responder (10 minutos)
-  silencioMs: 15 * 60 * 1000,
-
-  // De quanto em quanto tempo o bot confere prazos vencidos
-  intervaloVerificacaoMs: 15 * 1000,
-
   // Só funciona em grupos
   somenteGrupos: true,
 };
@@ -42,12 +33,9 @@ export const {
   comandosConvite,
   comandosResposta,
   comandosPoster,
+  comandosIniciar,
   comandosEncerrar,
   gruposPermitidos,
-  expiracaoMs,
-  prazoRespostaMs,
-  silencioMs,
-  intervaloVerificacaoMs,
   somenteGrupos,
 } = config;
 export default config;
