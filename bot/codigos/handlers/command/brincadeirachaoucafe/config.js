@@ -21,7 +21,6 @@ const config = {
   gruposPermitidos: [
     '120363412511975026@g.us', // GRUPO_PRINCIPAL
     '120363431558953171@g.us', // GRUPO_ADMINS
-    '120363430900442230@g.us', // GRUPO "Chá ou café" (teste)
   ],
 
   // Só funciona em grupos
