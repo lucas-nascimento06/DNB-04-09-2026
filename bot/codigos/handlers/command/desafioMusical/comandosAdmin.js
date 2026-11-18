@@ -31,7 +31,10 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         inscricoes.set(from, Date.now());
         await sock.sendMessage(from, {
             text:
-                '🎤🎶 *INSCRIÇÕES ABERTAS — DESAFIO MUSICAL*\n\n' +
+                '╔═══════════ 💃🏻🎼 ═══════════╗\n' +
+                '      ✨ *INSCRIÇÕES ABERTAS* ✨\n' +
+                '          🎼 *DESAFIO MUSICAL* 🎼\n' +
+                '╚═══════════ 🕺🏻🎸 ═══════════╝\n\n' +
                 'Escolha o seu time:\n' +
                 '👨🏻 Digite *#h* para entrar nos HOMENS\n' +
                 '👩🏻 Digite *#m* para entrar nas MULHERES\n\n' +
@@ -229,7 +232,7 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         // com prêmio pendente, o ADM precisa decidir antes (nada de aviso automático depois)
         if (j.premioPendente) {
             await sock.sendMessage(from, {
-                text: '⏳ Resolva antes com *#ok* (liberar), *#rep* (repassar o ponto) ou *#errou* (cancelar) antes de usar *#next*.',
+                text: '⏳ Antes de usar *#next*, resolva com *#ok* (liberar), *#rep* (repassar o ponto) ou *#errou* (cancelar).',
             }, { quoted: message });
             return true;
         }

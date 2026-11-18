@@ -115,7 +115,10 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
     const total = Math.max(1, Math.min(rodadas, CONFIG.rodadasMax, livres.length));
 
     inscricoes.delete(groupId); // começou: inscrições fechadas
-    const [timeH, timeM] = await Promise.all([membrosDoTime(groupId, 'homens'), membrosDoTime(groupId, 'mulheres')]);
+    const [timeH, timeM] = await Promise.all([
+        membrosDoTime(groupId, 'homens'),
+        membrosDoTime(groupId, 'mulheres'),
+    ]);
 
     jogos.set(groupId, {
         total,
@@ -129,6 +132,7 @@ export async function iniciarDesafio(sock, groupId, rodadas) {
         aguardando: false,
         finalizando: false,
         placarKey: null, // chave da mensagem do placar fixado
+        premioPendente: null,
     });
 
     // lista dos times: 2 nomes + "..." e o resto atrás do "Ler mais" (vai por último na mensagem)
@@ -162,6 +166,7 @@ export async function proximaRodada(sock, groupId, jogoRef) {
 
     // prêmio que ficou sem resolução: descartado em silêncio (o #next já exige #ok/#errou antes)
     jogo.premioPendente = null;
+    jogo.aguardando = false;
 
     // garante que a pergunta da rodada anterior saiu da fixação antes de fixar a nova
     // (evita acumular fixados; o WhatsApp só aceita 3 ao mesmo tempo)
@@ -328,7 +333,10 @@ export async function mostrarTimes(sock, groupId, message) {
         groupId,
         {
             text:
-                '🎤 *TIMES DO DESAFIO MUSICAL*\n\n' +
+                '╔═══════💃🎼═══════╗\n' +
+                '      *TIMES DO DESAFIO MUSICAL*\n' +
+                '╚═══════🎸🕺═══════╝\n\n' +
+                '⚔️ *HOMENS 🆚 MULHERES* ⚔️\n\n' +
                 `👨🏻 *HOMENS* (${homens.length})\n${lista(homens)}\n\n` +
                 `👩🏻 *MULHERES* (${mulheres.length})\n${lista(mulheres)}`,
             mentions: [...homens, ...mulheres].map(jidDe),
