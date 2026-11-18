@@ -30,6 +30,9 @@ let config = null;
 let processandoDedicatoria = false;
 const filaDedicatorias = [];
 
+// Garante que a pasta de downloads temporários exista
+fs.mkdirSync('./downloads', { recursive: true });
+
 // ============================================
 // 🪙 CUSTO EM DC PARA LIBERAR UMA DEDICATÓRIA (JUKEBOX)
 // ============================================
@@ -418,7 +421,7 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
             await sock.sendMessage(from, { text: captionInfo, mentions: allMentions });
         }
 
-        // ── 4. DOWNLOAD DO ÁUDIO ─────────────────────────────────────────────
+        // ── 4. DOWNLOAD DO ÁUDIO (SEMPRE MP3) ────────────────────────────────
         console.log(`⬇️ [DEDICATÓRIA] Baixando áudio...`);
         const result = await baixarMusicaBuffer(urlResult);
         const nomeFormatado = limparNomeArquivo(`${dados.autor} - ${dados.titulo}`);
@@ -430,7 +433,7 @@ async function processarDedicatoria(sock, from, termo, senderId, mentionedJids, 
         fs.renameSync(caminhoTemp, caminhoFinal);
 
         // ── 5. ENVIA O ÁUDIO ─────────────────────────────────────────────────
-        console.log(`📤 [DEDICATÓRIA] Enviando: ${nomeArquivo}`);
+        console.log(`📤 [DEDICATÓRIA] Enviando (${result.formato}): ${nomeArquivo}`);
         await sock.sendMessage(from, {
             audio: fs.readFileSync(caminhoFinal),
             mimetype: 'audio/mpeg',

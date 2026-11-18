@@ -13,6 +13,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const urlCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000;
 
+// 🎚️ FORMATO DE ÁUDIO: SEMPRE MP3
+const FORMATO_AUDIO = 'mp3';
+const QUALIDADE_MP3 = '128K';
+
 // 🍪 AUTENTICAÇÃO DO YOUTUBE (resolve "Sign in to confirm you're not a bot")
 //
 // Ordem de escolha:
@@ -225,9 +229,10 @@ export async function obterDadosMusica(url) {
     }
 }
 
-// 🎵 DOWNLOAD COM ANTI-DETECÇÃO
+// 🎵 DOWNLOAD (SEMPRE MP3) COM ANTI-DETECÇÃO
 async function baixarComYtDlp(urlResolvida, tentativa = 1) {
     let tempFile = null;
+    const formato = FORMATO_AUDIO;
 
     try {
         await verificarYtDlp();
@@ -243,18 +248,19 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
         lastDownloadTime = Date.now();
 
         const inicioYtDlp = Date.now();
-        console.log(`🔄 [YT-DLP] Tentativa ${tentativa}/3 - Iniciando download...`);
+        console.log(`🔄 [YT-DLP] Tentativa ${tentativa}/3 - Iniciando download (${formato})...`);
 
-        // Arquivo final será <base>.opus (o yt-dlp troca %(ext)s após a conversão)
+        // Arquivo final será <base>.mp3 (o yt-dlp troca %(ext)s após a conversão)
         const randomId = randomBytes(8).toString('hex');
         const baseFile = join(tmpdir(), `music_${randomId}`);
-        tempFile = `${baseFile}.opus`;
+        tempFile = `${baseFile}.${formato}`;
 
-        // 🎵 ESTRATÉGIA DE FORMATO (COM FALLBACK)
+        // 🎵 ESTRATÉGIA DE FORMATO DE ORIGEM (COM FALLBACK)
+        // O yt-dlp sempre converte o resultado para MP3 depois.
         const formatStrategies = [
             'bestaudio/best',
             'bestaudio[ext=m4a]/bestaudio[ext=mp4]/bestaudio',
-            'bestaudio[ext=webm][acodec=opus]/bestaudio[acodec=opus]/best'
+            'best'
         ];
 
         const formatStrategy = formatStrategies[Math.min(tentativa - 1, formatStrategies.length - 1)];
@@ -275,10 +281,10 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
             // 🍪 AUTENTICAÇÃO (cookies + runtime JS + solver)
             ...argsAutenticacao(),
 
-            // 🎧 EXTRAIR ÁUDIO E CONVERTER PARA OPUS (-x é obrigatório p/ --audio-format)
+            // 🎧 EXTRAIR ÁUDIO E CONVERTER PARA MP3 (-x é obrigatório p/ --audio-format)
             '-x',
-            '--audio-format', 'opus',
-            '--audio-quality', '96K',
+            '--audio-format', formato,
+            '--audio-quality', QUALIDADE_MP3,
             '--postprocessor-args', 'ffmpeg:-ac 2 -ar 48000',
 
             // ⚡ PERFORMANCE
@@ -296,6 +302,12 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
         });
 
         const buffer = await fs.readFile(tempFile);
+
+        // 🔎 CONFERE SE O ARQUIVO É MESMO MP3 (ID3 ou byte de sincronia FF Ex)
+        const cabecalho = buffer.subarray(0, 3).toString('latin1');
+        const ehMp3 = cabecalho === 'ID3' || (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0);
+        console.log(`🔎 [ARQUIVO] mp3 válido: ${ehMp3 ? '✅' : '⚠️'}`);
+
         const tempoYtDlp = Date.now() - inicioYtDlp;
         const tamanhoMB = (buffer.length / 1024 / 1024).toFixed(2);
 
@@ -303,7 +315,7 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
         stats.success++;
         stats.totalDownloads++;
 
-        return { buffer, metodo: 'yt-dlp', formato: 'opus' };
+        return { buffer, metodo: 'yt-dlp', formato };
     } catch (err) {
         console.error(`❌ [YT-DLP] Tentativa ${tentativa} falhou:`, err.message);
 
@@ -349,7 +361,7 @@ async function baixarComYtDlp(urlResolvida, tentativa = 1) {
     }
 }
 
-// 🎯 DOWNLOAD DE MÚSICA
+// 🎯 DOWNLOAD DE MÚSICA (MP3)
 export async function baixarMusicaBuffer(url) {
     try {
         const inicioTotal = Date.now();
@@ -407,7 +419,7 @@ export async function baixarMusicaComInfo(url) {
         const downloadResult = await baixarMusicaBuffer(urlFinal);
 
         const tempoTotal = (Date.now() - inicio) / 1000;
-        console.log(`✅ [COMPLETO] ${tempoTotal.toFixed(1)}s | Formato: Opus 96K`);
+        console.log(`✅ [COMPLETO] ${tempoTotal.toFixed(1)}s | Formato: ${downloadResult.formato} ${QUALIDADE_MP3}`);
 
         if (stats.totalDownloads % 10 === 0 && stats.totalDownloads > 0) {
             console.log(`📊 [STATS] ${JSON.stringify(obterEstatisticas(), null, 2)}`);

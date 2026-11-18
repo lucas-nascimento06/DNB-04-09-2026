@@ -14,6 +14,9 @@ const __dirname = path.dirname(__filename);
 let processandoMusica = false;
 const filaMusicas = [];
 
+// Garante que a pasta de downloads temporários exista
+fs.mkdirSync('./downloads', { recursive: true });
+
 // ============================================
 // 🪙 CUSTO EM DC PARA LIBERAR UMA MÚSICA (JUKEBOX)
 // ============================================
@@ -396,7 +399,7 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
             });
         }
 
-        // ── 4. DOWNLOAD E ENVIO DO ÁUDIO ─────────────────────────────────────
+        // ── 4. DOWNLOAD E ENVIO DO ÁUDIO (SEMPRE MP3) ────────────────────────
         console.log(`⬇️ Baixando áudio: ${dados.titulo} - ${dados.autor}`);
         const result = await baixarMusicaBuffer(url);
 
@@ -408,7 +411,7 @@ async function baixarEEnviarMusica(sock, from, termo, senderId, messageKey, orig
         if (fs.existsSync(caminhoFinal)) fs.unlinkSync(caminhoFinal);
         fs.renameSync(caminhoCompleto, caminhoFinal);
 
-        console.log(`📤 Enviando áudio: ${nomeArquivo}`);
+        console.log(`📤 Enviando áudio (${result.formato}): ${nomeArquivo}`);
         try {
             const sentAudio = await sock.sendMessage(from, {
                 audio: fs.readFileSync(caminhoFinal),
