@@ -31,10 +31,10 @@ export async function tratarComandoAdmin(sock, message, lower, from, ownerNumber
         inscricoes.set(from, Date.now());
         await sock.sendMessage(from, {
             text:
-                '╔═══════════ 💃🏻🎼 ═══════════╗\n' +
-                '      ✨ *INSCRIÇÕES ABERTAS* ✨\n' +
-                '          🎼 *DESAFIO MUSICAL* 🎼\n' +
-                '╚═══════════ 🕺🏻🎸 ═══════════╝\n\n' +
+                '╔═══════💃🎼═══════╗\n' +
+                '      *DESAFIO MUSICAL*\n' +
+                '╚═══════🎸🕺═══════╝\n' +
+                '📢 *INSCRIÇÕES ABERTAS* ✍️\n\n' +
                 'Escolha o seu time:\n' +
                 '👨🏻 Digite *#h* para entrar nos HOMENS\n' +
                 '👩🏻 Digite *#m* para entrar nas MULHERES\n\n' +
